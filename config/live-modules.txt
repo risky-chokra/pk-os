@@ -85,3 +85,24 @@ kernel/fs/binfmt_misc.ko*
 kernel/drivers/cpufreq
 kernel/drivers/cpuidle
 kernel/drivers/thermal
+
+# --- audio / bluetooth / webcam / sensors / power (saare I/O device) -------------
+# Pehle live me sirf storage+net+hid+input the: sound card, bluetooth, webcam,
+# laptop battery/fans, USB-serial, typec dock ke driver ship hi nahi hote the.
+kernel/sound/core                  # ALSA core (har sound driver ko chahiye)
+kernel/sound/pci/hda               # Intel/AMD HDA - aaj kal ke almost saare PCs
+kernel/sound/pci/ac97              # purane onboard audio
+kernel/sound/usb                   # USB sound cards / headsets / webcams ke mic
+kernel/sound/drivers               # dummy/virmidi (VM me bhi device dikhe)
+kernel/net/bluetooth
+kernel/drivers/bluetooth           # btusb etc.
+kernel/drivers/media/usb/uvc       # webcams
+kernel/drivers/media/common
+kernel/drivers/hwmon               # temperature/fan sensors (sensors command)
+kernel/drivers/power/supply        # laptop battery/AC status
+kernel/drivers/video/backlight      # brightness control (pk-display isko use karta hai)
+kernel/drivers/thunderbolt
+kernel/drivers/usb/typec           # USB-C docks
+kernel/drivers/usb/misc
+kernel/drivers/usb/phy
+# chahiye to enable karo (bada): kernel/drivers/gpu/drm/amd (amdgpu + firmware chahiye)

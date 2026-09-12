@@ -1,6 +1,6 @@
 #!/bin/sh
 # pk's OS :: /sbin/pk-console <tty>
-# live  = bina password ke root shell ; installed = login prompt
+# live  = bina password ke root shell (ya /run/pk/autologin wala user) ; installed = login prompt
 # shellcheck shell=sh
 TTY=${1:-tty1}
 # device nahi hai (e.g. inittab me ttyS0 aur machine me serial port nahi) ->
@@ -10,10 +10,31 @@ case $TTY in
   ttyS*|ttyAMA*|hvc*|ttyGS*) SPEED=${PK_SERIAL_SPEED:-115200} ;;
   *) SPEED=38400 ;;
 esac
-if [ -e /run/pk/require-login ]; then
+AUTO=""
+# pk-user autologin <name> -> /run/pk/autologin (is boot) + /etc/pk-console.conf (persist)
+[ -f /run/pk/autologin ] && AUTO=$(head -1 /run/pk/autologin 2>/dev/null)
+if [ -z "$AUTO" ] && [ -f /etc/pk-console.conf ]; then
+  AUTO=$(sed -n 's/^PK_CONSOLE_AUTOLOGIN=//p' /etc/pk-console.conf 2>/dev/null | head -1)
+fi
+if [ -n "$AUTO" ] && ! grep -qs "^$AUTO:" /etc/passwd; then
+  echo "pk-console: autologin user '$AUTO' /etc/passwd me nahi -> root"
+  AUTO=""
+fi
+if [ -e /run/pk/require-login ] && [ -z "$AUTO" ]; then
   exec getty "$SPEED" "$TTY" linux
 fi
-cd /root || cd /
 echo
 [ -f /etc/issue ] && sed -e "s|@PK_VER@|$(cut -d= -f2 /etc/pk-build 2>/dev/null || echo 1.0)|" -e 's|\\l|'"$TTY"'|' /etc/issue
+if [ -n "$AUTO" ] && [ "$AUTO" != root ]; then
+  H=$(awk -F: -v U="$AUTO" '$1==U{print $6; exit}' /etc/passwd 2>/dev/null)
+  [ -n "$H" ] && [ -d "$H" ] || { echo "pk-console: home '$H' nahi hai (pk-user doctor chalao)"; H=/tmp; }
+  echo "  logged in as: $AUTO  (uid $(id -u "$AUTO" 2>/dev/null || echo ?); pk-user info $AUTO)"
+  # su root se password nahi mangta; -m se env (PATH etc.) barkarar
+  # 'su -' (login) isliye: HOME + cwd target user ke milte hain; 'su -m' parent ka
+  # HOME (/root) barkarar rakh deta tha -> apps root ki home me likhne ki koshish karti
+  su - "$AUTO" -c "exec /bin/sh -l" 2>/dev/null \
+    || su -m "$AUTO" -c "cd \"$H\" 2>/dev/null || cd /tmp; exec /bin/sh -l"
+  echo "pk-console: '$AUTO' ka shell band hua -> root shell"
+fi
+cd /root || cd /
 exec /bin/sh -l

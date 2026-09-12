@@ -1,0 +1,83 @@
+#!/bin/sh
+# pk's OS :: seatd - chhota session manager (weston/GUI ko VT + /dev/dri + /dev/input
+# dene ke liye). Live system me systemd-logind NAHI hota, aur weston 10 ka DRM backend
+# bina logind/seatd ke VT nahi le pata tha -> compositor chal ta hai par screen par
+# text console dikhta rehta hai. seatd wahi kaam 30 KB me karta hai.
+#
+#   pk-seatd start | stop | status | restart      (boot par S55seatd khud 'start' karta hai)
+#   boot options: pk_seatd=on|off                 (default: on, agar runtime me seatd ho)
+#
+# seatd hamare App Runtime ke andar se chalta hai (Debian ka package) - isliye base
+# ISO ka size nahi badhta. Socket runtime ke /run me banta hai, jahan weston use
+# dhoondhta hai.
+set -u
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+RT=${PK_RUNTIME_ROOT:-/opt/pk}
+PIDF=/run/pk/seatd.pid
+LOGF=/run/pk/seatd.log
+SOCK=$RT/run/seatd.sock
+say()  { printf 'pk-seatd: %s\n' "$*"; }
+mark() { ( printf '### PK: %s ###\n' "$*" > /dev/console ) 2>/dev/null; printf '%s\n' "$*" > /dev/kmsg 2>/dev/null; }
+mounted() { grep -q " $RT " /proc/mounts 2>/dev/null; }
+have() { command -v "$1" >/dev/null 2>&1; }
+rbin() { [ -x "$RT/usr/sbin/$1" ] || [ -x "$RT/usr/bin/$1" ]; }
+
+start() {
+  mounted || { say "runtime attach nahi hai (pk-runtime start) - seatd skip"; mark "SEATD-SKIP (no runtime)"; return 64; }
+  rbin seatd || { say "runtime me seatd nahi -> pk-get install -y seatd"; mark "SEATD-SKIP (seatd not in runtime)"; return 70; }
+  if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null; then
+    say "pehle se chal raha hai (pid $(cat "$PIDF"))"; mark "SEATD-OK (already, pid $(cat "$PIDF"))"; return 0
+  fi
+  mkdir -p /run/pk "$RT/run" 2>/dev/null
+  rm -f "$SOCK" 2>/dev/null
+  # seatd '-g seat' group ko resolve karta hai -> runtime ke /etc/group me bhi chahiye
+  grep -qs '^seat:' "$RT/etc/group" 2>/dev/null || printf 'seat:x:990:\n' >> "$RT/etc/group" 2>/dev/null
+  grep -qs '^seat:' /etc/group 2>/dev/null || addgroup seat >/dev/null 2>&1
+  # daemon: pk-chroot ke andar, taaki socket wahi mile jahan weston dekhta hai
+  setsid pk-chroot /bin/sh -c 'exec /usr/sbin/seatd -u 0 -g seat -l error 2>&1 || exec seatd -u 0 -g seat -l error' >"$LOGF" 2>&1 &
+  echo $! > "$PIDF" 2>/dev/null
+  i=0
+  while [ $i -lt 12 ]; do
+    [ -S "$SOCK" ] && break
+    sleep 1; i=$((i + 1))
+  done
+  if [ -S "$SOCK" ]; then
+    chmod 660 "$SOCK" 2>/dev/null || true
+    chgrp seat "$SOCK" 2>/dev/null || true
+    # live side se bhi reachable ho (weston root hi hai; 666 se koi risk nahi kyunki
+    # node sirf runtime ke andar mount hota hai)
+    say "chalu: socket=$SOCK group=seat pid=$(cat "$PIDF" 2>/dev/null)"
+    mark "SEATD-OK (socket=/run/seatd.sock in runtime, pid=$(cat "$PIDF" 2>/dev/null))"
+    return 0
+  fi
+  say "socket nahi bana; log: $LOGF"
+  tail -4 "$LOGF" 2>/dev/null | sed 's/^/    /'
+  mark "SEATD-FAIL (socket nahi bana)"
+  return 1
+}
+
+stop() {
+  if [ -f "$PIDF" ]; then kill "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null || true; rm -f "$PIDF"; fi
+  pk-chroot /bin/sh -c 'pkill -x seatd 2>/dev/null' >/dev/null 2>&1 || true
+  say "band kiya"
+}
+
+status() {
+  if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null; then
+    echo "pk-seatd: RUNNING (pid $(cat "$PIDF"))"
+  else
+    echo "pk-seatd: stopped"
+  fi
+  if [ -S "$SOCK" ]; then ls -l "$SOCK" | sed 's/^/  /'; else echo "  socket: $SOCK nahi"; fi
+  grep -qs '^seat:' /etc/group && echo "  live group seat: yes" || echo "  live group seat: NO"
+  echo "  weston ke liye env: LIBSEAT_BACKEND=seatd XDG_SEAT=seat0 XDG_VTNR=<active vt>"
+  [ -s "$LOGF" ] && { echo "  log (last 5):"; tail -5 "$LOGF" | sed 's/^/    /'; }
+}
+
+case "${1:-status}" in
+  start) start ;;
+  stop) stop ;;
+  restart) stop; sleep 1; start ;;
+  status) status ;;
+  *) echo "usage: pk-seatd start|stop|restart|status"; exit 1 ;;
+esac

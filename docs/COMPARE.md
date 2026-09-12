@@ -47,3 +47,10 @@ jo kami mili wahi add ki (kuch bhi hataaya nahi gaya).
 - **Graphical boot splash / plymouth** — base ISO me X nahi (design); `pk-desktop` session deta hai.
 - **Squashfs `dm-verity` + signed boot** — payload sha256 (`pk_verify`) diya, poora verified-boot
   TPM/MOK round hai (roadmap me).
+
+- **Users + device access ka scene**: reference OS me user management ya to absent hai ya
+  manual (`/etc/passwd` edit). Hamare live me `pk-user add/remove/autologin` hai aur naye
+  user ko audio/input/video/seat groups milte hain, isliye wo bina root ke sound, keyboard/mouse
+  events aur GPU use kar sakta hai; `pk-check --users` ye round-trip khud test karta hai.
+- **Session manager**: hamein chahiye tha ki weston screen le - isliye `seatd` (30 KB,
+  runtime ke andar) + active-VT handling; iske bina weston bina VT liye headless ban jaata tha.

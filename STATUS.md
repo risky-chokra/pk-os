@@ -358,6 +358,47 @@ Is state me user ke liye practical raaste (sab tested/tuned):
 3. `make iso-full`/bade runtime me `seatd` service + `logind`-compatible session lane ka
    kaam bacha hai (weston ko VT dilaane ka standard tareeka). Chahoge to agla round yehi karunga.
 
+### 4m. Session manager + users + I/O devices (is round ka kaam)
+
+User bola: *"desktop to aana hi chahiye aur sare input/output device bhi kaam karni
+chahiye, seatd session bhi banana chahiye aur user bhi add/remove hone chahiye"*.
+Kya-kya joda (sab additive; purana fallback chain intact):
+
+- **`pk-seatd` + `S55seatd` hook**: seatd (30 KB, systemd-free session manager) ko
+  **App Runtime ke andar se** chalate hain -> base ISO ka size nahi badha. Socket
+  runtime ke `/run/seatd.sock` par banta hai, group `seat` (gid 990, 0660). Weston
+  `LIBSEAT_BACKEND=seatd` se VT + `/dev/dri` + `/dev/input` isi se leta hai.
+  Markers: `SEATD-OK (socket=…)` / `SEATD-SKIP (no runtime|seatd)` / `SEATD-FAIL`.
+- **weston ab *visible* VT par**: `pk-x` `/sys/devices/virtual/tty/tty0/active` padhkar
+  `XDG_VTNR=<wahi>` + `--tty=/dev/tty<same> </dev/tty<same>` deta hai, aur attempt ke baad
+  `DESKTOP-VT (want=ttyX active=ttyY)` / zaroorat padne par `DESKTOP-VTMISMATCH` maarta hai
+  + `/run/pk/x-how` me detail. (Pichhli baar weston tty7 le raha tha -> screen par text.)
+- **I/O device modules** live me: `sound/core`, `snd-hda-intel`, `snd-ac97`,
+  `snd-usb-audio`, bluetooth (net+drivers), `uvc` webcam, hwmon (sensors),
+  power_supply (laptop battery), backlight, thunderbolt, usb/typec, usb/misc.
+- **Device permissions**: naya `/etc/mdev.conf` -> `/dev/snd/*`=audio, `/dev/input/event*`=input,
+  `/dev/dri/card*`=video (0660), `/dev/ttyUSB*`=dialout, `/dev/video*`=video, block devices
+  root-only (disk group 0660), aur **har** rule par `@/etc/mdev/hotplug.sh` (busybox mdev
+  pehla match leta hai -> hotplug modprobe na chhoot jaaye, ye isliye har line me repeat kiya).
+- **`pk-user`** (naya command): `list / info / add / del / passwd / autologin / doctor`.
+  `add` me busybox `adduser -D` + har group ke liye `addgroup user grp` (busybox ke `-G` par
+  bharosa nahi), home + /etc/skel + 700, `--password=` -> `chpasswd`, `--admin` -> `wheel`
+  (+ `/etc/sudoers.d/90-<u>` agar sudo ho). Naye user ko default groups: `users,audio,input,
+  video,render,dialout,lp` + `seat` -> **device access = user access** (bina root ke sound/keyboard/GPU).
+  `del` `--home`/`--force`, process pehle `pkill -u`, aur `deluser` fail ho to manual
+  /etc edit (backup `/etc/passwd.pk-bak`) + autologin cleanup. `pk-check --users` poora
+  round-trip (add -> `su -m` -> del) khud chalata hai.
+- **Pre-created `pk` user** (uid 1000) ko device groups diye; naya `S12users` hook har boot
+  groups/homes ensure karta hai (missing home -> login fail hota tha) + marker `USERS-OK`.
+- **`pk_user=<name> [+ pk_userpw=<pw>]`** boot option: live me user banao + tty1 autologin;
+  `pk-console` ab `/run/pk/autologin` / `/etc/pk-console.conf` dekhkar **us user ke tor par**
+  shell khola (`su -m`), warna root (live) ya getty (installed). `pk-user autologin off` wapas.
+- Runtime (desktop variant) me: `seatd`, `alsa-utils` (amixer/aplay), `xwayland`
+  (weston ke andar xterm jaise X apps), pehle se `weston xterm xvfb mesa-utils wine`
+  + is round me `libgl1-mesa-dri`(llvmpipe), `fonts-dejavu-core`, `adwaita-icon-theme`.
+- QA: `USERS-OK`, `MDEV-OK`, `SEATD-OK`, `DESKTOP-VT`, `DESKTOP-WESTON-LOG` checks +
+  ek **negative** check (`DESKTOP-VTMISMATCH` aaya to test FAIL) -> ab 80 checks.
+
 ## 5. Aapke PC pe ab kya karna hai (emulator → pendrive → install)
 
 ```sh

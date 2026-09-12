@@ -1,0 +1,33 @@
+#!/bin/sh
+# pk's OS boot hook :: users/groups ki dekhbhaal (har boot par, sasta hai)
+#   - groups bana do (audio/video/input/render/seat/...) -> device perms inhi par depend
+#   - /etc/passwd me harkar har user ka home dir + owner theek karo (warna login fail)
+#   - marker: ### PK: USERS-OK (users=N groups=M autologin=X) ###
+set -u
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+say() { printf 'pk-users: %s\n' "$*"; }
+mark() { ( printf '### PK: %s ###\n' "$*" > /dev/console ) 2>/dev/null; printf '%s\n' "$*" > /dev/kmsg 2>/dev/null; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+ng=0
+for g in tty disk lp dialout cdrom audio video users input render seat wheel; do
+  grep -qs "^$g:" /etc/group || { have addgroup && addgroup "$g" >/dev/null 2>&1 && ng=$((ng + 1)); }
+done
+# uid>=1000 wale users ke homes
+nu=0; fixed=0
+while IFS=: read -r un _pw uid gid _gc home shell; do
+  case "${uid:-}" in ''|*[!0-9]*) continue ;; esac
+  [ "$uid" -ge 1000 ] 2>/dev/null || continue
+  nu=$((nu + 1))
+  [ -n "$home" ] || continue
+  if [ ! -d "$home" ]; then
+    mkdir -p "$home" 2>/dev/null && chown "$uid:${gid:-100}" "$home" 2>/dev/null && chmod 700 "$home" 2>/dev/null
+    [ -d /etc/skel ] && cp -a /etc/skel/. "$home"/ 2>/dev/null
+    fixed=$((fixed + 1))
+  fi
+done < /etc/passwd
+au=$(sed -n 's/^PK_CONSOLE_AUTOLOGIN=//p' /etc/pk-console.conf 2>/dev/null | head -1)
+[ -f /run/pk/autologin ] && au=$(cat /run/pk/autologin 2>/dev/null)
+say "users=$nu groups-made=$ng homes-fixed=$fixed autologin=${au:-none}"
+mark "USERS-OK (users=$nu groups=$ng homes=$fixed autologin=${au:-none})"
+exit 0

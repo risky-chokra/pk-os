@@ -144,6 +144,8 @@ stage "1/8  live boot from ISO (grub + cdrom)"
   check "$L" 'PK: DISPLAY-'            "S08display hook chala (blank off / backlight state)"
   check "$L" 'PK: DISPLAY-KMS'           "late display probe ne KMS device dikha (GPU driver live me ship hote hain)"
   check "$L" 'driver=bochs'              "QEMU -vga std ka bochs-drm guest me load hua (weston ko /dev/dri milta hai)" 
+  check "$L" 'PK: USERS-OK'             "S12users hook: groups + homes + autologin state"
+  check "$L" 'PK: MDEV-OK'              "mdev coldplug: /dev nodes audio/input/video groups ke saath (mdev.conf)"
   check "$L" 'PK: TUNE-SWAP-SKIP'      "live (tmpfs/overlay) par swap guard ne rok diya (RAM nahi khayega)"
   if grep -q "boot/grub/grub.cfg" /dev/null 2>/dev/null; then :; fi
   if [ -f "$WORK/iso/boot/grub/grub.cfg" ] && grep -q "consoleblank=0" "$WORK/iso/boot/grub/grub.cfg" 2>/dev/null; then
@@ -555,6 +557,14 @@ stage "8/8  pendrive kit: pk-check + keymap + install (user + runtime) + install
   check "$L" 'PK: INSTALL-DONE rc=0'   "installer ka rc 0 (autoinstall hook)"
   if [ "${PK_TEST_GUI:-0}" = 1 ]; then
     check "$L" 'PK: DESKTOP-OK'       "pk-desktop: session utha (weston ya Xvfb fallback)"
+    check "$L" 'PK: SEATD-OK'          "seatd session manager chalu (weston ko VT+DRM+input)"
+    check "$L" 'PK: DESKTOP-VT'        "weston ne active VT liya -> screen par desktop dikhega"
+    check "$L" 'PK: DESKTOP-WESTON-LOG' "weston ka apna log marker me (debug possible)"
+    if grep -q 'DESKTOP-VTMISMATCH' "$L" 2>/dev/null; then
+      bad "weston chala par VT switch nahi hua (screen par text hi rahega) - pk-desktop vnc use karo"
+    else
+      pass "weston ne VT le liya (no VTMISMATCH marker)"
+    fi
     check "$L" 'PK: GUI-X-OK'         "pk-check --gui: display mil gaya"
     check "$L" 'PK: GUI-APP-OK'       "GUI client (xterm ya weston-terminal) session me chala"
     if grep -q 'GUI-XCLIENT-OK' "$L" 2>/dev/null; then

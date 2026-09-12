@@ -368,3 +368,22 @@ Changes bachane ke do raaste: `persistent` boot option (USB pe hi partition) ya 
 
 MIT (see [LICENSE](LICENSE)). Isme koi nayi baat nahi — Linux kernel, busybox, squashfs-tools,
 GRUB, xorriso, e2fsprogs, parted ka kaam ek saath joda gaya hai, sab apni-apni license pe.
+
+## Users, devices aur desktop session (naya)
+
+```sh
+pk-user add bob --admin --password=bobpw   # user + audio/input/video/seat groups
+pk-user autologin bob                      # tty1 par bob ka shell (password ke bina)
+pk-user list ; pk-user info bob ; pk-user doctor
+pk-user del bob --home
+pk-seatd status                             # session manager (weston ko VT/dri/input)
+pk-check --users                            # add -> su -> del round-trip test
+```
+
+- Boot option se hi user + autologin: `pk_user=bob pk_userpw=pk` (live ISO me user tabhi
+  bachega jab `persistent` ho ya system installed ho — live ka `/etc` RAM overlay hai).
+- Live image me audio (`snd-hda-intel`, `snd-usb-audio`), bluetooth, webcam (uvc),
+  sensors (hwmon), battery, thunderbolt/USB-C modules + `/etc/mdev.conf` se sahi
+  device-group/mode (`/dev/snd`=audio, `/dev/input`=input, `/dev/dri`=video).
+- Desktop: apps ISO + GRUB entry `g` (`pk_desktop=1`). weston **active VT** par seatd ke
+  saath chalta hai -> screen par desktop. Marker: `DESKTOP-VT`, `SEATD-OK`, `DESKTOP-OK (wayland-1)`.

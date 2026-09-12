@@ -139,7 +139,7 @@ else
     # fonts-dejavu-core + adwaita-icon-theme: inke bina weston-terminal/xterm khulte
     # hain par text render nahi hota (aur weston "could not load cursor" warn karta hai)
     # -> desktop kaali/khaali screen jaisi dikhti thi. ~2 MB, desktop variant me hi.
-    desktop) EXTRA="apt-utils,ca-certificates,vim-tiny,htop,wget,curl,less,file,locales,sudo,fonts-dejavu-core,adwaita-icon-theme,xkb-data,libgl1-mesa-dri,libegl-mesa0,seatd" ;;
+    desktop) EXTRA="apt-utils,ca-certificates,vim-tiny,htop,wget,curl,less,file,locales,sudo,fonts-dejavu-core,adwaita-icon-theme,xkb-data,libgl1-mesa-dri,libegl-mesa0,seatd,alsa-utils,xwayland" ;;
     dev)  EXTRA="build-essential,git,make,pkg-config,apt-utils,ca-certificates,vim,htop,wget,curl,less,file" ;;
     *)    EXTRA="" ;;
   esac

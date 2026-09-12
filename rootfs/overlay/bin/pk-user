@@ -1,0 +1,336 @@
+#!/bin/sh
+# pk's OS :: user add/remove/list/autologin  (naya - "user bhi add/remove hone chahiye")
+#
+#   pk-user list
+#   pk-user info <user>
+#   pk-user add <user> [--password=<pw>] [--uid=N] [--shell=S] [--groups=a,b] [--admin] [--no-home]
+#   pk-user passwd <user> [newpw]          # newpw na do to interactive
+#   pk-user del <user> [--home] [--force]
+#   pk-user autologin <user>|off            # tty1 par bina password ke kaun andar aaye
+#   pk-user doctor                          # groups/homes/device-perms check + theek karo
+#
+# Design notes (live system ke hisaab se):
+#  * busybox ke adduser/deluser/addgroup/delgroup/chpasswd use karte hain - koi
+#    shadow-utils dependency nahi, isliye base ISO me bhi chalta hai.
+#  * naye user ko turant ye groups milte hain: users audio input video render dialout lp
+#    -> /dev/snd/*, /dev/input/event*, /dev/dri/card*, /dev/ttyUSB* inhi groups se
+#    khulte hain (mdev.conf wahi mode/group lagata hai). Device access = user access.
+#  * --admin -> wheel me; agar runtime/installed system me sudo hai to sudoers.d line
+#    bhi likh dete hain (guarded, warna chhodd dete hain).
+#  * LIVE ISO me /etc ek RAM overlay me hai: reboot par users gayab, jab tak
+#    'persistent' boot option (ya permanent install) na ho - ye output me batate hain.
+set -u
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+BASE_GROUPS="users,audio,input,video,render,dialout,lp"
+ALL_GROUPS="tty disk lp dialout cdrom audio video users input render seat wheel"
+CONF=/etc/pk-console.conf
+RUNAUTO=/run/pk/autologin
+say() { printf 'pk-user: %s\n' "$*"; }
+die() { printf 'pk-user: %s\n' "$*" >&2; exit 1; }
+have() { command -v "$1" >/dev/null 2>&1; }
+row() { printf '  %-10s %s\n' "$1" "$2"; }
+is_live() { [ -f /run/pk/live ] || grep -qs '^live$' /run/pk/mode 2>/dev/null; }
+# ---------------------------------------------------------------- /etc helpers
+# Debian ke busybox me adduser/deluser applet hote hi NAHI hain (hamare live image me
+# bhi nahi tha -> ye tool pehle fail ho gaya tha). Isliye /etc/passwd, /etc/group,
+# /etc/shadow, /etc/gshadow seedhe, carefully edit karte hain (temp file + cat back,
+# taaki SELinux/mount options se na phansein) aur busybox applets sirf optional bonus hain.
+PW=/etc/passwd; GR=/etc/group; SH=/etc/shadow; GSH=/etc/gshadow
+write_back() { # <tmp> <target>
+  [ -s "$1" ] || { rm -f "$1" 2>/dev/null; return 1; }
+  cat "$1" > "$2" 2>/dev/null; rc=$?; rm -f "$1" 2>/dev/null; return $rc
+}
+add_line() { # <file> <line>
+  printf '%s\n' "$2" >> "$1" 2>/dev/null
+}
+del_user_lines() { # <user> : passwd+shadow se hatao, group lists se members nikalo
+  u=$1
+  for f in "$PW" "$SH"; do
+    [ -f "$f" ] || continue
+    awk -F: -v U="$u" '$1!=U' "$f" > "$f.pk-tmp" 2>/dev/null && write_back "$f.pk-tmp" "$f"
+  done
+  for f in "$GR" "$GSH"; do
+    [ -f "$f" ] || continue
+    awk -F: -v U="$u" 'BEGIN{OFS=":"} {
+      if ($1==U) next                      # private group bhi hata do
+      n=split($4, m, ","); out=""
+      for (i=1;i<=n;i++) if (m[i]!="" && m[i]!=U) out = out (out=="" ? "" : ",") m[i]
+      $4=out; print
+    }' "$f" > "$f.pk-tmp" 2>/dev/null && write_back "$f.pk-tmp" "$f"
+  done
+}
+group_exists() { grep -qs "^$1:" "$GR" 2>/dev/null; }
+ensure_group() { # <name> [gid]
+  g=$1; gid=${2:-}
+  group_exists "$g" && return 0
+  if [ -z "$gid" ]; then gid=$(next_gid) || return 1; fi
+  add_line "$GR" "$g:x:$gid:" || return 1
+  [ -f "$GSH" ] && add_line "$GSH" "$g:!::"
+  return 0
+}
+group_gid() { awk -F: -v G="$1" '$1==G{print $3; exit}' "$GR" 2>/dev/null; }
+field() { # <name> <column> <file>   (NOTE: file argument shell me "$3" hai - "$F"
+                      # awk ki variable thi, wahan se empty expand ho kar stdin padhta)
+  awk -F: -v U="$1" -v C="$2" 'BEGIN{OFS=""} $1==U{print $C; exit}' "$3" 2>/dev/null
+}
+group_add_member() { # <group> <user>
+  g=$1; u=$2
+  group_exists "$g" || ensure_group "$g" || return 1
+  awk -F: -v G="$g" -v U="$u" 'BEGIN{OFS=":"} {
+    if ($1==G) { n=split($4, m, ","); for (i=1;i<=n;i++) if (m[i]==U) { p=1 }
+                 if (!p) $4 = ($4=="" ? U : $4 "," U) }
+    print }' "$GR" > "$GR.pk-tmp" 2>/dev/null && write_back "$GR.pk-tmp" "$GR"
+}
+# uid/gid: 1000 se shuru pehla free (max+1 isliye nahi, kyunki ek system user 65534
+# hone par naya user 65536 par chala jaata tha - login/permissions ke liye awkward)
+_taken() { awk -F: -v V="$2" '$3+0==V+0{f=1} END{exit f?0:1}' "$1" 2>/dev/null; }
+next_gid() { n=1000; while [ $n -lt 60000 ]; do _taken "$GR" "$n" || { echo "$n"; return 0; }; n=$((n + 1)); done; return 1; }
+next_uid() { n=1000; while [ $n -lt 60000 ]; do _taken "$PW" "$n" || { echo "$n"; return 0; }; n=$((n + 1)); done; return 1; }
+hash_pw() { # <pw> -> crypt hash (ya fail). Har tool ke saath '< /dev/null' zaroori
+  # hai: inme se kai password stdin par mangte hain, aur boot ke dauran (pk_user=)
+  # koi tty nahi hoti -> warna hang. (Ye hang humne host test me pakda tha.)
+  pw=$1
+  if have mkpasswd; then mkpasswd -m sha-512 "$pw" </dev/null 2>/dev/null && return 0; fi
+  if [ -x /bin/busybox ]; then /bin/busybox mkpasswd -m sha-512 "$pw" </dev/null 2>/dev/null && return 0; fi
+  if have perl; then perl -e 'use Crypt::SaltedHash; print Crypt::SaltedHash->new(algorithm=>"SHA-512",salt_len=>8)->add($ARGV[0])->b64_digest' "$pw" </dev/null >/dev/null 2>&1 || true; fi
+  if have openssl; then openssl passwd -6 "$pw" </dev/null 2>/dev/null && return 0; fi
+  if have python3; then python3 - "$pw" <<'PYX' 2>/dev/null && return 0
+import crypt,sys
+print(crypt.crypt(sys.argv[1], crypt.mksalt(crypt.METHOD_SHA512)))
+PYX
+  fi
+  return 1
+}
+
+ensure_groups() {
+  for g in $ALL_GROUPS seat; do
+    group_exists "$g" || ensure_group "$g"
+  done
+}
+user_exists() { grep -qs "^$1:" /etc/passwd; }
+uid_of() { field "$1" 3 "$PW"; }
+home_of() { field "$1" 6 "$PW"; }
+
+cmd_list() {
+  printf 'pk-user: users (uid>=1000 = normal, <1000 = system)\n'
+  while IFS=: read -r u _ uid gid gc home shell; do
+    case "${uid:-}" in ''|*[!0-9]*) continue ;; esac
+    printf '  %-12s uid=%-6s gid=%-6s home=%-12s shell=%s' "$u" "$uid" "$gid" "${home:-?}" "${shell:-?}"
+    [ "$uid" -lt 1000 ] && printf '  [system]'
+    # supplementary groups
+    gs=$(awk -F: -v U="$u" '$4 ~ ("(^|,)" U "($|,)") {printf "%s,", $1}' /etc/group | sed 's/,$//')
+    [ -n "${gs:-}" ] && printf '  groups=%s' "$gs"
+    [ -d "${home:-}" ] || printf '  HOME-MISSING'
+    printf '\n'
+  done < /etc/passwd
+  a=$(sed -n 's/^PK_CONSOLE_AUTOLOGIN=//p' "$CONF" 2>/dev/null | head -1)
+  [ -f "$RUNAUTO" ] && a=$(cat "$RUNAUTO" 2>/dev/null)
+  row autologin "${a:-off}"
+  row persistent "$(grep -qs 'upperdir=/mnt/persist' /proc/mounts && echo 'haan (users save rahenge)' || echo 'nahee (reboot pe reset - live me normal)')"
+}
+
+cmd_info() {
+  u=${1:-}; [ -n "$u" ] || die "usage: pk-user info <user>"
+  user_exists "$u" || die "user nahi mila: $u"
+  grep "^$u:" /etc/passwd | sed 's/^/  passwd: /'
+  grep "^$u:" /etc/shadow 2>/dev/null | sed 's/\$:.*$/<hash hidden>/' | sed 's/^/  shadow: /'
+  awk -F: -v U="$u" '$4 ~ ("(^|,)" U "($|,)")' /etc/group | cut -d: -f1 | tr '\n' ' ' | sed 's/^/  groups: /;s/$/\n/'
+  h=$(home_of "$u")
+  row home "$h"
+  row home-mode "$([ -n "$h" ] && [ -d "$h" ] && stat -c '%a %U:%G' "$h" 2>/dev/null || echo missing)"
+  row login-ok "$( [ -n "$h" ] && [ -d "$h" ] && echo yes || echo 'NO (home nahi hai -> pk-user doctor)')"
+}
+
+cmd_add() {
+  u=${1:-}; shift 2>/dev/null || true
+  [ -n "$u" ] || die "usage: pk-user add <user> [--password=PW] [--admin] [--uid=N] [--groups=a,b] [--shell=S] [--no-home]"
+  case "$u" in *[!a-zA-Z0-9_-]*|"") die "naam theek nahi (sirf a-z 0-9 _ -): $u" ;; esac
+  [ "$u" = root ] && die "root add nahi kar sakte"
+  user_exists "$u" && die "pehle se maujood: $u (groups me add karna ho: addgroup $u <grp>)"
+  pw=""; newuid=""; shell=/bin/sh; extra=""; admin=0; nohome=0
+  for a in "$@"; do
+    case "$a" in
+      --password=*) pw=${a#*=} ;;
+      --uid=*)      newuid=${a#*=} ;;
+      --shell=*)    shell=${a#*=} ;;
+      --groups=*)   extra=${a#*=} ;;
+      --admin)      admin=1 ;;
+      --no-home)    nohome=1 ;;
+      *) die "unknown option: $a" ;;
+    esac
+  done
+  ensure_groups
+  home=/home/$u
+  uid=${newuid:-$(next_uid)}
+  [ -n "$uid" ] || die "free uid nahi mila (next_uid fail)"
+  awk -F: -v U="$uid" '$3==U {e=1} END{exit e?0:1}' "$PW" 2>/dev/null && die "uid $uid pehle se use ho raha hai"
+  # private group (same name, same gid) - busybox adduser yahi karta hai
+  gid=$(group_gid "$u"); [ -n "$gid" ] || { gid=$uid; ensure_group "$u" "$gid"; }
+  hsh=$(hash_pw "${pw:-x}" 2>/dev/null || true)
+  if [ -n "$pw" ] && [ -z "${hsh:-}" ]; then
+    say "WARNING: password hash banane ka koi tool nahi (mkpasswd/openssl) -> account LOCKED rahega"
+  fi
+  add_line "$PW" "$u:x:$uid:$gid:$u:$home:$shell"
+  if [ -f "$SH" ]; then
+    if [ -n "$pw" ] && [ -n "${hsh:-}" ]; then
+      add_line "$SH" "$u:$hsh:19000:0:99999:7:::"
+    else
+      add_line "$SH" "$u:!:19000:0:99999:7:::"
+    fi
+  fi
+  [ -f "$GSH" ] && { printf '%s:!:%s:\n' "$u" "$u" >> "$GSH" 2>/dev/null; awk -v U="$u" 'BEGIN{OFS=":"} $1==U {$2="!"; $3=U} {print}' "$GSH" > "$GSH.pk-tmp" 2>/dev/null && write_back "$GSH.pk-tmp" "$GSH"; }
+  user_exists "$u" || die "passwd me line likhne ke baad bhi user nahi mila (root filesystem read-only?)"
+  # groups: base + extra + admin
+  glist=$BASE_GROUPS
+  [ -n "$extra" ] && glist="$glist,$extra"
+  [ "$admin" = 1 ] && glist="$glist,wheel"
+  added=""; failed=""
+  glist2=$(printf '%s' "$glist" | tr ',' ' ')
+  for g in $glist2; do
+    [ -n "$g" ] || continue
+    if group_add_member "$g" "$u"; then added="$added $g"; else failed="$failed $g"; fi
+  done
+  # seat group bhi (weston/seatd socket access ke liye)
+  group_add_member seat "$u" && added="$added seat"
+  # home + skel + perms
+  if [ "$nohome" = 0 ]; then
+    uid=$(uid_of "$u"); gid=$(field "$u" 4 "$PW")
+    mkdir -p "$home" 2>/dev/null || say "WARNING: $home create nahi ho paya"
+    # skel PEHLE copy karo, phir chown -R: warna dotfiles root ke reh jaate hain
+    [ -d /etc/skel ] && cp -a /etc/skel/. "$home"/ 2>/dev/null
+    chown -R "${uid:-$u}:${gid:-$u}" "$home" 2>&1 | sed 's/^/  chown: /' | sed 's/^/pk-user:/1' || true
+    chmod 700 "$home" 2>/dev/null
+    say "home: $(stat -c '%n %a %U:%G' "$home" 2>/dev/null || echo "$home (stat nahi laga)")"
+  fi
+  # password
+  if [ -n "$pw" ]; then
+    h2=$(hash_pw "$pw" 2>/dev/null || true)
+    if [ -n "${h2:-}" ] && [ -f "$SH" ]; then
+      awk -v U="$u" -v H="$h2" 'BEGIN{OFS=":"} $1==U {$2=H} {print}' "$SH" > "$SH.pk-tmp" 2>/dev/null && write_back "$SH.pk-tmp" "$SH"
+      say "password set kiya (shadow me sha-512 hash)"
+    elif printf '%s:%s\n' "$u" "$pw" | chpasswd >/dev/null 2>&1; then
+      say "password set kiya (chpasswd se)"
+    else
+      say "WARNING: password set nahi ho paya -> 'pk-user passwd $u' khud chalao"
+    fi
+  else
+    say "password set nahi kiya - abhi: pk-user passwd $u   (ya --password=... do)"
+  fi
+  # sudo (installed system me sudo ho to)
+  if [ "$admin" = 1 ]; then
+    if [ -d /etc/sudoers.d ]; then
+      printf '%s ALL=(ALL) ALL\n' "$u" > /etc/sudoers.d/90-$u 2>/dev/null && chmod 440 /etc/sudoers.d/90-$u 2>/dev/null \
+        && say "sudoers.d/90-$u likha (admin)" || say "sudoers.d me likh nahi paye (wheel me hai hi)"
+    else
+      say "sudo is image me nahi - --admin ka matlab abhi sirf 'wheel' group"
+    fi
+  fi
+  say "USER-ADDED $u (uid $(uid_of "$u")) groups:*$added"
+  [ -n "$failed" ] && say "  ye groups add nahi ho paye: $failed"
+  printf '### PK: USER-ADD-OK (%s) ###\n' "$u" > /dev/console 2>/dev/null
+  if is_live && ! grep -qs 'upperdir=/mnt/persist' /proc/mounts; then
+    say "note: live ISO me /etc RAM overlay me hai -> reboot pe ye user gayab (persistent=... ya installed system me save rahega)"
+  fi
+}
+
+cmd_del() {
+  u=${1:-}; shift 2>/dev/null || true
+  [ -n "$u" ] || die "usage: pk-user del <user> [--home] [--force]"
+  [ "$u" = root ] && die "root delete nahi kar sakte"
+  user_exists "$u" || die "user maujood hi nahi: $u"
+  rmhome=0; force=0
+  for a in "$@"; do case "$a" in --home) rmhome=1 ;; --force) force=1 ;; *) die "unknown option: $a" ;; esac; done
+  uid=$(uid_of "$u")
+  if [ -n "$uid" ] && [ "$uid" -lt 1000 ] && [ "$force" = 0 ]; then
+    die "system user (uid $uid) delete karne se pehle --force do"
+  fi
+  # user ke process pehle band karo, warna delete ke baad bhi chaleinge
+  pkill -u "$u" >/dev/null 2>&1 || true
+  # manual edit primary: kisi bhi busybox/shadow build par kaam karega
+  for f in "$PW" "$SH" "$GR" "$GSH"; do
+    [ -f "$f" ] && cp -p "$f" "$f.pk-bak" 2>/dev/null
+  done
+  del_user_lines "$u" || say "WARNING: /etc edit me dikkat (backup /etc/*.pk-bak se restore kar sakte ho)"
+  [ "$rmhome" = 1 ] && rm -rf "/home/$u" 2>/dev/null
+  au=$(sed -n 's/^PK_CONSOLE_AUTOLOGIN=//p' "$CONF" 2>/dev/null | head -1)
+  if [ -n "${au:-}" ] && [ "$au" = "$u" ]; then
+    rm -f "$RUNAUTO" "$CONF" 2>/dev/null; say "autologin hata diya (deleted user hi target tha)"
+  fi
+  say "USER-DELETED $u"
+  printf '### PK: USER-DEL-OK (%s) ###\n' "$u" > /dev/console 2>/dev/null
+}
+
+cmd_passwd() {
+  u=${1:-}; pw=${2:-}
+  [ -n "$u" ] || die "usage: pk-user passwd <user> [newpw]"
+  user_exists "$u" || die "user nahi mila: $u"
+  if [ -n "$pw" ]; then
+    h=$(hash_pw "$pw" 2>/dev/null || true)
+    if [ -n "${h:-}" ] && [ -f "$SH" ]; then
+      awk -v U="$u" -v H="$h" 'BEGIN{OFS=":"} $1==U {$2=H; $3=19000} {print}' "$SH" > "$SH.pk-tmp" 2>/dev/null && write_back "$SH.pk-tmp" "$SH"         && say "password badal diya ($u)" || die "shadow update fail"
+    elif printf '%s:%s\n' "$u" "$pw" | chpasswd >/dev/null 2>&1; then
+      say "password badal diya ($u, chpasswd se)"
+    else
+      die "password set karne ka koi tareeka nahi (mkpasswd/openssl/chpasswd koi nahi)"
+    fi
+  else
+    [ -t 0 ] || die "non-interactive: pk-user passwd $u <newpw>  (ya 'passwd $u' khud chalao)"
+    passwd "$u"
+  fi
+}
+
+cmd_autologin() {
+  u=${1:-}
+  [ -n "$u" ] || die "usage: pk-user autologin <user>|off"
+  mkdir -p /run/pk 2>/dev/null
+  if [ "$u" = off ] || [ "$u" = root ]; then
+    [ "$u" = off ] && { rm -f "$RUNAUTO" 2>/dev/null; printf 'PK_CONSOLE_AUTOLOGIN=\n' > "$CONF" 2>/dev/null; say "autologin off (login prompt wapas)"; return 0; }
+  fi
+  user_exists "$u" || die "user nahi mila: $u"
+  printf 'PK_CONSOLE_AUTOLOGIN=%s\n' "$u" > "$CONF" 2>/dev/null || say "$CONF likhne me dikkat (installed system me root se karo)"
+  printf '%s\n' "$u" > "$RUNAUTO" 2>/dev/null || true
+  say "ab tty1 par '$u' bina password ke andar aayega (agla boot / agla getty restart)"
+  say "  wapas chahiye to: pk-user autologin off"
+}
+
+cmd_doctor() {
+  say "device-perms + homes + groups ki jaanch"
+  ensure_groups
+  # /etc/group me gid blank reh gaya ho to bhar do
+  bad=0
+  for d in /dev/snd /dev/input /dev/dri; do
+    if [ -d "$d" ]; then
+      printf '  %-12s %s\n' "$d" "$(ls -l "$d" 2>/dev/null | sed -n '2,4p' | awk '{print $1" "$3":"$4}' | tr '\n' ' ')"
+    else
+      printf '  %-12s nahi (driver/hardware nahi mila)\n' "$d"
+    fi
+  done
+  # mdev ka ek coldplug: naye nodes ko turant sahi group/mode do
+  if have mdev || [ -x /bin/mdev ]; then
+    busybox mdev -s >/dev/null 2>&1 && say "mdev -s chala (perms apply kiye)"
+  fi
+  # missing homes
+  while IFS=: read -r u _ uid gid _ home shell; do
+    case "${uid:-}" in ''|*[!0-9]*) continue ;; esac
+    [ "$uid" -ge 1000 ] 2>/dev/null || continue
+    [ -d "$home" ] && continue
+    [ -n "$home" ] || continue
+    mkdir -p "$home" 2>/dev/null && chown "$uid":"$gid" "$home" 2>/dev/null && chmod 700 "$home" 2>/dev/null
+    [ -d /etc/skel ] && cp -a /etc/skel/. "$home"/ 2>/dev/null
+    say "home banaya: $home ($u)"; bad=$((bad + 1))
+  done < /etc/passwd
+  say "$bad homes banaye"
+  say "check: login test =  su - <user> -c id"
+}
+
+case "${1:-list}" in
+  list) shift; cmd_list ;;
+  info) shift; cmd_info "$@" ;;
+  add) shift; cmd_add "$@" ;;
+  del|rm|delete) shift; cmd_del "$@" ;;
+  passwd|password) shift; cmd_passwd "$@" ;;
+  autologin) shift; cmd_autologin "$@" ;;
+  doctor|fix) shift; cmd_doctor ;;
+  -h|--help|help) sed -n '2,22p' "$0" ;;
+  *) echo "usage: pk-user [list|info|add|del|passwd|autologin|doctor] ..."; exit 1 ;;
+esac

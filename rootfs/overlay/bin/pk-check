@@ -11,7 +11,7 @@
 # dono theek hain. Kuch FAIL ho to `pk-check --save` ki file hi bhej dena.
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
-VERB=0 SAVE=0 DOAPPS=0 DOGUI=0 DOSPEED=0
+VERB=0 SAVE=0 DOAPPS=0 DOGUI=0 DOSPEED=0 DOUN=0
 for a in "$@"; do
   case "$a" in
     --verbose|-v) VERB=1 ;;
@@ -19,7 +19,8 @@ for a in "$@"; do
     --apps)       DOAPPS=1 ;;
     --gui)        DOGUI=1 ;;
     --speed)      DOSPEED=1 ;;
-    --all)        VERB=1; SAVE=1; DOAPPS=1; DOGUI=1; DOSPEED=1 ;;
+    --users)      DOUN=1 ;;
+    --all)        VERB=1; SAVE=1; DOAPPS=1; DOGUI=1; DOSPEED=1; DOUN=1 ;;
     --help|-h)    sed -n '2,12p' "$0"; exit 0 ;;
   esac
 done
@@ -124,6 +125,59 @@ drm=''
 for c in /dev/dri/card*; do [ -e "$c" ] && drm="$drm $c"; done
 for c in /dev/dri/renderD128*; do [ -e "$c" ] && drm="$drm $c"; done
 if [ -n "$drm" ]; then row ok drm "KMS devices:$drm (weston KMS backend chalega)"; else row info drm "/dev/dri nahi (weston ko headless/Xvfb chahiye)"; fi
+# ---- I/O devices + session manager (audio/input/serial/seatd) --------------------
+if [ -S "$RT/run/seatd.sock" ]; then
+  row ok seatd "seatd chalu ($RT/run/seatd.sock) - weston ko VT+DRM+input isi se milta hai"
+elif [ -x /usr/bin/pk-seatd ]; then
+  row info seatd "seatd band -> 'pk-seatd start' (weston bina session manager ke headless par gir sakta hai)"
+fi
+sndn=$(ls /dev/snd/pcmC*D*p 2>/dev/null | wc -l | tr -d ' ')
+if [ -n "$sndn" ] && [ "$sndn" != 0 ]; then
+  row ok audio "/dev/snd: $sndn pcm node (group=$(ls -l /dev/snd/pcmC0D0p 2>/dev/null | awk '{print $4}' | head -1)) - users ko audio group me rakha hai"
+elif [ -d /dev/snd ]; then
+  row info audio "/dev/snd hai par pcm node nahi (codec bind nahi hua? 'dmesg | grep -i snd' dekho)"
+else
+  row info audio "sound card nahi mila (live me snd-hda-intel, snd-usb-audio, snd-ac97 ship hote hain)"
+fi
+inp=$(ls /dev/input/event* 2>/dev/null | wc -l | tr -d ' ')
+if [ -n "$inp" ] && [ "$inp" != 0 ]; then
+  row ok input "$inp event devices (group=$(ls -l /dev/input/event0 2>/dev/null | awk '{print $4}' | head -1); mdev.conf se 0660)"
+else
+  row info input "/dev/input/event* nahi (PS/2 hidpi? 'dmesg | grep -i input' dekho)"
+fi
+ser=$(ls /dev/ttyS* /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | wc -l | tr -d ' ')
+[ -n "$ser" ] && [ "$ser" != 0 ] && row ok serial "$ser serial nodes (ttyS/ttyUSB/ttyACM; dialout group)"
+cam=$(ls /dev/video* 2>/dev/null | wc -l | tr -d ' ')
+[ -n "$cam" ] && [ "$cam" != 0 ] && row ok webcam "$cam /dev/video* (uvc)"
+if [ -f /run/pk/x-how ]; then
+  row ok desktop "$(cat /run/pk/x-how 2>/dev/null)"
+else
+  row info desktop "desktop session nahi chala (GRUB entry 5 / boot option pk_desktop=1 se chalu hota hai)"
+fi
+# ---- users: add/remove kaam karta hai? (--users se full round-trip) ----------------
+nu=$(awk -F: '$3>=1000' /etc/passwd 2>/dev/null | wc -l | tr -d ' ')
+au=$(sed -n 's/^PK_CONSOLE_AUTOLOGIN=//p' /etc/pk-console.conf 2>/dev/null | head -1)
+[ -f /run/pk/autologin ] && au=$(cat /run/pk/autologin 2>/dev/null)
+row ok users "${nu:-0} normal user(s), autologin=${au:-off} (pk-user list / pk-user add <n})"
+if [ "$DOUN" = 1 ]; then
+  tu=pkq$$
+  if pk-user add "$tu" --password=pk >/run/pk/user-test.log 2>&1; then
+    idout=$(su -m "$tu" -c 'id' 2>&1 | head -1)
+    if printf '%s' "$idout" | grep -q "uid=$(id -u "$tu" 2>/dev/null || echo x)"; then
+      pk-user del "$tu" --home >/dev/null 2>&1
+      if ! grep -qs "^$tu:" /etc/passwd; then
+        row ok useradd "round-trip OK: add -> su ('$idout') -> del"
+      else
+        row fail useradd "del fail: $tu /etc/passwd me bacha hua"
+      fi
+    else
+      pk-user del "$tu" --home >/dev/null 2>&1
+      row fail useradd "su fail: $idout"
+    fi
+  else
+    row fail useradd "pk-user add fail (log: /run/pk/user-test.log)"
+  fi
+fi
 # "screen kaali" diagnosis: fb blank flag + backlight power/brightness
 fbb=''
 for f in /sys/class/graphics/fb*; do

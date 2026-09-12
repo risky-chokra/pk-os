@@ -30,37 +30,47 @@ start() {
   [ "$want" = auto ] && for c in weston Xorg Xvfb; do rbin "$c" && { want=$c; break; }; done
   case "$want" in
     weston)
-      for d in /dev/dri /dev/input; do
+      for d in /dev/dri /dev/input /dev/snd; do
         [ -e "$d" ] && { mkdir -p "$RT$d"; mounted "$RT$d" || mount --bind "$d" "$RT$d" 2>/dev/null || true; }
       done
-      mkdir -p "$RT/run/pk-x"; chmod 700 "$RT/run/pk-x"
-      { printf 'pk-x: weston try (RT=%s hasdrm=%s bin=%s)\n' "$RT" "$hasdrm" "$(ls "$RT/usr/bin/weston" 2>/dev/null || echo none)"; } > /run/pk/x-weston.log 2>&1
-      mkdir -p "$RT/run/pk-x" 2>/dev/null; rm -f "$RT/run/pk-x/wayland-1" 2>/dev/null || true
+      # seatd (S55seatd / pk-boot) ka socket runtime ke andar hota hai; weston wahi
+      # dhoondhta hai - mil gaya to VT + DRM + input ek saath, bina logind ke.
+      [ -S "$RT/run/seatd.sock" ] && SEATD=1 || SEATD=0
+      # weston ko WAHI VT par bithao jo screen par dikhta hai; warna wo free VT (tty7)
+      # le leta hai aur user ko text console hi dikhta rehta hai.
+      VT=$(sed -n 's/^tty//p' /sys/devices/virtual/tty/tty0/active 2>/dev/null | tr -d ' \n')
+      case "${VT:-}" in ''|*[!0-9]*) VT=1 ;; esac
+      [ -c "/dev/tty$VT" ] || VT=1
       # NOTE 1: `exec weston ... || exec weston ...` mat likho - exec shell kha jaata hai,
       #   to fallback attempts KABHI nahi chalte the (isi wajah se desktop kabhi nahi aaya).
-      # NOTE 2: weston ke DRM backend ko VT chahiye: '<stdin> not a vt -> use --tty'. Isliye
-      #   --tty=/dev/tty1 + stdin ko /dev/tty1 par redirect. (pehle '2>/dev/null' ki wajah se
-      #   ye message dikhta hi nahi tha, aur sirf headless backend chup-chaap chal jaata tha.)
-      # NOTE 3: LIBSEAT_BACKEND=builtin - logind/seatd wale live system me VT khud milta hai.
-      # (purana note) `exec weston ... || exec weston ...` me
-      # pehla exec shell kha jaata hai, to fallback attempts KABHI nahi chalte the (aur
-      # screen par desktop nahi aata tha - GL na hone par weston marta tha, chup) .
-      say "weston (Wayland) start - console switch: Ctrl+Alt+F7"
-      pk-chroot /bin/sh -c 'mkdir -p /run/pk-x; chmod 700 /run/pk-x; export XDG_RUNTIME_DIR=/run/pk-x; export XKB_DEFAULT_LAYOUT=us; test -d /usr/lib/dri || { export LIBGL_ALWAYS_SOFTWARE=1; export GALLIUM_DRIVER=llvmpipe; }; if command -v seatd-launch >/dev/null 2>&1; then SEATD="seatd-launch --"; else SEATD=""; LIBSEAT_BACKEND=builtin weston --backend=drm-backend.so --renderer=gl --tty=/dev/tty1 </dev/tty1; fi; test -S /run/pk-x/wayland-1 || $SEATD weston --backend=drm-backend.so --renderer=gl --socket=wayland-1; test -S /run/pk-x/wayland-1 || $SEATD weston --backend=drm-backend.so --socket=wayland-1; test -S /run/pk-x/wayland-1 || weston --backend=headless-backend.so --socket=wayland-1' >/run/pk/x-weston.log 2>&1 &
+      # NOTE 2: weston ke DRM backend ko VT chahiye ('<stdin> not a vt' -> --tty) aur
+      #   session ke liye logind/seatd. NOTE 3: 2>/dev/wali cheez reason chhupa leti thi -
+      #   ab har attempt ka output /run/pk/x-weston.log me rehta hai.
+      { printf 'pk-x: weston start (RT=%s hasdrm=%s seatd=%s vt=tty%s dri=%s)\n' "$RT" "${hasdrm:-0}" "$SEATD" "$VT" "$(ls /dev/dri/card* 2>/dev/null | tr '\n' ' ')"; } > /run/pk/x-weston.log 2>&1
+      mkdir -p "$RT/run/pk-x" 2>/dev/null; rm -f "$RT/run/pk-x/wayland-1" 2>/dev/null || true
+      say "weston (Wayland) start - VT=tty$VT seatd=$SEATD (log: /run/pk/x-weston.log)"
+      pk-chroot /bin/sh -c "mkdir -p /run/pk-x; chmod 700 /run/pk-x; export XDG_RUNTIME_DIR=/run/pk-x XKB_DEFAULT_LAYOUT=us XDG_SEAT=seat0 XDG_VTNR=$VT; test -d /usr/lib/dri || { export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe; }; if [ -S /run/seatd.sock ]; then LIBSEAT_BACKEND=seatd weston --backend=drm-backend.so --socket=wayland-1; fi; test -S /run/pk-x/wayland-1 || LIBSEAT_BACKEND=builtin weston --backend=drm-backend.so --tty=/dev/tty$VT </dev/tty$VT; test -S /run/pk-x/wayland-1 || weston --backend=drm-backend.so --socket=wayland-1; test -S /run/pk-x/wayland-1 || weston --backend=headless-backend.so --socket=wayland-1" >>/run/pk/x-weston.log 2>&1 &
       echo $! > "$PIDF"
       # socket ka wait: iske bina 'x-env' likh dena = jhootha success
       j=0
-      while [ $j -lt 20 ]; do
+      while [ $j -lt 25 ]; do
         [ -S "$RT/run/pk-x/wayland-1" ] && break
         sleep 1; j=$((j + 1))
       done
       if [ -S "$RT/run/pk-x/wayland-1" ]; then
         # clients chroot ke andar chalte hain -> in-chroot path hi do
         printf 'WAYLAND_DISPLAY=wayland-1\nXDG_RUNTIME_DIR=/run/pk-x\nPK_XDG_RUNTIME_HOST=%s\nDISPLAY=\n' "$RT/run/pk-x" > /run/pk/x-env
-        say "weston ready (socket: $RT/run/pk-x/wayland-1, ${j}s)"
-        [ "$hasdrm" = 1 ] || warn "weston HEADLESS par chal raha hai: koi physical screen nahi. 'pk-x stop' ke baad 'pk-desktop vnc 5900' use karo, ya VM ka graphics device badlo (docs/VM-TEST.md #2b)"
+        NOWVT=$(sed -n 's/^tty//p' /sys/devices/virtual/tty/tty0/active 2>/dev/null | tr -d ' \n')
+        printf 'weston vt=tty%s seatd=%s wait=%ss active=tty%s\n' "$VT" "$SEATD" "$j" "${NOWVT:-?}" > /run/pk/x-how
+        say "weston ready (socket: $RT/run/pk-x/wayland-1, ${j}s, VT=tty$VT seatd=$SEATD)"
+        printf '### PK: DESKTOP-VT (want=tty%s active=tty%s seatd=%s) ###\n' "$VT" "${NOWVT:-?}" "$SEATD" > /dev/console 2>/dev/null
+        if [ "${NOWVT:-}" != "$VT" ]; then
+          warn "weston chala par screen par abhi bhi tty${NOWVT:-?} dikhta hai (VT switch nahi hua) - 'pk-desktop vnc 5900' use karo"
+          printf '### PK: DESKTOP-VTMISMATCH (want=tty%s active=tty%s) ###\n' "$VT" "${NOWVT:-?}" > /dev/console 2>/dev/null
+        fi
+        [ "${hasdrm:-1}" = 1 ] || warn "weston HEADLESS par: koi physical screen nahi -> 'pk-desktop vnc 5900' ya VM ka graphics device badlo (docs/VM-TEST.md #2b)"
       else
-        warn "weston ka socket nahi aaya (GL/DRM?) -> $(tail -3 /run/pk/x-weston.log 2>/dev/null | tr '\n' '|' | cut -c1-160)"
+        warn "weston ka socket nahi aaya - reason: $(tail -3 /run/pk/x-weston.log 2>/dev/null | tr '\n' '|' | cut -c1-160)"
         kill "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null || true
         rm -f "$PIDF"
         if rbin Xvfb; then say "fallback: Xvfb"; start Xvfb; return $?; fi

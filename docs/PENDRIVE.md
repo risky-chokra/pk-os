@@ -164,6 +164,9 @@ dikhega (ye QA stage 8 me automate hai ✓).
 | Black screen, koi prompt | `c` (serial) try, ya `pk_debug`; display na ho to `g` ki jagah `l` |
 | Net nahi (wired) | `pk-net dhcp` ; marker `NET-OK (ip)` dekho. `udhcpc rc=0` par IP na aaye → `default.script` ka exec bit (purani ISOs): `ls -l /usr/share/udhcpc/default.script` (755 chahiye); fixed in current build |
 | Wi-Fi connect karna hai | `pk-wifi status` → phir `pk-get install -y wpasupplicant iw` (runtime me) → `pk-wifi connect <ssid> <pw>`. Boot me hi chahiye to `pk_wifi=<ssid>:<pw>`. Ye path **is sandbox me test nahi hua** (wireless hardware nahi) — fail ho to `/run/pk/wifi-boot.log` bhejo |
+| Naya user chahiye (apna account) | `pk-user add bob --admin --password=...` -> groups: audio,input,video,render,seat (device access). `pk-user autologin bob` se boot me uska shell; `pk-user list`, `pk-user doctor`. **Live ISO me /etc RAM me hai** -> reboot par user tabhi bachega jab `persistent` boot option ya installed system ho |
+| Screen par desktop (weston) | apps ISO + GRUB entry 5 (`g`). weston ko VT chahiye -> hamara **seatd** (`S55seatd` hook / `pk-seatd start`) use karta hai; marker: `PK: SEATD-OK`, `PK: DESKTOP-VT (want=tty1 active=tty1)` |
+| Audio/gamepad/serial/webcam chahiye | live me `snd-hda-intel`, `snd-usb-audio`, `snd-ac97`, bluetooth, uvc(webcam), hwmon, battery, typec modules ship hote hain + `/etc/mdev.conf` se `/dev/snd`(audio), `/dev/input`(input), `/dev/dri/card*`(video) groups ke saath; test: `pk-check` (rows: audio/input/serial/seatd) |
 | App not found / permission | `pk-info`, `pk-run --list`, `pk-runtime status`; runtime ke liye `sudo make runtime` + `make apps-iso` |
 | Install ke baad boot nahi | BIOS me us disk ko first boot karo; `pk-install` ke log me `grub-install` ki line dekho (`pk_silent` ho to /run/pk-install.log tail console par aata hai) |
 

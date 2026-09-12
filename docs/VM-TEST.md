@@ -200,6 +200,35 @@ Guest me aur cheezein check karni ho to boot option `pk_run=<cmd>`:
 `+` = space, `!` = commands ka separator (`;` GRUB khaata hai, isliye nahi chalta) —
 jaise `pk_run=cat+/run/pk/x-weston.log!ls+-l+/dev/dri`
 
+## 2c. Desktop, users aur devices ka VM-test (expected output ke saath)
+
+```sh
+# boot option (GRUB me e, ya ISO build karte waqt KERNEL_CMDLINE):
+#   pk_desktop=1 pk_user=bob pk_userpw=pk pk_check=1
+#
+# expected markers (serial log / dmesg):
+#   ### PK: DISPLAY-KMS (drm=1 driver=bochs-drm fb=1) ###     <- GPU driver + KMS
+#   ### PK: USERS-OK (users=2 groups=0 homes=0 autologin=bob) <- S12users hook
+#   ### PK: USER-AUTOLOGIN (bob) ###                          <- pk_user= se bana
+#   ### PK: SEATD-OK (socket=/run/seatd.sock in runtime, pid=..) <- session manager
+#   ### PK: DESKTOP-VT (want=tty1 active=tty1 seatd=1) ###     <- weston ne screen li
+#   ### PK: DESKTOP-OK (wayland-1) ###                         <- weston (Xvfb nahi!)
+#
+# guest ke andar:
+pk-user list            # users + unke groups (audio/input/video/seat)
+pk-user add alice --admin --password=alicepw
+pk-user info alice      # home exists? groups?
+su -m alice -c id       # uid=1001 ... groups=...(audio,input,video,render,seat)
+pk-user del alice --home
+pk-check --users        # add+su+del round-trip khud test karta hai
+pk-seatd status         # seatd socket + log
+ls -l /dev/snd /dev/input /dev/dri   # group/mode: audio / input / video
+```
+
+Agar `DESKTOP-VTMISMATCH` dikhe: weston chala par VT switch nahi hua (headless QEMU me
+ho sakta hai) -> `pk-desktop vnc 5900` se dekho, ya real monitor/VNC. `pk-seatd` log
+me `Failed to acquire VT` ho to `pk-seatd status` + `/run/pk/seatd.log` bhejo.
+
 ## 3. VM me andar jaake ye 8 commands (expected output ke saath)
 
 ```sh

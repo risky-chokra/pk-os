@@ -5,6 +5,7 @@
   install   : pk-install            (disk pe permanent install)
   network   : pk-net dhcp
   apps      : pk-run ./app  |  pk-shell  |  pk-get install -y <pkg>   (pk-runtime status)
+  users/device: pk-user list | pk-user add bob --admin | pk-seatd status | pk-check --users
   persistence: pk-persist           (USB pe changes save karne ke liye)
   Live session me sab changes RAM me hain; reboot pe reset.
 ================================================================

@@ -1,2 +1,14 @@
 root:x:0:
 pk:x:1000:
+tty:x:5:root
+disk:x:6:root
+lp:x:7:root,pk
+dialout:x:20:root,pk
+cdrom:x:24:root,pk
+audio:x:63:root,pk
+video:x:44:root,pk
+users:x:100:root,pk
+input:x:108:root,pk
+render:x:160:root,pk
+seat:x:990:root,pk
+wheel:x:999:root

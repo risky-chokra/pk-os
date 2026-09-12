@@ -117,3 +117,21 @@ pk-check --save     # + hardware, net, USB speed, display, runtime, apps, Secure
   reachable rehta hai (screen par nahi, network par haan) — kabhi fail nahi hoti.
 - `amdgpu`/`xe` intentionally base live me nahi (firmware .bin ke bina probe fail
   karte hain + ~4 MB) — installed system / `pk-firmware` pack me wo cover hote hain.
+### Session manager, users aur I/O devices (round: "desktop aana hi chahiye")
+- **seatd** (`pk-seatd`, `S55seatd`): live me systemd-logind nahi hai, aur weston 10 ka
+  DRM backend session ke bina VT nahi le pata tha. seatd App Runtime ke andar se chalta hai
+  (`pk-chroot` se) -> socket `$RT/run/seatd.sock`, group `seat`, mode 0660; weston
+  `LIBSEAT_BACKEND=seatd XDG_SEAT=seat0 XDG_VTNR=<active vt>` se chalu hota hai.
+  Na mile to chain: builtin libseat + `--tty=<active vt>` -> auto backend -> headless -> Xvfb.
+- **VT ka chunav**: `/sys/devices/virtual/tty/tty0/active` se active VT; wahi weston ko
+  diya jaata hai (warna weston free VT le kar invisible session bana deta tha).
+- **Users**: `pk-user` (busybox adduser/deluser/addgroup/chpasswd par bana, koi shadow-utils
+  nahi) -> `list/info/add/del/passwd/autologin/doctor`; har user ko `users,audio,input,video,
+  render,dialout,lp` + `seat`; `S12users` hook groups + homes ensure karta hai.
+- **Device permissions**: `/etc/mdev.conf` (busybox mdev) snd=audio, input=input,
+  dri/video=video, ttyUSB=dialout, video*=video, block=disk 0660; har rule par
+  `@/etc/mdev/hotplug.sh` (mdev pehla match leta hai, isliye repeat).
+- **I/O modules (live)**: sound(core/hda/ac97/usb/drivers), bluetooth, uvc, hwmon,
+  power_supply, backlight, thunderbolt, usb/typec/phy/misc + GPU KMS drivers.
+- **pk_check**: rows `seatd`, `audio`, `input`, `serial`, `webcam`, `desktop`, `users`
+  aur `--users` me add->su->del round-trip; QA me `USERS-OK`/`SEATD-OK`/`DESKTOP-VT`/VTMISMATCH.

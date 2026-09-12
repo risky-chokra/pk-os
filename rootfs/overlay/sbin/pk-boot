@@ -108,6 +108,41 @@ if has pk_check=1 || has pk_check=on || has pk_check=gui; then
   [ -n "${fr:-}" ] && printf '### PK: CHECK-ROWS %s ###\n' "$fr" > /dev/console
   say "pk-check done (rc=$?) - poori report: less /run/pk/check.txt"
 fi
+# ------------------------------------------------ user: pk_user=<name> [+ pk_userpw=<pw>]
+# "root ke alawa koi user nahi" wali kami yahan khatam: boot option se user banta hai
+# (na ho to) aur tty1 ka autologin us par set ho jaata hai. Installed system me ye
+# values pk-install ke --user/--user-password se aati hain.
+_pu=$(sed -n 's/.*pk_user=\([^ ]*\).*/\1/p' /proc/cmdline 2>/dev/null | head -1)
+if [ -n "${_pu:-}" ] && [ "${_pu:-}" != root ]; then
+  if ! grep -qs "^$_pu:" /etc/passwd; then
+    _ppw=$(sed -n 's/.*pk_userpw=\([^ ]*\).*/\1/p' /proc/cmdline 2>/dev/null | head -1)
+    say "user '$_pu' nahi hai -> pk-user add se bana raha hoon"
+    if [ -n "${_ppw:-}" ]; then
+      pk-user add "$_pu" --password="$_ppw" >/run/pk/user-boot.log 2>&1
+    else
+      pk-user add "$_pu" >/run/pk/user-boot.log 2>&1 </dev/null
+    fi
+    say "  pk-user add rc=$? (detail: /run/pk/user-boot.log)"
+  fi
+  if grep -qs "^$_pu:" /etc/passwd; then
+    mkdir -p /run/pk 2>/dev/null; printf '%s\n' "$_pu" > /run/pk/autologin 2>/dev/null
+    say "tty1 autologin = $_pu"
+    printf '### PK: USER-AUTOLOGIN (%s) ###\n' "$_pu" > /dev/console
+  else
+    printf '### PK: USER-ADD-FAIL (%s) ###\n' "$_pu" > /dev/console
+  fi
+fi
+
+# ------------------------------------------------ seatd (session manager)
+# weston ko VT + /dev/dri + /dev/input lene ke liye logind chahiye; hamare live me
+# systemd nahi, isliye seatd (runtime ke andar) wahi kaam karta hai. pk_seatd=off se band.
+if ! has pk_seatd=off; then
+  if [ ! -S /opt/pk/run/seatd.sock ]; then
+    say "pk-seatd start (weston session ke liye)"
+    pk-seatd start >/run/pk/seatd-boot.log 2>&1 || say "  seatd fail (detail: /run/pk/seatd-boot.log) - weston bina seatd try karega"
+  fi
+fi
+
 # desktop session (apps+wala ISO real PC pe kholne ke liye) - pk_desktop=1
 if has pk_desktop=1 || has pk_desktop=on; then
   say "pk-desktop start (weston/Xvfb; detail /run/pk/desktop.log)"

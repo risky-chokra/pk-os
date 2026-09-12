@@ -6,6 +6,7 @@ PATH=/bin:/sbin:/usr/bin:/usr/sbin
 for a in $(cat /proc/cmdline 2>/dev/null); do
   case "$a" in pk_seatd=off) printf 'pk-seatd-hook: band (pk_seatd=off)\n'; exit 0 ;; esac
 done
-[ -x /usr/bin/pk-seatd ] || exit 0
-/usr/bin/pk-seatd start
+have() { command -v "$1" >/dev/null 2>&1; }
+  have pk-seatd || { printf 'pk-seatd-hook: pk-seatd image me nahi -> skip\n'; exit 0; }
+pk-seatd start
 exit 0

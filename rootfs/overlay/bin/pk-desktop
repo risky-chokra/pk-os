@@ -5,6 +5,7 @@
 #   pk-desktop status         kya chal raha hai, kaunsa display
 #   pk-desktop stop           session band
 #   pk-desktop vnc <port>     Xvfb + vnc (headless machine ko screen dikhane ke liye)
+#   pk-desktop shot [file]      weston se desktop ki PNG (QA/evidence ke liye)
 #   pk-desktop outputs        connected displays + current modes (DRM se)
 #   pk-desktop scale 2 [OUT]  High-DPI scaling (weston.ini)   mode/transform/arrange bhi
 #   pk-desktop restart        ini reload (session dobara start)
@@ -133,7 +134,9 @@ pk's OS desktop
   check    :  pk-check --all
   iOS/Android: pk-ios why ; pk-android doctor
 W
-  if [ -n "${DISPLAY:-}" ] && rtbin xterm; then
+  if [ -e /run/pk/x-term ]; then
+    say "terminal already chal chuka hai (pk-x ne bheja) - duplicate nahi khologe"
+  elif [ -n "${DISPLAY:-}" ] && rtbin xterm; then
     pk-run --gui xterm -e sh -c 'cat /root/pk-desktop-welcome.txt; echo; exec /bin/sh' >/dev/null 2>&1 &
     say "terminal khola (xterm)"
   elif [ -n "${WAYLAND_DISPLAY:-}" ] && rtbin weston-terminal; then
@@ -170,6 +173,35 @@ vnc() {
   fi
 }
 
+# ------------------------------------------------------------------ shot
+# weston se *apni* screen capture karwata hai (weston-screenshooter; iske liye
+# weston --debug chahiye, jo pk-x lagata hai). Ye QA ka pixel-evidence hai:
+# "desktop aaya ya nahi" ka jawab screenshot se milta hai, markers se nahi.
+do_shot() {
+  out=${1:-/run/pk/desktop-shot.png}
+  runtime_ok || { warn "runtime attach nahi -> pk-desktop start pehle"; return 66; }
+  if ! grep -qs 'WAYLAND_DISPLAY' /run/pk/x-env 2>/dev/null; then
+    warn "Wayland session nahi chal raha (Xvfb/X11 session me ye kaam nahi karta)"
+    warn "  X11 ke liye: pk-chroot /bin/sh -c 'DISPLAY=:0 xwd -root -out /root/s.xwd' (x11-utils)"
+    return 66
+  fi
+  tmp=/root/.pk-shot.$$.png
+  pk-chroot /bin/sh -c "export XDG_RUNTIME_DIR=/run/pk-x WAYLAND_DISPLAY=wayland-1; cd /root; weston-screenshooter $tmp" >/run/pk/shot.log 2>&1
+  rc=$?
+  if [ -s "$RT/root/.pk-shot.$$.png" ] || [ -s "/root/.pk-shot.$$.png" ]; then
+    src="$RT/root/.pk-shot.$$.png"; [ -s "$src" ] || src=$tmp
+    mkdir -p "$(dirname "$out")" 2>/dev/null
+    cp -f "$src" "$out" 2>/dev/null && { rm -f "$src" "$tmp" 2>/dev/null
+      printf 'pk-desktop: shot %s (%s B)\n' "$out" "$(wc -c < "$out" 2>/dev/null)"
+      printf '### PK: GUI-SHOT-OK (%s bytes -> %s) ###\n' "$(wc -c < "$out" 2>/dev/null)" "$out" > /dev/console 2>/dev/null
+      return 0; }
+  fi
+  warn "screenshot nahi bana (rc=$rc) - weston --debug laga hona chahiye; log:"
+  tail -3 /run/pk/shot.log 2>/dev/null | sed 's/^/  /'
+  printf '### PK: GUI-SHOT-FAIL (rc=%s) ###\n' "$rc" > /dev/console 2>/dev/null
+  return 1
+}
+
 case "${1:-start}" in
   start|"") shift 2>/dev/null || true; start ;;
   app)      shift; [ $# -gt 0 ] || { echo "usage: pk-desktop app <x> [args...]"; exit 1; }
@@ -179,6 +211,8 @@ case "${1:-start}" in
             # app ko foreground slice me daalo (interactive priority)
             command -v pk-tune >/dev/null 2>&1 && pk-tune fg "$ap" >/dev/null 2>&1 || true
             wait "$ap" ;;
+  shot)
+    shift; do_shot "${1:-}" ;;
   status)   status ;;
   outputs|displays|monitors) outputs ;;
   scale)

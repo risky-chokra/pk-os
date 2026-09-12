@@ -128,7 +128,7 @@ if [ -n "$drm" ]; then row ok drm "KMS devices:$drm (weston KMS backend chalega)
 # ---- I/O devices + session manager (audio/input/serial/seatd) --------------------
 if [ -S "$RT/run/seatd.sock" ]; then
   row ok seatd "seatd chalu ($RT/run/seatd.sock) - weston ko VT+DRM+input isi se milta hai"
-elif [ -x /usr/bin/pk-seatd ]; then
+elif have pk-seatd; then
   row info seatd "seatd band -> 'pk-seatd start' (weston bina session manager ke headless par gir sakta hai)"
 fi
 sndn=$(ls /dev/snd/pcmC*D*p 2>/dev/null | wc -l | tr -d ' ')
@@ -219,6 +219,17 @@ if [ "$DOGUI" = 1 ]; then
     if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
       ( printf '### PK: GUI-X-OK (%s) ###\n' "${DISPLAY:-${WAYLAND_DISPLAY:-wayland}}" > /dev/console ) 2>/dev/null
       row ok display "DISPLAY=${DISPLAY:-none} WAYLAND=${WAYLAND_DISPLAY:-none} (rc=$rc${sess_prev:+, session pehle se tha})"
+      # desktop ka *pixel* evidence: weston se apni screen capture karwaao
+      # (pk-x weston ko --debug ke saath chalata hai -> screenshooter chalta hai)
+      sz_shot=""
+      if [ -n "${WAYLAND_DISPLAY:-}" ] && have pk-desktop; then
+        if pk-desktop shot /run/pk/desktop-shot.png >/run/pk/shot.log 2>&1; then
+          sz=$(wc -c < /run/pk/desktop-shot.png 2>/dev/null); sz_shot=$sz
+          row ok guishot "desktop PNG /run/pk/desktop-shot.png (${sz:-?} B) - isme asli desktop render hai"
+        else
+          row warn guishot "screenshot nahi bana: $(tail -2 /run/pk/shot.log 2>/dev/null | tr '\n' '|' | cut -c1-90)"
+        fi
+      fi
       # weston ke andar XWayland ho to :0 pe X clients chal sakte hain
       xd=${DISPLAY:-}
       if [ -z "$xd" ] && [ -e "$RT/tmp/.X11-unix/X0" ]; then xd=":0"; row info xwayland "XWayland socket mila ($RT/tmp/.X11-unix/X0)"; fi
@@ -240,8 +251,19 @@ if [ "$DOGUI" = 1 ]; then
           row fail guiapp "xterm rc!=0 (detail: /run/pk/x.log)"
           ( printf '### PK: GUI-APP-FAIL (xterm) ###\n' > /dev/console ) 2>/dev/null
         fi
+      elif [ -n "${WAYLAND_DISPLAY:-}" ] && [ -s /run/pk/desktop-shot.png ]; then
+        # shot upar hi ban chuka hai; iska matlab compositor + client path dono theek hain
+        row ok guiapp "weston session + desktop screenshot (${sz_shot:-?} B) = client path OK"
+        ( printf '### PK: GUI-APP-OK (weston shot) ###\n' > /dev/console ) 2>/dev/null
+      elif rt_has wayland-info; then
+        out=$(pk-chroot /bin/sh -c "export XDG_RUNTIME_DIR=/run/pk-x WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}; wayland-info 2>&1 | head -8" 2>/dev/null | tr '\n' ' ' | cut -c1-120)
+        case "$out" in
+          *"wl_compositor"*|*"wl_seat"*|*"Output"*) row ok guiapp "wayland-info: $out"
+            ( printf '### PK: GUI-APP-OK (wayland-info) ###\n' > /dev/console ) 2>/dev/null ;;
+          *) row warn guiapp "wayland-info ka output ajeeb: ${out:-<khaali>}" ;;
+        esac
       elif rt_has weston-info; then
-        out=$(pk-run --gui weston-info 2>&1 | tr '\n' ' ' | cut -c1-90)
+        out=$(pk-chroot /bin/sh -c "export XDG_RUNTIME_DIR=/run/pk-x WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}; weston-info 2>&1 | head -6" 2>/dev/null | tr '\n' ' ' | cut -c1-120)
         case "$out" in
           *"wl_compositor"*|*"wl_seat"*|*"Output"*|*"compositor"*)
             row ok guiapp "weston-info: $out"

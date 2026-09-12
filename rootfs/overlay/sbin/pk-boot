@@ -9,6 +9,9 @@ umask 022
 have() { command -v "$1" >/dev/null 2>&1; }
 has()  { grep -q -- "$1" /proc/cmdline 2>/dev/null; }
 note() { printf 'pk-boot: %s\n' "$*"; }
+say()  { printf 'pk-boot: %s\n' "$*"; }   # purane blocks say use karte the par ye define hi nahi tha
+                              # -> boot log me har jagah "pk-boot: line N: say: not found" (latent bug).
+
 dbg()  { [ "$PK_DEBUG" = 1 ] && printf 'pk-boot(dbg): %s\n' "$*"; return 0; }
 
 # kernel messages console par na dikhein (boot clean rahe)
@@ -122,11 +125,11 @@ if [ -n "${_pu:-}" ] && [ "${_pu:-}" != root ]; then
     else
       pk-user add "$_pu" >/run/pk/user-boot.log 2>&1 </dev/null
     fi
-    say "  pk-user add rc=$? (detail: /run/pk/user-boot.log)"
+    note "  pk-user add rc=$? (detail: /run/pk/user-boot.log)"
   fi
   if grep -qs "^$_pu:" /etc/passwd; then
     mkdir -p /run/pk 2>/dev/null; printf '%s\n' "$_pu" > /run/pk/autologin 2>/dev/null
-    say "tty1 autologin = $_pu"
+    note "tty1 autologin = $_pu"
     printf '### PK: USER-AUTOLOGIN (%s) ###\n' "$_pu" > /dev/console
   else
     printf '### PK: USER-ADD-FAIL (%s) ###\n' "$_pu" > /dev/console
@@ -138,15 +141,15 @@ fi
 # systemd nahi, isliye seatd (runtime ke andar) wahi kaam karta hai. pk_seatd=off se band.
 if ! has pk_seatd=off; then
   if [ ! -S /opt/pk/run/seatd.sock ]; then
-    say "pk-seatd start (weston session ke liye)"
-    pk-seatd start >/run/pk/seatd-boot.log 2>&1 || say "  seatd fail (detail: /run/pk/seatd-boot.log) - weston bina seatd try karega"
+    note "pk-seatd start (weston session ke liye)"
+    pk-seatd start >/run/pk/seatd-boot.log 2>&1 || note "  seatd fail (detail: /run/pk/seatd-boot.log) - weston bina seatd try karega"
   fi
 fi
 
 # desktop session (apps+wala ISO real PC pe kholne ke liye) - pk_desktop=1
 if has pk_desktop=1 || has pk_desktop=on; then
-  say "pk-desktop start (weston/Xvfb; detail /run/pk/desktop.log)"
-  pk-desktop start >/run/pk/desktop.log 2>&1 || say "pk-desktop fail (log: /run/pk/desktop.log)"
+  note "pk-desktop start (weston/Xvfb; detail /run/pk/desktop.log)"
+  pk-desktop start >/run/pk/desktop.log 2>&1 || note "pk-desktop fail (log: /run/pk/desktop.log)"
   # 'desktop kyun nahi aaya' ka jawab ab screen par hi milna chahiye: pk-x ka detail
   # /run/pk/x.log me aur pk-desktop ka /run/pk/desktop.log me dab jaata tha.
   d_tail=$(tr '\n' '|' < /run/pk/x-weston.log 2>/dev/null | tail -c 220)
@@ -164,7 +167,7 @@ if has pk_desktop=1 || has pk_desktop=on; then
     fi
   fi
   if has pk_check=1 || has pk_check=on || has pk_check=gui; then
-    say "desktop ke baad dobara: pk-check --gui"
+    note "desktop ke baad dobara: pk-check --gui"
     pk-check --save --gui > /run/pk/check2.out 2>&1
   fi
 fi

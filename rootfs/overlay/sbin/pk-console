@@ -16,6 +16,11 @@ AUTO=""
 if [ -z "$AUTO" ] && [ -f /etc/pk-console.conf ]; then
   AUTO=$(sed -n 's/^PK_CONSOLE_AUTOLOGIN=//p' /etc/pk-console.conf 2>/dev/null | head -1)
 fi
+# serial/SSH-jaise console par autologin NAHI lagate: wo recovery/debug channel hai,
+# wahan root hi chahiye (aur bob jaisa user wahan root ke logs padh bhi na sake).
+case $TTY in
+  ttyS*|ttyAMA*|ttyUSB*|hvc*|ttyGS*) AUTO="" ;;
+esac
 if [ -n "$AUTO" ] && ! grep -qs "^$AUTO:" /etc/passwd; then
   echo "pk-console: autologin user '$AUTO' /etc/passwd me nahi -> root"
   AUTO=""

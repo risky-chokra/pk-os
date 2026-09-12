@@ -50,6 +50,9 @@ if [ "$need" = 0 ]; then
   fi
 fi
 
+# GPU driver abhi load hua hai -> /dev/dri/card* naye bane: perms yahi set honge
+command -v pk-devperms >/dev/null 2>&1 && pk-devperms 2>/dev/null
+
 # --- 2) final numbers ----------------------------------------------------------------
 fbn=$(ls /dev/fb* 2>/dev/null | wc -l | tr -d ' ')
 drm=$(ls /dev/dri/card* 2>/dev/null | grep -c 'card[0-9]*$')

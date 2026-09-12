@@ -59,6 +59,12 @@ say "coldplug: /dev scan (mdev -s)"
 busybox mdev -s >/dev/null 2>&1
 rc=$?
 
+# mdev jin nodes ko chhu leta nahi (devtmpfs ne pehle se bana diye the) unke group/mode
+# yahan set karte hain - warna /dev/dri, /dev/snd, /dev/input root-only reh jaate hain aur
+# normal user ko GPU/sound/keyboard nahi milta. (GPU driver *baad* me load hota hai, isliye
+# S99zdisplay isi ko dobara chalata hai.)
+if have pk-devperms; then pk-devperms; fi
+
 lis=0
 if [ -x /bin/uevent ] || have uevent; then
   ( setsid busybox uevent busybox mdev >/dev/null 2>&1 & ) 2>/dev/null && lis=1

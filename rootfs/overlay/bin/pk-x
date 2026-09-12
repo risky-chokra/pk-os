@@ -18,6 +18,13 @@ rbin() { [ -x "$RT/usr/bin/$1" ] || [ -x "$RT/bin/$1" ]; }
 start() {
   want=${1:-auto}
   mounted "$RT" || { say "runtime attach nahi hai -> pk-runtime start"; exit 64; }
+  # idempotent: pk-boot aur pk-check --gui dono se do baar call ho sakta hai - dusre
+  # instance par weston "unable to lock wayland-1.lock" de kar Xvfb par gir jaata tha.
+  if [ -S "$RT/run/pk-x/wayland-1" ] && pidof weston >/dev/null 2>&1; then
+    say "Wayland session pehle se chal raha hai (weston pid $(pidof weston)) - dobara nahi uthayenge"
+    [ -r "$ENVR" ] || printf 'WAYLAND_DISPLAY=wayland-1\nXDG_RUNTIME_DIR=/run/pk-x\nPK_XDG_RUNTIME_HOST=%s\nDISPLAY=\n' "$RT/run/pk-x" > "$ENVR" 2>/dev/null
+    return 0
+  fi
   # KMS device ke bina weston sirf 'headless' backend par chadhta hai -> session ready
   # dikhega par SCREEN PAR KUCH NAHI (log isi ko "desktop nahi aaya" kehte hain).
   # Isliye auto mode me /dev/dri/card* dekho: na ho to Xvfb (VNC-able) prefer karo.
@@ -47,9 +54,9 @@ start() {
       #   session ke liye logind/seatd. NOTE 3: 2>/dev/wali cheez reason chhupa leti thi -
       #   ab har attempt ka output /run/pk/x-weston.log me rehta hai.
       { printf 'pk-x: weston start (RT=%s hasdrm=%s seatd=%s vt=tty%s dri=%s)\n' "$RT" "${hasdrm:-0}" "$SEATD" "$VT" "$(ls /dev/dri/card* 2>/dev/null | tr '\n' ' ')"; } > /run/pk/x-weston.log 2>&1
-      mkdir -p "$RT/run/pk-x" 2>/dev/null; rm -f "$RT/run/pk-x/wayland-1" 2>/dev/null || true
+      mkdir -p "$RT/run/pk-x" 2>/dev/null; rm -f "$RT/run/pk-x/wayland-1" "$RT/run/pk-x/wayland-1.lock" 2>/dev/null || true
       say "weston (Wayland) start - VT=tty$VT seatd=$SEATD (log: /run/pk/x-weston.log)"
-      pk-chroot /bin/sh -c "mkdir -p /run/pk-x; chmod 700 /run/pk-x; export XDG_RUNTIME_DIR=/run/pk-x XKB_DEFAULT_LAYOUT=us XDG_SEAT=seat0 XDG_VTNR=$VT; test -d /usr/lib/dri || { export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe; }; if [ -S /run/seatd.sock ]; then LIBSEAT_BACKEND=seatd weston --backend=drm-backend.so --socket=wayland-1; fi; test -S /run/pk-x/wayland-1 || LIBSEAT_BACKEND=builtin weston --backend=drm-backend.so --tty=/dev/tty$VT </dev/tty$VT; test -S /run/pk-x/wayland-1 || weston --backend=drm-backend.so --socket=wayland-1; test -S /run/pk-x/wayland-1 || weston --backend=headless-backend.so --socket=wayland-1" >>/run/pk/x-weston.log 2>&1 &
+      pk-chroot /bin/sh -c "mkdir -p /run/pk-x; chmod 700 /run/pk-x; export XDG_RUNTIME_DIR=/run/pk-x XKB_DEFAULT_LAYOUT=us XDG_SEAT=seat0 XDG_VTNR=$VT; test -d /usr/lib/dri || { export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe; }; if [ -S /run/seatd.sock ]; then LIBSEAT_BACKEND=seatd weston --debug --backend=drm-backend.so --socket=wayland-1; fi; test -S /run/pk-x/wayland-1 || LIBSEAT_BACKEND=builtin weston --debug --backend=drm-backend.so --tty=/dev/tty$VT </dev/tty$VT; test -S /run/pk-x/wayland-1 || weston --debug --backend=drm-backend.so --socket=wayland-1; test -S /run/pk-x/wayland-1 || weston --debug --backend=headless-backend.so --socket=wayland-1" >>/run/pk/x-weston.log 2>&1 &
       echo $! > "$PIDF"
       # socket ka wait: iske bina 'x-env' likh dena = jhootha success
       j=0
@@ -67,6 +74,14 @@ start() {
         if [ "${NOWVT:-}" != "$VT" ]; then
           warn "weston chala par screen par abhi bhi tty${NOWVT:-?} dikhta hai (VT switch nahi hua) - 'pk-desktop vnc 5900' use karo"
           printf '### PK: DESKTOP-VTMISMATCH (want=tty%s active=tty%s) ###\n' "$VT" "${NOWVT:-?}" > /dev/console 2>/dev/null
+        fi
+        # session ke baad ek client chahiye, warna weston ki screen plain black dikhti
+        # hai ("desktop aaya ya nahi" ka fark hi nahi pata chalta). weston ka apna
+        # terminal (X nahi) - isliye Xwayland ke bhi bhi chalta hai.
+        if [ -x "$RT/usr/bin/weston-terminal" ] || [ -x "$RT/usr/bin/xterm" ]; then
+          ( pk-chroot /bin/sh -c 'export XDG_RUNTIME_DIR=/run/pk-x WAYLAND_DISPLAY=wayland-1; cd; [ -x /usr/bin/weston-terminal ] && exec /usr/bin/weston-terminal; [ -x /usr/bin/xterm ] && exec env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR=/run/pk-x DISPLAY= /usr/bin/xterm' >>/run/pk/x-weston.log 2>&1 ) &
+          : > /run/pk/x-term 2>/dev/null
+          say "terminal uthaya (weston-terminal/xterm) - screen par desktop dikhega"
         fi
         [ "${hasdrm:-1}" = 1 ] || warn "weston HEADLESS par: koi physical screen nahi -> 'pk-desktop vnc 5900' ya VM ka graphics device badlo (docs/VM-TEST.md #2b)"
       else

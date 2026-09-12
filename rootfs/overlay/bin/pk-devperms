@@ -1,0 +1,49 @@
+#!/bin/sh
+# pk's OS :: /dev nodes ke group/mode theek karta hai (mdev jin nodes ko chhu leta
+# hai nahi - khaaskar jo devtmpfs ne pehle se bana diye the, ya jo GPU driver
+# load hone par *baad* me bante hain).
+#   pk-devperms            # ek fix-up phera
+#   pk-devperms --watch      # 5 baar, 2s gap (driver late bind ho to bhi lag jaaye)
+# Groups /etc/group se resolve hote hain; na milte ho to chup-chaap skip (base ISO
+# me sound hardware na ho to /dev/snd hi nahi hota) .
+set -u
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+GRP() { awk -F: -v G="$1" '$1==G{print $3; exit}' /etc/group 2>/dev/null; }
+say() { printf 'pk-devperms: %s\n' "$*"; }
+fix() { # <glob> <group> <mode>
+  pat=$1; g=$2; m=$3; gid=$(GRP "$g")
+  [ -n "${gid:-}" ] || { say "group '$g' /etc/group me nahi -> $pat skip"; return 0; }
+  n=0
+  for f in $pat; do
+    [ -e "$f" ] || continue
+    chgrp "$gid" "$f" 2>/dev/null && n=$((n + 1))
+    chmod "$m" "$f" 2>/dev/null
+  done
+  [ "$n" != 0 ] && say "$pat -> :$g ($m), $n nodes"
+  return 0
+}
+rounds=1
+[ "${1:-}" = "--watch" ] && rounds=5
+i=0
+while [ $i -lt $rounds ]; do
+  i=$((i + 1))
+  fix "/dev/dri/card*"           video   660
+  fix "/dev/dri/renderD*"        render  666
+  fix "/dev/fb*"                 video   660
+  fix "/dev/input/event*"        input   660
+  fix "/dev/input/mouse*"        input   660
+  fix "/dev/input/touchscreen*"  input   660
+  fix "/dev/snd/*"               audio   660
+  fix "/dev/snd/seq"             audio   666
+  fix "/dev/snd/timer"           audio   666
+  fix "/dev/video*"              video   660
+  fix "/dev/media*"              video   660
+  fix "/dev/tty[0-9]*"           tty     620
+  fix "/dev/ttyUSB*"             dialout 660
+  fix "/dev/ttyACM*"             dialout 660
+  fix "/dev/ttyS*"               dialout 660
+  fix "/dev/usb/lp*"             lp      660
+  fix "/dev/hidraw*"             input   660
+  [ $i -lt $rounds ] && sleep 2
+done
+exit 0

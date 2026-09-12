@@ -23,6 +23,14 @@ have() { command -v "$1" >/dev/null 2>&1; }
 rbin() { [ -x "$RT/usr/sbin/$1" ] || [ -x "$RT/usr/bin/$1" ]; }
 
 start() {
+  # S55seatd hook runtime-attach ke turant baad chalta hai, par overlay mount thoda der
+  # se stable ho sakta hai -> 15s tak intezaar, phir hi skip. (Warna hook order par
+  # nirbhar hokar "SEATD-SKIP (no runtime)" aa jaata tha jabki runtime 2s baad lag jaata.)
+  i=0
+  while ! mounted; do
+    i=$((i + 1)); [ $i -gt 15 ] && break
+    sleep 1
+  done
   mounted || { say "runtime attach nahi hai (pk-runtime start) - seatd skip"; mark "SEATD-SKIP (no runtime)"; return 64; }
   rbin seatd || { say "runtime me seatd nahi -> pk-get install -y seatd"; mark "SEATD-SKIP (seatd not in runtime)"; return 70; }
   if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null; then
@@ -34,12 +42,21 @@ start() {
   grep -qs '^seat:' "$RT/etc/group" 2>/dev/null || printf 'seat:x:990:\n' >> "$RT/etc/group" 2>/dev/null
   grep -qs '^seat:' /etc/group 2>/dev/null || addgroup seat >/dev/null 2>&1
   # daemon: pk-chroot ke andar, taaki socket wahi mile jahan weston dekhta hai
-  setsid pk-chroot /bin/sh -c 'exec /usr/sbin/seatd -u 0 -g seat -l error 2>&1 || exec seatd -u 0 -g seat -l error' >"$LOGF" 2>&1 &
-  echo $! > "$PIDF" 2>/dev/null
-  i=0
-  while [ $i -lt 12 ]; do
+  # do try: pehle group 'seat' ke saath (multi-user access), na chale to plain root socket.
+  # 'setsid' isliye ki shell ke band hone par bhi daemon bache rahe.
+  # NOTE: seatd -u ko *naam* chahiye (getpwnam karta hai). "-u 0" dene par wo
+  #   "Could not find user by name 0." de kar exit ho jaata tha (ye guest me pakda).
+  for args in "-u root -g seat -l error" "-u root -l error"; do
+    setsid pk-chroot /bin/sh -c "exec /usr/sbin/seatd $args 2>&1 || exec seatd $args 2>&1" >>"$LOGF" 2>&1 &
+    echo $! > "$PIDF" 2>/dev/null
+    i=0
+    while [ $i -lt 10 ]; do
+      [ -S "$SOCK" ] && break
+      sleep 1; i=$((i + 1))
+    done
     [ -S "$SOCK" ] && break
-    sleep 1; i=$((i + 1))
+    say "try '$args' fail -> agli koshish"
+    kill "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null || true
   done
   if [ -S "$SOCK" ]; then
     chmod 660 "$SOCK" 2>/dev/null || true
@@ -52,7 +69,8 @@ start() {
   fi
   say "socket nahi bana; log: $LOGF"
   tail -4 "$LOGF" 2>/dev/null | sed 's/^/    /'
-  mark "SEATD-FAIL (socket nahi bana)"
+  sr=$(tail -c 150 "$LOGF" 2>/dev/null | tr '\n' '|' | tr -s ' ')
+  mark "SEATD-FAIL (sock nahi bana: ${sr:-no-log})"
   return 1
 }
 

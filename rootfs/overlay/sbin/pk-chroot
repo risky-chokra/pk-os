@@ -8,6 +8,14 @@ PATH=/bin:/sbin:/usr/bin:/usr/sbin
 RT=${PK_RUNTIME_ROOT:-/opt/pk}
 
 have() { command -v "$1" >/dev/null 2>&1; }
+# chroot/CAP_SYS_CHROOT + runtime ke /etc me write = root chahiye. Non-root user ko
+# pehle hi saaf bata dete hain (warna 'Operation not permitted' ke beech me khona padta).
+if [ "$(id -u)" != 0 ]; then
+  echo "pk-chroot: isse root hi chala sakta hai (chroot + /opt/pk/etc write)."
+  echo "           live system me desktop root session hai; user ke liye device access"
+  echo "           (audio/input/video/render/seat groups) already mila hua hai - 'id' se dekho."
+  exit 65
+fi
 mounted() { grep -q " $1 " /proc/mounts 2>/dev/null; }
 say() { printf 'pk-chroot: %s\n' "$*" >&2; }
 bind() { # <src> <dst>

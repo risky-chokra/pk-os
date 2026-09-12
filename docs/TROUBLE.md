@@ -135,6 +135,7 @@ grep -a pk-display-status /etc/motd  # login screen ke upar bhi yehi dikhta hai
 | kernel log: `vmwgfx ... probe with driver vmwgfx failed with error -38` | QEMU ka emulated VMware SVGA purana (v2) hai, kernel reject karta hai | `-vga vmware` chhodo; `-vga std`/`-vga virtio` use karo (asli VMware/VBox par vmwgfx chalta hai) |
 
 ```
+pk-desktop shot /root/desktop.png   # weston se desktop ki PNG - 'aayi ya nahi' ka final proof
 pk-desktop status      # session/Xvfb ke baare me + weston.ini
 pk-x status            # konsa display server chala (weston/Xvfb) + log
 pk-check --gui         # GUI round-trip test (xterm khola, screenshot/exit check)

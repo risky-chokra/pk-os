@@ -376,6 +376,7 @@ pk-user add bob --admin --password=bobpw   # user + audio/input/video/seat group
 pk-user autologin bob                      # tty1 par bob ka shell (password ke bina)
 pk-user list ; pk-user info bob ; pk-user doctor
 pk-user del bob --home
+pk-desktop shot /root/desktop.png               # desktop ki screenshot (weston se)
 pk-seatd status                             # session manager (weston ko VT/dri/input)
 pk-check --users                            # add -> su -> del round-trip test
 ```

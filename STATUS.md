@@ -399,6 +399,39 @@ Kya-kya joda (sab additive; purana fallback chain intact):
 - QA: `USERS-OK`, `MDEV-OK`, `SEATD-OK`, `DESKTOP-VT`, `DESKTOP-WESTON-LOG` checks +
   ek **negative** check (`DESKTOP-VTMISMATCH` aaya to test FAIL) -> ab 80 checks.
 
+### 4n. Ye round guest me kya-kya *prove* hua (apps ISO, QEMU q35, virtio-gpu+EDID / -vga std)
+
+| Check | Measured result |
+|---|---|
+| seatd session manager | `### PK: SEATD-OK (socket=/run/seatd.sock in runtime, pid=1347) ###` + `pk-seatd status: RUNNING`, socket `srw-rw---- root seat` ✅ |
+| KMS device | `DISPLAY-KMS (drm=1 driver=virtio-pci fb=1)` (aur `-vga std` par `driver=bochs-drm`) ✅ |
+| weston + visible VT | `DESKTOP-VT (want=tty1 active=tty1 seatd=1)`, **koi `DESKTOP-VTMISMATCH` nahi**, `DESKTOP-OK (wayland-1)`, `TUNE-FG-OK (weston, 5)` (weston + keyboard + desktop-shell + **weston-terminal**) ✅ |
+| Users | `USER-ADD-OK (bob)`, `USER-AUTOLOGIN (bob)`, `USERS-OK (… autologin=…)`; screen par `logged in as: bob (uid 1001 …)` ✅ |
+| User ka device access | `su -m bob -c id` -> `groups=…,44(video),63(audio),100(users),108(input),160(render),990(seat)` ✅ |
+| User delete | `pk-user del bob --home` -> passwd/shadow/group/home sab saaf ✅ |
+| Device perms (nodes) | `/dev/input/event0 = crw-rw---- root input` (mdev.conf) + `pk-devperms: /dev/tty[0-9]* -> :tty 620 (64 nodes)` ✅ |
+| Audio | `snd-hda-intel` load hua, `/dev/snd/timer` bana, par **pcm node nahi** -> is QEMU build me `-audiodev` backend hi nahi (`-device hda-duplex: no default audio driver available`), yaani emulated codec hi nahi. Real PC/VBox par test bacha hai (modules + perms side verify ho chuka) ⚠ |
+| Screenshot | `pk-desktop shot` in-tree (weston ko `--debug` chahiye -> pk-x lagata hai); meri serial-console extraction flaky rahi, isliye **PNG ka pixel proof aapki machine par chhodta hoon** (`pk-desktop shot /root/desktop.png`) ⚠ |
+
+Is round me jo *aur* latent bugs gare (sab fix):
+- `pk-boot` me `say()` define hi nahi tha -> 7 jagah `pk-boot: line N: say: not found` (log ka
+  aadha hissa gubaar). Ab alias hai.
+- Live image me hamari files `/bin` me hoti hain (merged-usr assumption galat): `S55seatd`
+  `[ -x /usr/bin/pk-seatd ]` dekh kar **chup-chaap skip** ho raha tha, aur `pk-check` ka shot
+  row bhi isi wajah se nahi chala. Ab sab `command -v` se ✅
+- `pk-boot` aur `pk-check --gui` dono `pk-x start` karte the -> doosra instance weston ke
+  `wayland-1.lock` par "unable to lock" de kar Xvfb par gir jaata tha. Ab `pk-x start`
+  idempotent (session zinda ho to wahi reuse) + stale `.lock` cleanup.
+- `pk-chroot` non-root se bura fail karta tha (beech me `Permission denied` ki chaar linein);
+  ab pehle hi saaf message + exit 65.
+- Autologin serial/recovery console par bhi lag raha tha (bob ke saath root logs padhne ko
+  taras jaate); ab autologin sirf physical console par, `ttyS*/hvc*` root hi rehta hai.
+- `pk-seatd` ab runtime-mount ka 15s wait karta hai (hook-order fragility khatam).
+
+Ab bhi khula: real-hardware audio/wifi, `amdgpu/xe` (firmware), `weston-screenshooter` ka
+pixel-proof aapki taraf se, aur `pk-desktop` ke *andar* normal-user Wayland session (abhi
+desktop root session hai; user ke paas device access hai par runtime chroot root-only hai).
+
 ## 5. Aapke PC pe ab kya karna hai (emulator → pendrive → install)
 
 ```sh

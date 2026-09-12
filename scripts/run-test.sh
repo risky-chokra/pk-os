@@ -566,6 +566,7 @@ stage "8/8  pendrive kit: pk-check + keymap + install (user + runtime) + install
       pass "weston ne VT le liya (no VTMISMATCH marker)"
     fi
     check "$L" 'PK: GUI-X-OK'         "pk-check --gui: display mil gaya"
+    check "$L" 'PK: GUI-SHOT-OK'         "desktop ki screenshot (weston se) bani - pixel-level proof"
     check "$L" 'PK: GUI-APP-OK'       "GUI client (xterm ya weston-terminal) session me chala"
     if grep -q 'GUI-XCLIENT-OK' "$L" 2>/dev/null; then
       pass "X client (xdpyinfo) ne bhi display use kiya"

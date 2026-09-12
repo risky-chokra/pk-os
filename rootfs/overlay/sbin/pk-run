@@ -1,21 +1,21 @@
 #!/bin/sh
-# pk's OS :: app dispatcher - "koi bhi app direct chalo"
-#   pk-run <file|name> [args...]     app detect karke sahi tarike se chalata hai
-#   pk-run --install <file>          .deb / binary / AppImage ko apps dir me daalo
-#   pk-run --info <file>             sirf type batao
+# pk's OS :: app dispatcher - "run any app directly"
+#   pk-run <file|name> [args...]     detect the app and start it the right way
+#   pk-run --install <file>          put a .deb / binary / AppImage into the apps dir
+#   pk-run --info <file>             only report the type
 #   pk-run --list                    installed launchers
-#   pk-run --gui <app>               display server (pk-x) ke saath chalao
-#   pk-run --sandbox <app>           namespaces (user/pid/mnt/net) + /root /home chhupe
-#   pk-run --selftest [samplesdir]   QA: dispatch battery + ### PK: APPS-* ### markers
-#   pk-run --uninstall <name>        apps dir se hatao (+ runtime ka dpkg package bhi)
-#   pk-run --which <name>            resolve karke path batao
+#   pk-run --gui <app>               start it with a display server (pk-x)
+#   pk-run --sandbox <app>           namespaces (user/pid/mnt/net) + hide /root /home
+#   pk-run --selftest [samplesdir]   QA: the dispatch battery + ### PK: APPS-* ### markers
+#   pk-run --uninstall <name>        remove from the apps dir (+ the runtime dpkg package)
+#   pk-run --which <name>            resolve the name and print the path
 #
 # support:
-#   Linux   : ELF (static native; dynamic -> runtime ke chroot me), scripts, .deb, .rpm, AppImage, .jar
-#   Windows : .exe / .msi  -> Wine (runtime me `pk-get install -y wine`)
-#   Android : .apk         -> Waydroid (binderfs chahiye) warna exact missing pieces batate hain
-#   iOS     : .ipa         -> native NAHI (Mach-O + UIKit closed); pk-ios info/web/mac-guest
-#   macOS   : Mach-O       -> native NAHI (Darwin chahiye); Linux build ya pk-vm route
+#   Linux   : ELF (static runs native; dynamic inside the runtime chroot), scripts, .deb, .rpm, AppImage, .jar
+#   Windows : .exe / .msi  -> Wine (in the runtime: pk-get install -y wine)
+#   Android : .apk         -> Waydroid (needs binderfs), otherwise the missing pieces are named
+#   iOS     : .ipa         -> NOT native (Mach-O + closed UIKit); see pk-ios info/web/mac-guest
+#   macOS   : Mach-O       -> NOT native (needs Darwin); build for Linux or use pk-vm
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 RT=${PK_RUNTIME_ROOT:-/opt/pk}
@@ -641,7 +641,7 @@ case "${1:-}" in
     done
     if have "$w"; then printf '%s\n' "$(command -v "$w")"; exit 0; fi
     warn "kahin nahi mila: $w"; exit 1 ;;
-  --help|-h)  sed -n '2,16p' "$0"; exit 0 ;;
+  --help|-h)  sed -n '2,18p' "$0"; exit 0 ;;
 esac
 GUI=0
 SANDBOX=0

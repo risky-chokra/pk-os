@@ -1,15 +1,15 @@
 #!/bin/sh
-# pk's OS :: Android (.apk) ka raasta - kya chahiye, kya hai, kaise laayein
-#   pk-android doctor            binder/ashmem/kvm/waydroid ka haal
-#   pk-android enable            /dev/binderfs mount karne ki try (kernel support ho to)
-#   pk-android install <apk>     apk extract + waydroid/greenlight/setup instructions
-#   pk-android kernel-frag       apne kernel ke liye config fragment (make kernel)
-#   pk-android list              runtime me installed android containers
+# pk's OS :: the Android (.apk) route - what is needed, what exists, how to get there
+#   pk-android doctor            state of binder/ashmem/kvm/waydroid
+#   pk-android enable            try to mount /dev/binderfs (if the kernel supports it)
+#   pk-android install <apk>     unpack the apk + waydroid/greenlight setup instructions
+#   pk-android kernel-frag       the config fragment for your own kernel (make kernel)
+#   pk-android list              android containers installed in the runtime
 #
-# Sach: Android app = Linux kernel par Android HAL (binderfs/ion/ashmem) + ART runtime.
-# Isliye .apk chalane ke liye 2 cheezein chahiye: (1) kernel me CONFIG_ANDROID_BINDERFS=y
-# (hamare shipped host-kernel me nahi hai), (2) waydroid/GSI image. Ye script wahi
-# steps deta hai aur jo possible hai wahi karke batata hai.
+# Fact: an Android app = the Android HAL (binderfs/ion/ashmem) + the ART runtime on the
+# Linux kernel. So an .apk needs two things: (1) CONFIG_ANDROID_BINDERFS=y in the kernel
+# (the host kernel we ship has none), (2) a waydroid/GSI image. This script gives exactly
+# those steps and does whatever is possible right now.
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 RT=${PK_RUNTIME_ROOT:-/opt/pk}

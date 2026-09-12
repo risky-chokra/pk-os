@@ -1,15 +1,17 @@
 #!/bin/sh
-# pk's OS :: Wi-Fi (experimental) - base image me wpa_supplicant NAHI hota, isliye
-# ye tool App Runtime ke andar wala wpa_supplicant/iw use karta hai (ya host me ho to wo).
+# pk's OS :: Wi-Fi (experimental). The app runtime ships wpa_supplicant + iw
+# (wpasupplicant/iw/wireless-tools/rfkill are pre-installed in pkos-apps.iso); on the base
+# image those tools are absent, so this helper uses the runtime's copies when it is attached.
 #
-#   pk-wifi status                      interface/driver/firmware/rfkill ka haal
-#   pk-wifi scan [wlan0]                iw dev scan (iw chahiye)
+#   pk-wifi status                      interface/driver/firmware/rfkill state
+#   pk-wifi scan [wlan0]                iw dev scan (needs iw)
 #   pk-wifi connect <ssid> [password]   connect + DHCP
-#   pk-wifi stop                        wpa_supplicant bandh karo
+#   pk-wifi stop                        stop wpa_supplicant
 #
-# boot option se (laptop jisme ethernet nahi): pk_wifi=<ssid>:<password>
-# QEMU/CI me wireless hardware nahi hota -> is tool ka sirf 'status' path automated
-# test me cover hota hai; connect real PC par hi test hoga.
+# Boot option: pk_wifi=<ssid>:<password>
+# QEMU/CI has no wireless hardware -> only the 'status' path is covered by automated
+# tests; 'connect' has to be tested on a real PC.
+# 
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 RT=${PK_RUNTIME_ROOT:-/opt/pk}
@@ -136,6 +138,6 @@ case "${1:-status}" in
   scan)   shift; do_scan "${1:-}" ;;
   connect) shift; do_connect "${1:-}" "${2:-}" ;;
   stop)   do_stop ;;
-  --help|-h) sed -n '2,13p' "$0" ;;
+  --help|-h) sed -n '2,14p' "$0" ;;
   *) warn "unknown: $1 (pk-wifi --help)"; exit 1 ;;
 esac

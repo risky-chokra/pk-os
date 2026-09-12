@@ -231,6 +231,12 @@ if [ "$km" = 0 ]; then warn "console keymaps nahi mile (builder par 'kbd' instal
 
 # ---------------------------------------------------------------- metadata / live marker
 printf '%s\n' "${OS_VERSION:-1.0}" > "$OV/etc/pk-build"
+# @PK_VER@ was printed literally in /etc/issue (the login banner) and in pk-help/motd:
+# nothing ever substituted it. Do it here, at stage time, so the tree keeps a placeholder
+# and the image shows the real version.
+for vf in "$OV/etc/issue" "$OV/etc/motd" "$OV/bin/pk-help" "$OV/sbin/pk-console"; do
+  [ -f "$vf" ] && sed -i "s/@PK_VER@/${OS_VERSION:-1.0}/g" "$vf" 2>/dev/null || true
+done
 printf 'kernel=%s\nkver=%s\n' "$(basename "${KERNEL:-vmlinuz}")" "$KVER" > "$OV/etc/pk-build-info"
 echo "live" > "$OV/etc/pk-live-base"
 ln -sfn /bin/busybox "$OV/bin/pk-busybox" 2>/dev/null || true

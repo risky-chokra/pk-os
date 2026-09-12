@@ -1,17 +1,17 @@
 #!/bin/sh
-# pk's OS :: iOS / iPadOS apps ka handle - sach kya hai, aur kaam kaise chalayein
-#   pk-ios doctor              machine/runtime me kya-kya available hai
-#   pk-ios why                 ek line me: native kyun nahi chalta
-#   pk-ios info <file.ipa>     .ipa/.app khol ke batao: bundle id, arch, min iOS
+# pk's OS :: iOS / iPadOS apps - what is true, and how to actually get work done
+#   pk-ios doctor              what this machine/runtime has available
+#   pk-ios why                 one line: why it cannot run natively
+#   pk-ios info <file.ipa>     open the .ipa/.app: bundle id, arch, minimum iOS
 #   pk-ios extract <file.ipa> [dir]
-#   pk-ios web <url> [name]    iOS-only service ko desktop/kiosk app bana do
-#   pk-ios mac-guest [--run]   QEMU macOS guest + Xcode iOS Simulator ka raasta
-#   pk-ios darling [--setup]   macOS (x86_64/arm64) Mach-O apps ke liye Darling
+#   pk-ios web <url> [name]    turn an iOS-only service into a desktop/kiosk app
+#   pk-ios mac-guest [--run]   the QEMU macOS guest + Xcode iOS Simulator route
+#   pk-ios darling [--setup]   Darling, for macOS (x86_64/arm64) Mach-O apps
 #
-# NOTE (imaandaari se): iOS app = Mach-O + Apple ke closed frameworks (UIKit/SwiftUI)
-# + codesign + XNU kernel. Linux kernel Mach-O ko load nahi kar sakta aur UIKit ka koi
-# Linux port nahi hai -> ".ipa directly install karke chalana" possible nahi.
-# Jo 3 raaste sach me kaam karte hain, wahi ye script deti hai.
+# NOTE (said honestly): an iOS app = Mach-O + Apple's closed frameworks (UIKit/SwiftUI)
+# + codesign + the XNU kernel. A Linux kernel cannot load Mach-O and there is no Linux
+# port of UIKit -> "install an .ipa and run it" is not possible. The routes above are the
+# ones that really work, and this script offers exactly those.
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 RT=${PK_RUNTIME_ROOT:-/opt/pk}

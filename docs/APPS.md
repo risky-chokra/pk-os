@@ -1,223 +1,112 @@
-# pk's OS · Apps kaise chalate hain (App Runtime)
+# Running applications
 
-Chhota version: **base ISO jan-boojh ke chhota hai** (busybox + kernel modules, ~78 MiB).
-“koi bhi app” chalane ke liye usme ek **App Runtime** jodte hain — ek Debian
-userland squashfs, jo boot par `/opt/pk` par **writable overlay** ke saath mount hota
-hai. Uske baad `pk-run` sab kuch dispatch kar deta hai, aur `pk-get` se koi bhi
-Linux package install ho jaata hai.
-
-```
-base ISO (busybox, ~78 MiB)  +  pk-runtime.sqfs (Debian minbase, ~37 MiB)
-                                  └─ overlay upper = pk-runtime-rw.img (installed apps + apt state)
-```
-
----
-
-## 1. Runtime banao
-
-```sh
-sudo make runtime                     # lean: hello, vim-tiny, htop, wget, ca-certs
-sudo make runtime-desktop             # + weston, xterm, Xvfb, x11-utils, mesa, wine (GUI)
-sudo make runtime VARIANT=full        # + apt-utils, curl, less, file, man, sudo, locales
-sudo make runtime VARIANT=dev         # + build-essential, git, make, pkg-config
-sudo make runtime PKGS=wine,gnumeric,firefox-esr   # apni pasand ke packages
-```
-
-Output: `build/pk-runtime.sqfs` (+ `build/pk-runtime-rw.img` — writable overlay, sparse).
-
-Direct script bhi chalega: `scripts/make-runtime [--variant=lean|full|dev] [--pkgs=a,b]
-[--dist=bookworm] [--mirror=URL] [--out=FILE] [--rw-mb=N] [--no-rw] [--tiny]`.
-
-> `--tiny` QA ka mode hai: debootstrap ke bina busybox-based nakli runtime, taaki
-> mount/overlay/chroot/dispatch ka poora flow 1 MB me test ho jaaye.
-
-## 2. Runtime kahaan rakho (3 raaste)
-
-| raasta | kaise | kab theek |
-|---|---|---|
-| **A. ISO me daal do** | `make iso WITH_RUNTIME=1` → `/live/pk-runtime.sqfs` ISO ke andar | ek hi file carry karni ho, USB/pendrive single-image |
-| **B. Alag partition** | 1–2 GiB ext4 partition label `PK-RUNTIME`, usme `pk-runtime.sqfs` + `pk-runtime-rw.img` (boot karke: `pk-runtime --setup /path/to/pk-runtime.sqfs /dev/sda3`) | ISO chhota rakhna ho, runtime upgrade karna ho bina ISO badle |
-| **C. Kisi bhi partition ki root me** | `pk-runtime.sqfs` (aur optional `pk-runtime-rw.img`) kisi ext4/vfat partition ke top level par | installed system ke `/home` me rakhna ho |
-| **D. Kuch mat rakho (installed system)** | `pk-runtime --setup` na karo; runtime file installed `/var/lib/pk/` me | rw image khud ban jaati hai (apps persist) |
-
-Boot par discovery order: `pk_runtime=<...>` option → ISO ka `/live/pk-runtime.sqfs` →
-label `PK-RUNTIME` → har mountable partition ki root. Mil gaya to:
+pk's OS keeps the base image tiny (busybox + your kernel) and puts everything else in a
+separate, optional **App Runtime**: a Debian userland built by `debootstrap` on your
+machine, compressed with squashfs, mounted at `/opt/pk` at boot. It has its own `apt`,
+its own `wine`, its own `/var`, and it cannot break the base system.
 
 ```
-squashfs -> /mnt/pk-rt/pk-runtime.sqfs   (read-only base)
-rw img   -> /mnt/pk-rw/pk-runtime        (writable upper; touch-proof kiya hua)
-overlay  -> /opt/pk                       (merged view, yehi runtime hai)
+build/pk-runtime.sqfs  ->  /opt/pk        (read-only base)
+                     rw  ->  /opt/pk-upper (your installs, ephemeral unless persistent)
 ```
 
-`pk-runtime status` sab dikhaata hai; marker:
-`### PK: RUNTIME-OK src=pk-runtime.sqfs upper=/mnt/pk-rw/pk-runtime mode=rw-image (...) ###`
+## 1. Getting a runtime
 
-**Boot options**
-
-| option | matlab |
+| Way | Command |
 |---|---|
-| (kuch nahi) | `pk_runtime=auto` — dhoondo, na mile to base OS me chalao |
-| `pk_runtime=off` | runtime mat mount karo |
-| `pk_runtime=/dev/sdb3` | is partition se lo (label ya `PARTUUID=` bhi chalega) |
-| `pk_runtime=/dev/sdb3:/live/pk-runtime.sqfs` | partition + path |
-| `pk_runtime=/data/pk-runtime.sqfs` | boot se pehle file directly |
+| inside the ISO | `make runtime-desktop && make apps-iso` → `build/pkos-apps.iso` |
+| lean runtime (console tools only) | `make runtime` (or `make runtime VARIANT=dev`) |
+| on a partition/file of any USB stick | `pk-runtime --setup /path/pk-runtime.sqfs [dev]` |
+| downloaded at boot | `pk_apps_get=<name-or-url>` (see below) |
+| off entirely | `pk_runtime=off` |
 
-`mode=tmpfs` / `mode=read-only bind` ka matlab rw image use nahi ho payi (RAM overlay —
-reboot par installed apps udd jayenge). `RUNTIME-WARN rw image read-only lagi` serial par
-aata hai, chhupaata nahi.
+`pk-runtime status` prints where it came from, whether the writable upper exists, and
+what is mounted; the boot log line is `### PK: RUNTIME-OK src=… upper=… mode=… ###`.
 
-rw image kahaan mil/banti hai (pehla match):
+## 2. Already installed (the "essentials" set)
 
-1. sqfs ke bagal me `pk-runtime-rw.img`  (option B/C ka normal setup)
-2. `/mnt/persist/pk-runtime-rw.img`      (live + `persistent` boot option)
-3. `/var/lib/pk/pk-runtime-rw.img`       (**installed system** — yahan ban bhi jaati hai)
+The published `apps` image ships, inside the runtime, a normal desktop OS starting set —
+no `pk-get` needed, works offline:
 
-live mode (persistence OFF) me `/var/lib/pk` RAM overlay par hota hai, isliye wahan
-image **nahi** banate (2 GB ki image RAM me = OOM) — `pk-runtime` bolke RAM upper par
-chhod deta hai: `live mode (persistence off): rw image RAM me nahi banayenge`.
+* editors / shell: `vim`, `nano`, `less`, `bash-completion`, `man-db`, `locales`, `sudo`, `dialog`
+* files / archives: `tree`, `pv`, `zip`, `unzip`, `p7zip-full`, `xz-utils`, `patch`, `diffutils`, `file`
+* system / processes: `htop`, `procps`, `psmisc`, `ncdu`, `lsof`, `strace`, `bc`, `time`, `watch`, `make`
+* network: `iproute2`, `iputils-ping`, `dnsutils` (`dig`, `nslookup`), `iperf3`, `ethtool`, `socat`, `wget`, `curl`, `openssh-client`, `openssh-sftp-server`, `ca-certificates`, `gnupg`, `pinentry-curses`
+* USB/PCI/SMBIOS: `pciutils`, `usbutils`, `dmidecode`
+* language: `python3`, `python3-venv`
+* wireless + Bluetooth: `wpasupplicant`, `iw`, `wireless-tools`, `crda`, `wireless-regdb`, `rfkill`, `bluez`, `bluez-obexd`
+* GUI basics: `weston`, `xterm`, `Xvfb`, `mesa-utils`, `x11-utils`, `xkb-data`, fonts, icons, `seatd`, `alsa-utils`, `xwayland`
+* media / documents: `dillo` (browser), `sxiv` (images), `mupdf-tools` (PDF), `mpg123` (audio)
+* Windows layer: `wine`
 
-## 2b. Extra flags (is round me)
+The build writes the exact list it found into the runtime as `/etc/pk-essentials.txt`, and
+every boot turns it into `### PK: ESSENTIALS-OK (count=NN missing=0) ###` — so
+"pre-installed" is checked by QA, not asserted. If the apps image was built without
+them (older runtime), the marker says `ESSENTIALS-PARTIAL (missing=…)` / `ESSENTIALS-SKIP`.
 
-```sh
-pk-run --sandbox <app>   # app sandbox (namespaces + hidden home) - QA: APP-SANDBOX-OK
-pk-binfmt register       # foreign-arch Linux ELF (arm64/riscv64/...) via qemu-user
-pk-tune report|desktop|hybrid|swap|net|ipc|io
-```
+Anything else: `pk-get update && pk-get install -y <pkg>` (Debian's apt, in the runtime;
+package indexes are already inside the image, so a normal install only downloads the
+`.deb` files).
 
-## 3. Commands (image me maujood)
-
-```sh
-pk-info                          # runtime laga hai ya nahi, kya-kya mil gaya
-pk-run ./app                     # kuch bhi chalao — type pehchan ke dispatch
-pk-run --info ./file             # sirf pehchan: elf/script/dos-exec/zip(apk)/mach-o/deb/iso…
-pk-run --install ./foo.deb       # .deb install (dpkg ho to wahi, warna ar+tar extract + launcher)
-pk-run ./Setup.msi               # Wine msiexec /i se install (.exe bhi isi se)
-pk-run --list                    # installed apps
-pk-run --gui xterm               # GUI app (X/Wayland dhoondh ke, na ho to Xvfb try)
-pk-shell                         # runtime ke andar root shell (`pk-shell -c "cmd"` bhi)
-pk-run --selftest                # 7-check battery (QA isi ko dekhta hai)
-pk-get install -y vim            # apt (runtime ke andar) — network ho to
-pk-get update
-pk-chroot /usr/bin/htop -y       # runtime me chroot (binds: /proc /sys /dev /tmp /run)
-pk-chroot --umount               # binds hatao
-pk-x start | pk-x status         # display server (weston -> Xorg -> Xvfb), pk-desktop session
-pk-wifi status|scan|connect      # Wi-Fi (experimental; wpa_supplicant runtime me)
-pk-vm new win --size=40G         # QEMU guest (Windows / Android-x86 / macOS raasta)
-pk-vm run win --cdrom=win.iso --ram=4096 --vnc=:1
-pk-vm list
-```
-
-Sab `root` se (live me autologin `root`/`pk`; installed system me apna password).
-
-## 4. “Har tarah ke app” — honestly kya chalta hai
-
-| app type | status | kaise |
-|---|---|---|
-| **Linux** native ELF, shell/python/perl script | ✅ chalta hai | `pk-run ./binary` (loader path `/opt/pk/lib64/ld-linux…` fix ho jaata hai) |
-| **Linux** `.rpm` | ⚠️ runtime + `alien` chahiye | `pk-run --install pkg.rpm` → `pk-chroot alien -i`; na ho to message: `pk-get install -y rpm` karke `pk-chroot rpm -Uvh` |
-| **Linux** `.deb` | ✅ | `pk-run --install pkg.deb` → runtime me `dpkg` ho to wahi, warna in-house `ar` reader + tar pipe (QA-proved, dono path) |
-| **Linux** apt repo ka kuch bhi (vim, htop, curl, firefox-esr…) | ✅ | `pk-get install -y <pkg>` — network + DNS chahiye (DHCP: `pk_net=dhcp`); lists na hon to `pk-get` khud `apt-get update` karta hai |
-| **Linux** static binaries / AppImage | ✅ mostly | AppImage ko `pk-run` extract karke andar ka `.desktop`/binary chalata hai; FUSE zaroori nahi |
-| **Windows** `.exe` / `.msi` | ✅ **Wine ke through** | `pk-get install -y wine` (ya runtime banate waqt `VARIANT=full`/`PKGS=wine`) → `pk-run ./setup.exe`, `pk-run --install ./Setup.msi`. Wine ke bina `pk-run` “install wine” bolke saaf diagnostic deta hai (rc 64), crash nahi |
-| Java `.jar` | ⚠️ JRE chahiye | `pk-get install -y default-jre-headless` → `pk-run ./app.jar` |
-| **Android** `.apk` | ❌ direct nahi | Android app ko Android runtime chahiye (binder + `/dev/binderfs`, apna kernel). `pk-run` ise pehchan kar **waydroid** ka raasta batata hai. Poora raasta: §5 |
-| **macOS** `.app` / `.dmg` / Mach-O binary | ❌ | Mach-O ko Linux kernel execute nahi kar sakta — Darwin kernel chahiye. Raasta: macOS ko **guest** me chalao (§5). `pk-run` honest error deta hai: “Darwin kernel required” |
-| Flatpak / Snap | ⚠️ runtime ke andar | `pk-get install -y flatpak` → `flatpak install …` (bubblewrap ko user namespaces chahiye; live OS me `root` se chal jaata hai) |
-| GUI apps (X11/Wayland) | ⚠️ optional | base ISO me X server nahi hai. `VARIANT=full` me weston aa jaata hai; warna runtime me `pk-get install -y weston xterm`. Phir: `pk-x start weston` |
-
-## 5. Windows / Android / macOS — guest-based raasta
-
-`pk-run` dispatch ka maqsad **native** execution hai jo possible hai (Linux + Wine).
-Jo possible nahi, unke liye `pk-vm` (QEMU inside the live system) ka raasta hai:
-
-* **Windows**: `pk-vm new win --size=40G` → `pk-vm run win --cdrom=win.iso --vnc=:1`. QEMU + KVM
-  (real PC par `/dev/kvm` milega; VM ke andar TCG).
-* **Android**: `pk-runtime` me `waydroid` install karo, aur **apna kernel** banao jisme
-  `CONFIG_ANDROID_BINDERFS=y` + `CONFIG_ASHMEM` ho (`make kernel`, `docs/KERNEL.md`).
-  Host kernel pe binderfs na mile to `pk-run` ye exact wajah batata hai.
-* **macOS**: legally Apple hardware par hi chalta hai; QEMU guest + `pk-vm run` se test
-  sakte ho (license Apple hardware maangti hai). `.app` files us *guest* ke andar
-  chalenge, OS ke andar nahi — ye limitation kernel ki hai, hamari nahi.
-
-## 6. Persistence (apps reboot ke baad bhi)
-
-`pk-runtime-rw.img` (ya `persistent=`/installed system ka `/opt/pk`) overlay upper
- rakhta hai: `pk-get install`, `pk-run --install` se aaye apps, apt state — sab **reboot
-ke baad bhi** rehte hain. QA stage 7 ise do boot me verify karta hai (host side
-`pk-runtime-rw.img` ke andar installed file dhoondh ke).
-
-RAM-only fallback (`mode=tmpfs`) me sab udd jaayega — isliye `pk-runtime` rw image ko
-mount karne ke baad us par **sach me `touch`** karke check karta hai; fail hone par
-`RUNTIME-WARN` print hota hai.
-
-## 7. Test / prove
+## 3. `pk-run`: one entry point, several ecosystems
 
 ```sh
-make test-apps                                   # tiny runtime, 14 checks (~50 s)
-PK_TEST_REAL_RUNTIME=1 make test-apps            # asli Debian runtime se same battery
-PK_TEST_REAL_RUNTIME=1 PK_TEST_WINE=1 make test-apps   # + apt se wine install + 'wine --version'
+pk-run ./AppImage-file            # sets the executable bit, runs it (FUSE-less extract fallback)
+pk-run ./pkg.deb                  # installs into the runtime via apt (deps resolved)
+pk-run ./pkg.rpm                  # converted/extracted, then run
+pk-run ./Setup.exe                # wine (prefix in the runtime's writable layer)
+pk-run ./app.jar                  # java -jar (install a JRE with pk-get if you need it)
+pk-run ./script.sh                # interpreter from the runtime
+pk-run ./hello-arm64              # ELF with e_machine=AArch64 -> qemu-user (see §4)
+pk-run https://example.com/app.deb      # download, verify type, then install
+pk-run --gui ./gimp               # export WAYLAND_DISPLAY/DISPLAY first (needs pk-desktop/pk-x)
+pk-run --list                     # launchers created so far
+pk-run --info <file>              # what it thinks the file is, and why
+pk-run --selftest                 # the QA battery (used by 'make test')
 ```
 
-Boot-time manual check (koi script nahi):
+`pk-run` reads the ELF header (magic + `e_machine` at offset 18) rather than trusting the
+extension, and prints `APP-ARCH-OK`/`ARCH-DISPATCH-OK` when it hands a foreign-arch
+binary to `qemu-user`.
 
-```
-GRUB → 'e' karke append:  pk_net=dhcp pk_apps_get=sl pk_apps_get=wine:--version
-```
-`pk_apps_get=<pkg>[:args]` runtime me apt se package install karta hai (lists na hon to
-pehle `apt-get update` khud) aur `<pkg>` chala ke serial par marker deta hai — asli
-Debian runtime me QA ne yahi dekha:
-
-```
-### PK: APPS-GET-OK (sl)   pk-run: type: elf (/opt/pk/usr/games/sl)|<ASCII train> ###
-### PK: APPS-GET-OK (wine) pk-run: type: runtime-bin (/opt/pk/usr/bin/wine)|wine-8.0 ... ###
-```
-
-multiple specs do sakte ho: `pk_apps_get=sl pk_apps_get=wine:--version`
-
-`pk-run --selftest` ke markers QA check karta hai:
-
-```
-APP-ELF-OK  APP-SCRIPT-OK  APP-DEB-OK (dpkg path|extract path)  APP-EXE-OK|APP-EXE-NO-WINE
-APP-APK-DIAG-OK  APP-MACHO-DIAG-OK  RUNTIME-EXEC-OK  APPS-OK
-```
-
-## 8. Troubleshooting
-
-| lakshan | kaam |
-|---|---|
-| `RUNTIME-NONE` | runtime file kahaan hai? `pk-runtime find`; ISO me `WITH_RUNTIME=1` se rebuild kiya? |
-| `RUNTIME-WARN rw image read-only lagi` | backing partition ro mount hai ya file root-owned — `pk-runtime --setup` root se chalao |
-| `mode=tmpfs` | installed apps reboot ke baad nahi rahenge (upar dekho) |
-| `pk-get install` fail “Temporary failure resolving” | `pk_net=dhcp` (ya `pk-net dhcp`) karo; marker me `NET-OK (ip)` hona chahiye |
-| `E: Unable to locate package ...` | apt ki index lists nahi hain — `pk-get install` khud `apt-get update` chalata hai (network chahiye); `pk-get update` pehle chalao to confirm ho jaata hai |
-| `pk-get install` 5-10 min chal raha hai (QEMU me) | normal hai jab lists image me na hon: 320 MB VM me apt ka poora bookworm index parse karna bhaari hai. `sudo make runtime` default me lists **rakhta** hai (`RUNTIME_KEEP_LISTS=0` se hata sakte ho) |
-| `.exe` pe “wine nahi” (rc 72, `APP-EXE-NO-WINE`) | `pk-get install -y wine` (ya `VARIANT=full` se runtime dobara banao) |
-| `.deb` extract pe “short read” | fix ho chuka: `data.tar.*` ko pipe se tar me daala jaata hai (busybox/GNU dono me) — purani ISO ho to rebuild |
-| GUI app connect fail | `pk-x start weston` (ya `pk-x status`), phir `pk-run --gui xterm` |
-| `pk-run --list` me package dikhe par launcher na | `.deb` dpkg se install hua tha (apps/ me launcher nahi banta) — binary runtime ke `/usr/bin` me hai, seedha `pk-run <naam>` |
-| kya chal raha hai dekho | `dmesg | grep PK` , `cat /run/pk/boot.env`, `pk-info`, `tail /run/pk/apps-get.log` |
-
-## 9. Size ka hisaab
-
-| cheez | size |
-|---|---|
-| base ISO | ~78 MiB |
-| `pk-runtime.sqfs` (lean, Debian minbase + hello/vim/htop/wget) | ~37 MiB |
-| runtime ka merged view (RAM ke baad) | ~125 MiB |
-| `VARIANT=full` + wine + weston | ~600 MiB–1 GiB (mirror speed pe) |
-| `pk-runtime-rw.img` | jitna do (`--rw-mb=`, default 1024, sparse) |
-
-RAM: runtime mount `tmpfs` nahi rakhta (squashfs + loop page cache chhota hai), par
-`pk_apps_get`/apt chalane ke liye QEMU me `PK_QEMU_MEM=1024` Behtar.
-
-Speed note: runtime **ISO ke andar** ho (option A) to apt ka package index emulated
-CD-ROM se padha jaata hai — pehla `pk-get install`/me `pk_apps_get` USB/partition wale
-option B se kaafi slow lag sakta hai (QEMU me ~3-5 min dekha). Fast chahiye to runtime
-ko ext4 partition par rakho (option B/C): `pk-runtime --setup`.
-
-Do ISO variants (repo se):
+## 4. Other architectures
 
 ```sh
-make iso                                   # base, 78 MiB (apps optional)
-make iso OUT=build/pkos-apps.iso WITH_RUNTIME=1   # runtime andar, ~349 MiB
+pk-binfmt register        # binfmt_misc handlers -> runtime's qemu-<arch>-static
+pk-binfmt status
+pk-get install -y qemu-user-static     # if the runtime lacks them
 ```
+Registered handlers: `pk-aarch64`, `pk-arm`, `pk-riscv64`, `pk-ppc64le`, `pk-s390x`.
+This is user-mode emulation: correct for running a foreign binary, not for GPU-heavy or
+timing-sensitive programs.
+
+## 5. Windows programs
+
+Wine lives in the runtime, so `pk-run Setup.exe` / `.msi` works out of the box in the
+apps image. Notes that matter in practice:
+
+* the Wine prefix is inside the runtime's writable layer → it disappears on reboot
+  unless you use `persistent` or install to disk;
+* 32-bit installers need a 32-bit Wine build: `pk-get install -y wine32` (multiarch);
+* GPU acceleration is the same KMS device the desktop uses — on `amdgpu`/`xe` machines
+  you get llvmpipe (software), which is enough for office-style apps;
+* `wine` prints a lot on first run; run it through `pk-run --gui <app>` inside a session
+  and check `/run/pk/desktop.log`.
+
+## 6. GUI apps need a display
+
+```sh
+pk-desktop start         # weston on the KMS device (+ weston-terminal), or
+pk-x start Xvfb          # headless, then pk-desktop vnc 5900
+pk-desktop app ./gimp    # = pk-run --gui, but with the session env set
+```
+
+## 7. Known gaps (deliberate, so you are not surprised)
+
+* no Flatpak/Snap daemons — use `.deb`/AppImage (or `pk-get`) instead;
+* no `systemd` in the base or the runtime: services are `pk-boot` hooks and the
+  runtime's own `service`/init scripts;
+* `pk-chroot`, `pk-shell`, `pk-get` require root (they `chroot`); normal users run apps
+  through `pk-run`, which is designed for that;
+* iOS apps: not possible (see [IOS-ANDROID.md](IOS-ANDROID.md)); Android apps need a
+  Waydroid image and binder support.

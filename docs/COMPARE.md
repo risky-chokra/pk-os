@@ -1,56 +1,44 @@
-# pk's OS · REFERENCE-OS comparison (live-boot hardware matric)
+# How pk's OS compares
 
-Kyun: hamara goal "har PC/desktop pe chale" hai. Live distros ye maamle saalon se
-seekh chuke hain, isliye unka architecture hamare init/initrd se compare kiya aur
-jo kami mili wahi add ki (kuch bhi hataaya nahi gaya).
+This is not trying to be Debian. It is a small, readable, *self-built* live OS whose
+feature set is chosen around four things a personal OS actually needs: boot anywhere,
+run real apps, show a desktop, manage users and devices.
 
-| reference | uska live-boot model | hamara pk's OS | verdict |
+| Capability | pk's OS | Typical minimal live distro (e.g. TinyCore, Alpine-style) | A big live ISO (Debian/Ubuntu live) |
 |---|---|---|---|
-| **Alpine Linux** (mkinitfs + `aodela`/`liveinit`) | tiny initramfs; `realroot` retry + `rootdelay`; mediacfg me fs-type list; `sda`+partitions scan; **frugal**: `apline-mod` ISO/directory dono se | init me `list_devices` (disks + partitions) + naye `rootdelay=` retry loop (default 12 s) + `try_sqfs_here` + frugal `try_iso_file` | ✅ ab barabar (pehle retry-only- installed path me tha, aur frugal nahi) |
-| **ArchISO** (mkinitcpio + `archiso` hook) | `work_directory=arch/boot/x86_64/airootfs`, devmapper + **overlayfs** on `/run/archiso/airootfs`, `cow_spacesize`, `archisobasedir`; USB boot ke liye initrd me `vfat/exfat/nls` + `usb_storage` | `/live/pk.sqfs` scan (5 path variants), overlayfs upper = RAM/`PK-PERSIST`, initrd me storage+input+nls modules | ✅ same idea; hamare paas extra: 3 runtime locations + `pk_verify` |
-| **Fedora live** (dracut + `dmsquash-live`) | `live_image_uuid=` se **media dhoondhta hai (UUID!)**, `live_dir=LiveOS`, `rd.live.squashimg`, `rootdelay`, `rd.retry`, `mem=...toram` (`live_memainscratch`), checks `rd.live.check` | `pk_media=<dev|UUID=x|LABEL=x>` (already supported) + `persistent` + `toram` + ab `rootdelay=` | ✅ parity (aur naya: payload sha256 `pk_verify` = unka `rd.live.check` se behtar, since we hash the squashfs) |
-| **Ubuntu casper** | `find_livefs` loop: retries until `CASPER_TIMEOUT`(30 s default), `iso-scan` for **ISO-file-on-partition** boot (ubiquity/frugal), `nopersistent`, `boot=casper` | pehle koi retry nahi tha live ke liye; ab `rootdelay` + frugal loop | ✅ ab parity (casper ka `iso-scan` hi hamara `try_iso_file` hai) |
-| **TinyCore** | `scan=/dev/sd*` mount karke `*.iso`/`cde/*.tcz` dhoondhta hai, `basefile=`, `wait=XX` seconds, `restore` | `pk_iso=<naam>` se specific file, auto-scan `*.iso`, `rootdelay=` as `wait=` | ✅ |
-| **SystemRescue / GRML** (Debian-based) | initrd me `usb-storage`, `uas`, `xhci`, `sr_mod`, `cdrom`, `vfat/exfat/ntfs3`, keyboard ke liye `usbhid`; `dovolume=`/`archisobasedir`-jaisa label; admin toolset (fsck/gddrescue/smartctl) | initrd me same storage+input set + ab `ntfs3`, `nls_cp437`, `nls_utf8`, `msdos`; live image me `lsblk`(naya), `wipefs`, `blkdiscard`, `dumpe2fs`, `setfacl`, `mksquashfs`; `pk_media=`/`pk_iso=` | ✅ + hamare paas unke jaisa "boot par network+SSH" bhi hai (`pk_net=dhcp pk_ssh=on`) |
-| **Ventoy** (boot manager) | ISO ko **file ki tarah** partition me rakhta hai, dm-mapper device deta hai (`/dev/mapper/ventoy`) | ab frugal ISO-file boot supported + `list_devices` me `/dev/mapper/*`, `/dev/dm-*` bhi scan hote hain | ✅ (pehle mapper devices scan me nahi aate the) |
-| **Debian/Ubuntu installer ISO** | EFI `\EFI\BOOT\BOOTX64.EFI` + `el-torito` hybrid, `.disk/info`, grub-mkrescue | hybrid ISO (BIOS+UEFI+protective GPT), `.disk/` + `README.txt` + `SHA256SUMS` | ✅ |
+| Built from source on your PC in one command | `make kit` ✅ | ❌ (download pre-built image) | ❌ (rebuild is a project of its own) |
+| Reproducible build + payload manifest | `REPRODUCIBLE=1`, `manifest*.txt` ✅ | ❌ | partly |
+| Base image size | ≈ 95 MB ✅ | 20-300 MB | 1-3 GB ❌ |
+| Boots BIOS **and** UEFI from one hybrid ISO, `dd`-able | ✅ (QA checks both) | often one of them | ✅ |
+| Installer to disk (GPT+EFI+GRUB+user, journaling) | ✅ `pk-install` | usually ❌ | ✅ |
+| Persistence on the same stick | ✅ `pk-persist` + `persistent` | partly | live-rw only |
+| App ecosystem without changing the OS | separate Debian runtime at `/opt/pk` with its own apt/Wine ✅ | package set is fixed ❌ | system apt ✅ but the OS *is* the packages |
+| `.exe` support | Wine in the runtime ✅ | ❌ | manual |
+| Foreign-arch Linux ELF (arm64, riscv64…) | `pk-binfmt` + `qemu-user` ✅ | ❌ | qemu-user-static, manual |
+| Windows `.msi` installers | via Wine ✅ | ❌ | manual |
+| iOS/Android apps | honest diagnostics + real routes (`pk-ios`, `pk-android`) ✅ (no false promise) | ❌ / silence | ❌ / silence |
+| Wayland desktop without systemd | weston + **seatd**, VT takeover ✅ | ❌ or X11 only | ✅ but systemd-logind |
+| Software rendered/visible by default | fonts, icons, mesa (llvmpipe), XWayland in the runtime ✅ | ❌ | ✅ |
+| User/device management | `pk-user` + mdev groups (`audio input video render dialout seat`) ✅ | root-only ❌ | full (logind) ✅ |
+| Boot-time self-test with markers | `pk-check`, `### PK: … ###`, 70+ automated QA checks ✅ | ❌ | ❌ |
+| init system | busybox `inittab` + `S*` hooks (readable, re-runnable) | busybox | systemd (large) |
+| Everything inside one image (frugal boot of an ISO file) | ✅ `pk_iso=` + FAT32 frugal layout | ❌ | ❌ |
 
-## Aaj is comparison se kya-juda fix hua (sirf add hua, kuch hataaya nahi)
-1. **`nls_cp437`, `nls_utf8`, `msdos`, `ntfs3` initrd me** ( + `kernel/fs/unicode` live modules me;
-   Debian ka `vfat` inhein runtime me maangta hai — `modules.dep` me dep nahi hota, isliye
-   hamara dep-closure nahi laata tha) → **FAT32/exFAT pendrive partition se boot** ab kaam karta hai.
-   Proof (QEMU): `live base: /live/pk.sqfs from /dev/vda1 (fs=vfat)` → `### PK: BOOT-OK ###` ✓
-2. **mount option variants + auto-detect fallback** (`vfat:ro,utf8`, `iocharset=utf8`, `auto:ro`) —
-   images/kernels ke bhed se `EINVAL` aata tha (ye upar wale fix ko complete karta hai).
-3. **`rootdelay=`/`pk_rootdelay=` + live-media retry loop** (default 12 s): slow USB3/mmc readers
-   par devices 2-8 s me aate hain; pehle ek hi scan hota tha → real hardware pe "media nahi mila" ka risk.
-4. **Frugal / ISO-file boot**: partition me sirf `pkos*.iso` (ya koi bhi `*.iso`) para ho to loop-mount
-   karke `/live/pk.sqfs` nikaal lete hain; `pk_iso=<naam|path>` se pin bhi kar sakte ho.
-   Proof: `live base: /live/pk.sqfs from /dev/loop0 (fs=iso9660)` → `BOOT-OK` ✓ (Ventoy/hard-disk flow)
-5. **`/dev/mapper/*` + `/dev/dm-*` candidates** me add (Ventoy/dm devices) + extra live paths
-   (`/boot/live/pk.sqfs`) + extra fs types (`btrfs`, `f2fs`, `msdos`).
-6. **`pk_fsdebug=1`** (init diagnostics): har failed media-mount ka asli error, device ka size +
-   first-sector bytes, aur `insmod` failures console par. Aise bugs ("screen hi nahi aayi") field me
-   2 minute me diagnose ho jaate hain.
-7. **`mk-initrd`: static-busybox ka hard check** — dynamic busybox initrd me jaake `/init` ko
-   panic karta tha (blank screen!); ab build hi clear message ke saath fail hota hai,
-   `PK_ALLOW_DYNAMIC_BUSYBOX=1` par lib closure copy karke chalta bhi hai.
-8. **`lsblk`/`findmnt`/`wipefs`/`blkdiscard` live image me** (SystemRescue/Alpine jaisa admin set);
-   `pk-check` ka purana `/sys` fallback waisa hi rahega (dependent cheezein tooti nahi).
+Where pk's OS is deliberately **weaker** (so the table is not marketing):
+* no systemd → no `systemctl`, no socket activation, no logind sessions for normal users
+  beyond seatd's lease, no `.timer` units;
+* no package manager in the base image: the base is busybox + your kernel; Debian apt
+  lives in the runtime, so it is per-runtime and needs root;
+* driver coverage is a *list you edit* (`config/live-modules.txt`), not a full kernel
+  module set: `amdgpu`/`xe` are intentionally absent;
+* no Anaconda/Calamares-style installer UI: `pk-install` is a careful script with
+  `--info` and `--yes`, plus an autoinstall hook when a real installer UI is wanted;
+* no cross-architecture ISO: the live image is amd64 (arm64 hardware can be supported by
+  building on that machine — the layout already boots `pk_iso=` frugally);
+* no LUKS/full-disk encryption in the installer yet (the runtime can mount it manually),
+  and no OTA updater: you flash a new image or `git pull && make kit`.
 
-## Jaan-boojh ke NAHI kiya (aur kyun)
-- **Network boot (PXE/NFS/iSCSI)** — Alpine/Fedora karte hain; hamara target "pendrive + install" hai,
-  aur initrd me `ip=dhcp`/nfs add karna size + complexity badhaata hai (maango to bana denge).
-- **dm-snapshot `cow` persistence** (Arch/Fedora) — hamara overlayfs-upper (`persistent`) simpler aur
-  ext4/vfat dono pe chalta hai; `cow` ka koi fayda nahi mila jo na mil raha ho.
-- **`live_dir` naming** (Arch/Fedora style) — hamara path set chhota rakha; 5 variants support me hain.
-- **Graphical boot splash / plymouth** — base ISO me X nahi (design); `pk-desktop` session deta hai.
-- **Squashfs `dm-verity` + signed boot** — payload sha256 (`pk_verify`) diya, poora verified-boot
-  TPM/MOK round hai (roadmap me).
-
-- **Users + device access ka scene**: reference OS me user management ya to absent hai ya
-  manual (`/etc/passwd` edit). Hamare live me `pk-user add/remove/autologin` hai aur naye
-  user ko audio/input/video/seat groups milte hain, isliye wo bina root ke sound, keyboard/mouse
-  events aur GPU use kar sakta hai; `pk-check --users` ye round-trip khud test karta hai.
-- **Session manager**: hamein chahiye tha ki weston screen le - isliye `seatd` (30 KB,
-  runtime ke andar) + active-VT handling; iske bina weston bina VT liye headless ban jaata tha.
+If you need the full Debian experience, run Debian. If you want to *own* the OS — read
+every file, boot it on a 2009 netbook and on a 2024 mini-PC, run a Windows installer
+from a USB stick, and know exactly which marker to grep when something fails — this is
+the project for that.

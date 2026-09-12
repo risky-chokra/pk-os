@@ -1,15 +1,14 @@
 #!/bin/sh
-# pk's OS :: seatd - chhota session manager (weston/GUI ko VT + /dev/dri + /dev/input
-# dene ke liye). Live system me systemd-logind NAHI hota, aur weston 10 ka DRM backend
-# bina logind/seatd ke VT nahi le pata tha -> compositor chal ta hai par screen par
-# text console dikhta rehta hai. seatd wahi kaam 30 KB me karta hai.
+# pk's OS :: seatd - the small session manager that gives the GUI (weston) its VT plus
+# /dev/dri and /dev/input. The live system has no systemd-logind, and weston 10's DRM
+# backend cannot take a VT without logind/seatd: the compositor ran, but the screen kept
+# showing the text console. seatd does that job in 30 KB.
 #
-#   pk-seatd start | stop | status | restart      (boot par S55seatd khud 'start' karta hai)
-#   boot options: pk_seatd=on|off                 (default: on, agar runtime me seatd ho)
+#   pk-seatd start | stop | status | restart      (the S55seatd boot hook runs 'start')
+#   boot options: pk_seatd=on|off                 (default on, if the runtime has seatd)
 #
-# seatd hamare App Runtime ke andar se chalta hai (Debian ka package) - isliye base
-# ISO ka size nahi badhta. Socket runtime ke /run me banta hai, jahan weston use
-# dhoondhta hai.
+# seatd comes from the app runtime (a Debian package), so the base ISO stays small; the
+# socket is created in the runtime's /run, which is where weston looks for it.
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 RT=${PK_RUNTIME_ROOT:-/opt/pk}

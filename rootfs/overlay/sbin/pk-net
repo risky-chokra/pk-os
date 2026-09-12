@@ -1,6 +1,6 @@
 #!/bin/sh
 # pk's OS :: network helper   usage: pk-net [dhcp|status|down]
-# Live/inittab ke boot hook se chalta hai; output /var/log/pk-net.log jaata hai.
+# Started by the live/inittab boot hook; output goes to /var/log/pk-net.log.
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
 say() { printf 'pk-net: %s\n' "$*" > /dev/console 2>/dev/null; printf '%s\n' "$*"; }

@@ -1,5 +1,5 @@
 #!/bin/sh
-# pk's OS :: system report
+# pk's OS :: system report (boot mode, media, kernel, mounts, network, runtime state)
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 sep() { printf -- '--------------------------------------------------\n'; }
 . /etc/os-release 2>/dev/null

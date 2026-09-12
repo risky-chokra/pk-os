@@ -1,13 +1,13 @@
 #!/bin/sh
 # pk's OS :: app runtime attach   usage: pk-runtime [start|stop|status|find|--setup <file>]
 #
-# Runtime = ek squashfs Debian userland (build/pk-runtime.sqfs, `scripts/make-runtime`
-# se banta hai). Boot par ye /opt/pk par mount hota hai (overlayfs upper ke saath),
-# taaki koi bhi Linux app chale, apt se packages aa jaayein, aur Wine se Windows apps.
+# The runtime is one squashfs Debian userland (build/pk-runtime.sqfs, made by
+# scripts/make-runtime). At boot it is mounted at /opt/pk with an overlayfs upper dir, so
+# any Linux app can run, apt can install packages, and Wine can run Windows apps.
 #
-# dhundhne ka order:
-#   pk_runtime=<boot option>  ->  label PK-RUNTIME partition  ->  live media par
-#   /live/pk-runtime.sqfs  ->  /opt/pk-runtime/pk-runtime.sqfs  ->  disks ke root par file
+# search order:
+#   pk_runtime=<boot option>  ->  a partition labelled PK-RUNTIME  ->  /live/pk-runtime.sqfs
+#   on the live media  ->  /opt/pk-runtime/pk-runtime.sqfs  ->  that file at the root of disks
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 RT=/opt/pk                 # mount point
@@ -183,6 +183,19 @@ if [ -d /opt/pk/usr/bin ]; then
 fi
 EOF
   mark "RUNTIME-OK src=$(basename "$src") upper=$UP mode=$mode"
+
+  # The runtime build recorded which essential commands it actually shipped
+  # (/etc/pk-essentials.txt). Printing it here means "basic software is pre-installed"
+  # is proven on every boot instead of being a claim in the release notes.
+  if [ -r "$RT/etc/pk-essentials.txt" ]; then
+    ess=$(sed -n '$p' "$RT/etc/pk-essentials.txt" 2>/dev/null)
+    case "$ess" in
+      *"missing=0"*) mark "ESSENTIALS-OK ($ess)" ;;
+      *)             mark "ESSENTIALS-PARTIAL ($ess)" ;;
+    esac
+  else
+    mark "ESSENTIALS-SKIP (this runtime has no pk-essentials.txt - lean/QA runtime)"
+  fi
   say "attached -> $RT  ($mode)"
   return 0
 }

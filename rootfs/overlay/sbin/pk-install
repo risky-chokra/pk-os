@@ -1,19 +1,19 @@
 #!/bin/sh
-# pk's OS :: disk installer - live image ko internal disk pe copy karta hai
-#                 + partition table + filesystems + GRUB (BIOS aur UEFI dono).
+# pk's OS :: disk installer - copies the live image to the internal disk
+#                 + partition table + filesystems + GRUB (both BIOS and UEFI).
 #
 # usage: pk-install [options]
-#   --target=<dev|auto>   kis disk pe install kare (default: auto = pehli internal disk)
-#   --yes                 confirmation skip (scripted/headless install)
-#   --layout=<hybrid|bios|efi>   default hybrid (BIOS+UEFI dono boot honge)
-#   --size=<MiB>          root partition size (default: pura bacha hua space)
-#   --root-password=<pw>  installed system ka root password
-#   --user=<name>         non-root user bana do (home + groups) ; --user-password=<pw>
-#   --no-runtime-copy     app runtime (pk-runtime.sqfs) installed system me copy mat karo
-#   --hostname=<h>        installed system ka hostname
-#   --no-bootloader       GRUB skip
-#   --info                sirf dikhao kaunsi disk milegi, kuch mat chhedo
-# WARNING: target disk ka pura data mit jaata hai.
+#   --target=<dev|auto>   which disk to install to (default: auto = first internal disk)
+#   --yes                 skip the confirmation (scripted/headless install)
+#   --layout=<hybrid|bios|efi>   default hybrid (boots in BIOS and UEFI)
+#   --size=<MiB>          root partition size (default: all remaining space)
+#   --root-password=<pw>  root password of the installed system
+#   --user=<name>         create a non-root user (home + groups) ; --user-password=<pw>
+#   --no-runtime-copy     do not copy the app runtime (pk-runtime.sqfs) to the installed system
+#   --hostname=<h>        hostname of the installed system
+#   --no-bootloader       skip GRUB
+#   --info                only show which disk would be used, change nothing
+# WARNING: all data on the target disk is destroyed.
 # shellcheck shell=sh disable=SC3030,SC2086
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
@@ -60,7 +60,7 @@ for a in "$@"; do
     --user-password=*) USERPW=${a#*=} ;;
     --no-runtime-copy) NORT=1 ;;
     --info)          INFOONLY=1 ;;
-    -h|--help)       sed -n '2,20p' "$0"; exit 0 ;;
+    -h|--help)       sed -n '2,17p' "$0"; exit 0 ;;
     *) die "unknown option: $a (--help dekho)" ;;
   esac
 done
@@ -191,7 +191,17 @@ note "root = $ROOTP   esp = ${ESPP:-none}"
 
 # ---------------------------------------------------------------- filesystems
 note "filesystems format kar raha hoon"
-mkfs.ext4 -q -F -L pkos "$ROOTP" 2>/dev/null || mke2fs -q -F -L pkos "$ROOTP" || die "mkfs.ext4 fail"
+# ext4 + journal EXPLICITLY, and through the real binary name (mke2fs). This used to be
+#   mkfs.ext4 ... 2>/dev/null || mke2fs ...
+# In the live image that produced a filesystem with only "dir_index filetype
+# sparse_super" - no has_journal - because the silent first attempt failed and the
+# fallback mke2fs had no -t, so the type/features came from whatever /etc/mke2fs.conf
+# happened to provide. A root filesystem without a journal is not crash-safe, and QA
+# (correctly) failed on INSTALL-JOURNAL. Errors are printed now, not swallowed.
+if mke2fs -q -F -t ext4 -O has_journal -L pkos "$ROOTP"; then : ; else
+  note "  mke2fs -t ext4 fail -> mkfs.ext4 try kiya"
+  mkfs.ext4 -q -F -t ext4 -O has_journal -L pkos "$ROOTP" || die "root filesystem fail (mke2fs/mkfs.ext4)"
+fi
 [ -n "$ESPP" ] && { mkfs.vfat -F 32 -n PK-EFI "$ESPP" >/dev/null 2>&1 || die "mkfs.vfat fail"; }
 
 # crash-safety: ext4 journal on hona chahiye (default hai; marker install ke *ant* me
@@ -208,6 +218,14 @@ else
   JRN="no-dumpe2fs-in-image"
 fi
 note "  ext4 journal check: $JRN"
+  # agar image ke mke2fs defaults ne journal diya hi nahi -> tune2fs se add kar dete hain
+  # (fs abhi unmounted hai, isliye safe) aur phir dobara probe karte hain: marker hamesha
+  # jo *actually* bana hai wahi batata hai.
+  if [ "$JRN" != ok ] && have tune2fs; then
+    note "  journal nahi mila -> tune2fs -O has_journal se add kar rahe hain"
+    tune2fs -q -O has_journal "$ROOTP" >/dev/null 2>&1 && dumpe2fs -h "$ROOTP" 2>/dev/null | grep -q has_journal && JRN=ok
+    case "$JRN" in ok) note "  journal added (re-verified with dumpe2fs)" ;; *) JRN="${JRN:-fail}" ;; esac
+  fi
 
 TGT=/mnt/install
 mkdir -p "$TGT"

@@ -1,6 +1,6 @@
 #!/bin/sh
-# pk's OS :: boot USB ke baad free space me persistence partition banata hai
-# phir boot option "persistent" (ya grub me toram+nikaal) use karo.
+# pk's OS :: builds a persistence partition in the free space after the boot USB stick;
+# then boot with the "persistent" option (drop toram from the GRUB line if it is there).
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 set -u
 have() { command -v "$1" >/dev/null 2>&1; }

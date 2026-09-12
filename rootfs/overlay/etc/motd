@@ -1,11 +1,12 @@
 ================================================================
-  pk's OS - apna khud ka chhota Linux OS
-  help      : pk-help
-  system    : pk-info
-  install   : pk-install            (disk pe permanent install)
-  network   : pk-net dhcp
-  apps      : pk-run ./app  |  pk-shell  |  pk-get install -y <pkg>   (pk-runtime status)
-  users/device: pk-user list | pk-user add bob --admin | pk-seatd status | pk-check --users
-  persistence: pk-persist           (USB pe changes save karne ke liye)
-  Live session me sab changes RAM me hain; reboot pe reset.
+  pk's OS @PK_VER@ - a small Linux you built yourself
+  help        : pk-help            report: pk-info
+  self-test   : pk-check --all     (display, audio, input, wifi, users, apps)
+  apps        : pk-run ./app | pk-shell | pk-get install -y <pkg>
+  desktop     : pk-desktop start   (or boot with pk_desktop=1)
+  users       : pk-user add bob --admin | pk-user list
+  network     : pk-net dhcp        Wi-Fi: pk-wifi connect <ssid> <pw>
+  persistence : pk-persist          (keep changes on the USB stick)
+  install     : pk-install         (to the internal disk)
+  All changes in this live session live in RAM and are lost on reboot.
 ================================================================

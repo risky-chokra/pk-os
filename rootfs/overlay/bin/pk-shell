@@ -1,8 +1,9 @@
 #!/bin/sh
-# pk's OS :: app runtime ka shell (Debian userland ke andar)
-#   pk-shell            -> /opt/pk me root shell
-#   pk-shell -c "cmd"   -> wahi command wahan chalao
-# Exit karte hi binds nahi hatte (apps ko chahiye ho sakte hain); 'pk-shell --clean' se hatao.
+# pk's OS :: shell inside the app runtime (the Debian userland)
+#   pk-shell            -> root shell in /opt/pk
+#   pk-shell -c "cmd"   -> run just that command there
+# The bind mounts are not unmounted when you exit (running apps may need them);
+# use 'pk-shell --clean' to remove them.
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 if [ "${1:-}" = --clean ]; then exec pk-chroot --umount; fi

@@ -133,13 +133,24 @@ else
   have sudo >/dev/null 2>&1 || SUDO_OK=0
   case " ${PATH} " in *" /usr/sbin "*|*" /sbin "*) : ;; *) export PATH="$PATH:/usr/sbin:/sbin" ;; esac
   log "debootstrap $DEB_DIST ($VARIANT) -> $SUIT  (kuch minute lagenge)"
+  # "basic essential software" - ISO release karne se pehle hi image me, taaki live
+  # stick utarte hi system usable ho (editor, files, network, diagnostics, archives,
+  # python, man pages) aur Wi-Fi/Bluetooth bina pk-get ke chale. desktop variant me
+  # GUI essentials (browser, image/pdf viewer, audio player) bhi jaate hain.
+  PK_ESSENTIALS=${PK_ESSENTIALS:-"nano,vim,less,htop,procps,psmisc,which,file,tree,pv,tmux,rsync,git,make,curl,wget,openssh-client,ca-certificates,jq,zip,unzip,p7zip-full,xz-utils,patch,diffutils,bc,ncdu,strace,lsof,iputils-ping,iproute2,dnsutils,iperf3,ethtool,socat,dialog,pciutils,usbutils,dmidecode,python3,python3-venv,man-db,bash-completion,locales,poppler-utils,xdg-utils,gnupg,openssh-sftp-server"}
+  PK_GUI_ESSENTIALS=${PK_GUI_ESSENTIALS:-"dillo,sxiv,mupdf-tools,xpdf,mpg123,wpasupplicant,iw,wireless-regdb,rfkill,wireless-tools,bluez,bluez-obexd,pinentry-curses"}
+  # build ke baad yeh commands runtime me actually milein ya nahi - isi list ki
+  # verification /etc/pk-essentials.txt me likhi jaati hai (boot marker isi se banta hai)
+  PK_ESSENTIAL_BINS=${PK_ESSENTIAL_BINS:-"nano vim less htop tmux rsync git make curl wget ssh sftp jq zip unzip 7z xz tree pv watch ncdu strace lsof ping ip dig nslookup iperf3 ethtool socat dialog lspci lsusb dmidecode python3 man bc diff patch gpg pdftotext file"}
+  PK_GUI_ESSENTIAL_BINS=${PK_GUI_ESSENTIAL_BINS:-"dillo sxiv mutool muraster xpdf mpg123 wpa_cli wpa_supplicant iwlist iw rfkill bluetoothctl btmgmt"}
+
   case "$VARIANT" in
     lean) EXTRA="hello,vim-tiny,htop,wget,ca-certificates" ;;
     full) EXTRA="apt-utils,ca-certificates,vim,htop,wget,curl,less,file,man,dialog,locales,sudo" ;;
     # fonts-dejavu-core + adwaita-icon-theme: inke bina weston-terminal/xterm khulte
     # hain par text render nahi hota (aur weston "could not load cursor" warn karta hai)
     # -> desktop kaali/khaali screen jaisi dikhti thi. ~2 MB, desktop variant me hi.
-    desktop) EXTRA="apt-utils,ca-certificates,vim-tiny,htop,wget,curl,less,file,locales,sudo,fonts-dejavu-core,adwaita-icon-theme,xkb-data,libgl1-mesa-dri,libegl-mesa0,seatd,alsa-utils,xwayland" ;;
+    desktop) EXTRA="apt-utils,ca-certificates,htop,wget,curl,less,file,locales,sudo,fonts-dejavu-core,adwaita-icon-theme,xkb-data,libgl1-mesa-dri,libegl-mesa0,seatd,alsa-utils,xwayland" ;;
     dev)  EXTRA="build-essential,git,make,pkg-config,apt-utils,ca-certificates,vim,htop,wget,curl,less,file" ;;
     *)    EXTRA="" ;;
   esac
@@ -156,12 +167,73 @@ else
   else
     run_as sh -c "rm -rf '$SUIT'/var/cache/apt/archives/*.deb '$SUIT'/usr/share/man '$SUIT'/usr/share/doc/* '$SUIT'/var/lib/apt/lists/* 2>/dev/null; true"
   fi
+  # --- basic essential software: apt se install (debootstrap ka minbase index sirf
+  # required/important packages janta hai -> git/python3/dillo jaise wahan nahi milte;
+  # isliye yeh ek asli apt transaction hai, aur neeche verify bhi hota hai).
+  ess_pkgs=$(printf '%s' "$PK_ESSENTIALS" | tr ',' ' ')
+  if [ "$VARIANT" = full ] || [ "$VARIANT" = desktop ]; then
+    ess_pkgs="$ess_pkgs $(printf '%s' "$PK_GUI_ESSENTIALS" | tr ',' ' ')"
+  fi
+  if [ -n "${PKGS:-}" ]; then
+    log "  essentials: --pkgs diya hua hai, apni list par kuch add nahi kiya"
+  else
+    log "  essentials install: $(printf '%s' "$ess_pkgs" | tr ' ' ',' )"
+    run_as chroot "$SUIT" /bin/sh -c \
+      "apt-get update -qq >/dev/null 2>&1; DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $ess_pkgs" >/dev/null 2>&1 \
+      || { warn "poora transaction lag nahi gaya -> ek-ek package try kar rahe hain"; \
+           for ep in $ess_pkgs; do
+             run_as chroot "$SUIT" /bin/sh -c \
+               "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $ep" >/dev/null 2>&1 \
+               || warn "  essential install fail: $ep"
+           done; }
+  fi
+
   if [ "$VARIANT" = full ] || [ "$VARIANT" = desktop ]; then
     log "$VARIANT variant: GUI stack (weston + xterm + Xvfb + mesa) + wine install (lamba chalega)"
     run_as chroot "$SUIT" /bin/sh -c \
       "apt-get update -qq && apt-get install -y --no-install-recommends wine mesa-utils weston xterm xvfb x11-utils x11-xkb-utils xkb-data" >/dev/null 2>&1 || \
       warn "wine/weston install fail (baad me runtime ke andar 'pk-get install -y wine' se kar lena)"
   fi
+  # --- trim (install ke BAAD): doc/man/info, apt ki .deb cache, non-English locales.
+  # Pehle yeh step sirf debootstrap ke turant baad chalta tha, to essentials + wine ke
+  # docs/man/locale image me wapas aa jaate the (runtime 897 MB ban gaya tha). Ab sab
+  # installs ke baad chalta hai -> "pre-installed but still small" dono bachte hain.
+  for td in var/cache/apt/archives var/cache/apt/archives/partial usr/share/doc \
+            usr/share/man usr/share/info usr/share/lintian usr/share/gtk-doc \
+            usr/share/i18n usr/share/backgrounds usr/share/common-licenses; do
+    run_as sh -c "rm -rf '$SUIT/$td'/* 2>/dev/null; true"
+  done
+  run_as sh -c "rm -rf '$SUIT'/usr/share/vim/*/doc 2>/dev/null; true"
+  # locales: C/en rakhte hain, baaki hata dete hain (~90 MB) - messages English hi aayenge
+  run_as sh -c "cd '$SUIT/usr/share/locale' 2>/dev/null && ls -d */ 2>/dev/null | grep -vE '^(C|en|en_US|en_GB)(\\..*)?$' | xargs -r rm -rf; true"
+  log "  trim ke baad runtime tree: $(du -sh "$SUIT" 2>/dev/null | cut -f1)"
+
+  # --- essentials: image me actually kaun-kaun se commands maujood hain -------------
+  # /etc/pk-essentials.txt guest boot par 'ESSENTIALS-OK (count=.. missing=0)' marker
+  # banata hai, aur QA host par isi file ko check karta hai - matlab "pre-installed"
+  # ka claim har build me verify hota hai, maan ke nahi chalta.
+  cat > "$WORK/pk-check-essentials.sh" <<'CHK'
+#!/bin/sh
+# pk's OS runtime build: record which essential commands are present.
+list="$1"; out=/etc/pk-essentials.txt; : > "$out"
+have=0; miss=0; missing=""
+for b in $list; do
+  p=$(command -v "$b" 2>/dev/null || true)
+  if [ -n "$p" ]; then printf '%s %s\n' "$b" "$p" >> "$out"; have=$((have+1))
+  else miss=$((miss+1)); missing="$missing $b"; fi
+done
+printf 'count=%s missing=%s%s\n' "$have" "$miss" "${missing:+ ($missing)}" >> "$out"
+[ "$miss" = 0 ]
+CHK
+  chmod 755 "$WORK/pk-check-essentials.sh"
+  essbins="$PK_ESSENTIAL_BINS"
+  { [ "$VARIANT" = desktop ] || [ "$VARIANT" = full ]; } && essbins="$PK_ESSENTIAL_BINS $PK_GUI_ESSENTIAL_BINS"
+  run_as cp "$WORK/pk-check-essentials.sh" "$SUIT/tmp/pk-check-essentials.sh" 2>/dev/null || true
+  run_as chroot "$SUIT" /bin/sh /tmp/pk-check-essentials.sh "$essbins" >/dev/null 2>&1 \
+    || warn "kuch essential commands runtime me nahi mile (pk-essentials.txt dekho)"
+  run_as chmod 644 "$SUIT/etc/pk-essentials.txt" 2>/dev/null || true
+  log "  essentials in image: $(run_as tail -1 "$SUIT/etc/pk-essentials.txt" 2>/dev/null || cat "$SUIT/etc/pk-essentials.txt" 2>/dev/null | tail -1 || echo unknown)"
+
   printf '%s\n' "pk's OS runtime: Debian $DEB_DIST ($VARIANT) built $(date -u +%Y-%m-%dT%H:%MZ)" > "$WORK/pk-runtime-release.tmp"
   # ^ debootstrap + chroot root se chalte hain, isliye '$SUIT/etc' root-owned reh jaata
   # hai: seedha `>` write EACCES deta aur `make runtime` poora fail ho jaata (bina-root

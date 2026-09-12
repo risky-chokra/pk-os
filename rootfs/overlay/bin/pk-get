@@ -1,10 +1,10 @@
 #!/bin/sh
-# pk's OS :: runtime ke andar apt-get (Linux apps install karne ke liye)
+# pk's OS :: apt-get inside the app runtime (for installing Linux apps)
 #   pk-get update
-#   pk-get install -y htop wine  default-jre-headless
+#   pk-get install -y htop wine default-jre-headless
 #   pk-get install -y /path/to/app.deb
-#   pk-get -y htop                 (chhota shortcut: install -y)
-# Network chahiye: 'pk-net dhcp' (ya boot option pk_net=dhcp) pehle.
+#   pk-get -y htop                 (short form of: install -y)
+# Needs network first: 'pk-net dhcp' (or the pk_net=dhcp boot option).
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 rt=${PK_RUNTIME_ROOT:-/opt/pk}

@@ -1,6 +1,7 @@
 #!/bin/sh
-# pk's OS :: sysinit  (inittab ::sysinit se chalta hai)
-# mounts ok karo, hostname, banner, network/ssh, install/autostep, phir inittab getty/shell spawn karega.
+# pk's OS :: sysinit  (started from inittab ::sysinit)
+# fixes mounts, hostname, banner, network/ssh, install/autostep; then inittab spawns the
+# getty/shell.
 # shellcheck shell=sh disable=SC3030,SC2086
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 export PATH

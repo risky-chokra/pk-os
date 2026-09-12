@@ -1,6 +1,7 @@
 #!/bin/sh
 # pk's OS :: /sbin/pk-console <tty>
-# live  = bina password ke root shell (ya /run/pk/autologin wala user) ; installed = login prompt
+# live      = root shell without a password (or the user named in /run/pk/autologin)
+# installed = a normal login prompt
 # shellcheck shell=sh
 TTY=${1:-tty1}
 # device nahi hai (e.g. inittab me ttyS0 aur machine me serial port nahi) ->

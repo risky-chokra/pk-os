@@ -1,83 +1,77 @@
-# pk's OS (live session)
+# pk's OS - the live session cheat sheet
 
-Turant yaad rakhne layak commands:
+Everything you need while the system is running. The long form lives in the source
+repository under `docs/` (BUILD, VM-TEST, PENDRIVE, REAL-PC, APPS, TROUBLE,
+ARCHITECTURE, PERSISTENCE, IOS-ANDROID, KERNEL, COMPARE, RELEASE).
 
-    pk-help     ye file
-    pk-info     boot mode, disk, network, modules - sab kuch
-    pk-net dhcp IP lo (udhcpc)
-    pk-ssh start SSH server (dropbear) - phir network se login
-    pk-install  internal disk pe permanent install
-    pk-persist  boot USB pe persistence partition banao
-    dmesg          kernel log
-    vi             text editor (busybox)
+## First five commands
 
-## Apps chalana (Linux / Windows)
-Base image chhota hai (busybox), isliye "koi bhi app" ke liye **App Runtime**
-joda gaya hai: Debian userland ki squashfs jo `/opt/pk` par overlay ke saath mount
-hoti hai. Runtime laga ho to:
+```sh
+pk-info                  # boot mode, live medium, kernel, mounts, IP, runtime
+pk-check --save --users  # hardware + OS self-test -> /run/pk/check.txt
+pk-net dhcp              # network (or boot with pk_net=dhcp)
+pk-desktop start         # graphical session (weston on KMS, via seatd)
+pk-help                  # the whole command list
+```
 
-    pk-run ./binary | ./script.sh | ./app.deb | ./Setup.exe | ./app.jar | ./App.app
-    pk-run --info ./file        # sirf type batao (elf/deb/win/apk/mach-o/...)
-    pk-run --install ./app.deb  # dpkg ho to wahi, warna extract + launcher
-    pk-run --list             # installed apps + runtime ka haal
-    pk-shell                    # runtime ke andar shell (apt/dpkg wahan hain)
-    pk-get install -y htop wine # net chahiye: pk-net dhcp
-    pk-chroot /usr/bin/htop     # ek command runtime ke andar
-    pk-x start weston           # GUI apps ke liye display
-    pk-vm new win --size=40G    # guest VM (Windows / Android-x86 / macOS)
+## Boot options (press `e` in the GRUB menu)
 
-`.apk` (Android) aur macOS `.app`/Mach-O native nahi chalte — `pk-run` unpe exact
-wajah + aage ka raasta batata hai (Waydroid/binderfs, ya `pk-vm` guest). Runtime
-na laga ho to `pk-runtime status` aur `pk-info` me dikhaata hai; banane ke liye
-host PC par `sudo make runtime` (details: repo ke docs/APPS.md me).
+```
+pk_net=dhcp      pk_ssh=on        pk_keymap=in     pk_desktop=1    pk_tune=desktop
+pk_user=bob pk_userpw=bob         pk_rootpw=secret pk_seatd=on    pk_check=1|gui
+persistent       toram            pk_swap=auto|<MB>|off            pk_silent
+pk_media=/dev/sdb  pk_iso=/path/file.iso  rootdelay=10  pk_verify=1
+pk_runtime=off|auto|/dev/sda3     pk_apps_get=<pkg>:<args>
+pk_install=auto|/dev/sda|ask      pk_install_user=bob pk_install_userpw=...
+pk_run=<cmd>                      break=mount   single   pk_debug
+```
 
-## Live session kaise kaam karta hai
-- `live/pk.sqfs` (read-only squashfs) boot medium se loop-mount hota hai.
-- Uske upar ek **overlay** lagta hai jiska upper layer tmpfs (RAM) hai.
-  Matlab: `/etc`, `/root`, `/home` sab likhne layak hain, par reboot pe sab reset.
-- `persistent` boot option se upper layer ek ext4 partition
-  (label `PK-PERSIST`) pe chala jaata hai - changes USB pe save rehte hain.
-- `toram` se poori image RAM me copy ho jaati hai - phir USB nikaal lo, system chalta rahega.
+`pk_run=` is the quickest debugging hook: spaces as `+`, separate commands with `!`
+(never `;` - that is a GRUB separator). Example:
+`pk_run=dmesg+|+grep+PK!ls+/dev/dri` -> output on the console and in `/run/pk/pk_run.out`.
 
-## Login
-- live boot = auto-login (koi password nahi). Prompt dikhe to: `root` / `pk`
-- installed boot = login chahiye (password installer me set kiya tha; default `pk`)
+## The ten tools that matter
 
-## Pendrive / hardware test (ek command me)
-    pk-check --save          # net, USB speed, disks, DRM/KMS, KVM, SecureBoot, runtime,
-                             # wine, dmesg errors...  report: /run/pk/check.txt
-    pk-check --gui           # desktop utha ke X client round-trip bhi test
-    pk-check --all           # sab (verbose + save + apps battery + speed)
-    pk-run --selftest        # app dispatch battery (ELF/.deb/.exe/AppImage/jar/rpm/iOS/apk)
-  Kuch FAIL dikhe to /run/pk/check.txt + `dmesg | grep PK` hi kaafi hai debug ke liye.
+| Command | Use |
+|---|---|
+| `pk-info` | one-page system report |
+| `pk-check [--save --gui --apps --users --speed --all]` | self-test: display, GPU, audio, input, serial, webcam, net, storage, users, seatd, desktop |
+| `pk-net dhcp\|status\|down`, `pk-wifi connect <ssid> <pw>`, `pk-ssh start` | network, Wi-Fi (pre-installed `wpa_supplicant`/`iw`/`rfkill`), remote shell |
+| `pk-desktop start\|status\|app X\|vnc 5900\|shot f.png` | desktop session + screenshot proof |
+| `pk-x start weston\|Xorg\|Xvfb`, `pk-seatd status` | the display/session layer underneath |
+| `pk-user list\|add\|del\|passwd\|autologin\|doctor` | users; new users get `audio input video render dialout seat` |
+| `pk-keymap in`, `pk-tune desktop\|report`, `pk-devperms` | layout, performance profile, /dev permissions |
+| `pk-run <file-or-url>`, `pk-shell`, `pk-get install -y <pkg>`, `pk-chroot <cmd>` | applications through the Debian runtime at `/opt/pk` |
+| `pk-runtime status\|start\|--setup <file>`, `pk-binfmt status` | where the runtime lives; foreign-arch execution |
+| `pk-persist`, `pk-install` | keep changes on the stick / install to disk |
 
-## GUI
-    pk-desktop               # weston (KMS) -> na ho to Xvfb fallback, + terminal
-    pk-desktop app htop      # koi GUI app session me
-    pk-x status              # display server ka haal (log: /run/pk/x.log)
-    pk-get install -y weston xterm xvfb x11-utils   # runtime me GUI tools
+## What is already installed (no download needed)
 
-## iOS / Android apps (sach + raaste)
-    pk-ios why               # iOS app Linux par native kyun nahi chalti (Mach-O + UIKit)
-    pk-ios info ./App.ipa    # .ipa kholke: bundle id, arch, min iOS
-    pk-ios web https://...   # iOS-only *service* ko desktop launcher bana do
-    pk-ios mac-guest         # QEMU macOS guest + Xcode iOS Simulator ka recipe
-    pk-android doctor        # .apk ke liye binderfs/waydroid ka haal
-    pk-android kernel-frag   # apne kernel me ye config lines daalo
+Base live image: busybox userland + `vi`, your shell, `pk-*` tools, kernel modules for
+GPU/storage/network/sound/Bluetooth/webcam/sensors.
 
-## Keyboard / console font
-    pk-keymap in             # layout: console (loadkmap) + GUI (setxkbmap)
-                             # (console maps builder ke /usr/share/keymaps se aate hain;
-                             #  na ho to GUI wala hissa hi chalega)
-    loadkmap < /path/to/map.kmap        # manually bhi kar sakte ho
-    pk-info                  # system report
+App runtime (in `pkos-apps.iso`): `git nano vim htop tmux rsync jq zip unzip 7z tree pv
+ncdu which strace lsof python3 make man` + network tools (`ip`, `dig`, `iperf3`,
+`ethtool`, `socat`, `ssh`, `curl`, `wget`) + `pciutils usbutils dmidecode poppler-utils`
++ Wi-Fi/BT (`wpasupplicant iw rfkill wireless-tools bluez`) + GUI stack (`weston
+xterm Xvfb mesa xwayland alsa-utils xkb-data fonts icons`) + `dillo sxiv xpdf mpg123`
++ `wine`. Verify on any boot: `dmesg | grep ESSENTIALS` ->
+`### PK: ESSENTIALS-OK (count=54 missing=0) ###`.
 
-## Disk pe install
-    pk-install --info                # kaunsi disk milegi (kuch nahi chheda)
-    pk-install                         # interactive (confirm maangega)
-    pk-install --target=/dev/sda --yes # headless (test/automation)
-    pk-install --target=auto --user=ramesh --user-password=Secret   # user + home bhi
-    # app runtime installed system me copy ho jaati hai (/var/lib/pk) + uski rw image,
-    # isliye installed boot par bhi apps + apt + persistence chalti hain
+## Files to read when something is wrong
 
-Layouts: `--layout=hybrid` (default: GPT + BIOS + UEFI), `--layout=efi`, `--layout=bios`.
+```
+/run/pk/check.txt      /run/pk/desktop.log   /run/pk/x.log
+/run/pk/x-weston.log   /run/pk/seatd.log     /run/pk/runtime.log
+/run/pk/wifi-boot.log  /run/pk/display.txt   /var/log/pk-net.log
+dmesg | grep '### PK'  # every stage tells you what it decided
+```
+
+## iOS / Android, in one paragraph
+
+`.ipa` files cannot run here (Mach-O + XNU syscalls + Apple code signing + closed
+UIKit); `pk-ios why|info|web|mac-guest|darling` gives the details and the workable
+routes (PWA, macOS guest with Xcode Simulator, Darling for macOS binaries).
+`.apk` needs the Android framework: `pk-android doctor|enable|install`, then Waydroid
+(with binder in your own kernel), an Android-x86 VM through `pk-vm`, or `scrcpy` to a
+real phone. No version of "just run the apk" exists, and this OS will not pretend otherwise.

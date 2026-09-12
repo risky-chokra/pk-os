@@ -1,9 +1,9 @@
 #!/bin/sh
-# pk's OS :: display server (GUI apps ke liye) - runtime ke andar weston/Xorg/Xvfb
-#   pk-x start            # jo mile usse session uthao (weston -> Xorg -> Xvfb)
-#   pk-x start weston     # specific
+# pk's OS :: display server for GUI apps - weston/Xorg/Xvfb from inside the runtime
+#   pk-x start            # bring up a session with whatever is there (weston -> Xorg -> Xvfb)
+#   pk-x start weston     # a specific backend
 #   pk-x status | stop
-# Phir:  pk-run --gui <app>
+# Then:  pk-run --gui <app>
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 RT=${PK_RUNTIME_ROOT:-/opt/pk}

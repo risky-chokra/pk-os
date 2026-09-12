@@ -1,10 +1,10 @@
 #!/bin/sh
-# pk's OS :: guest VM helper (Windows / macOS / Android-x86 / koi bhi ISO)
+# pk's OS :: guest VM helper (Windows / macOS / Android-x86 / any ISO)
 #   pk-vm new  <name> --size=40G
 #   pk-vm run  <name> [--cdrom=x.iso] [--ram=4096] [--cpus=2] [--uefi] [--vnc=:1]
 #   pk-vm run  --image=<qcow2|raw> [--cdrom=...]
 #   pk-vm list
-# QEMU runtime ke andar se use hota hai: pk-get install -y qemu-system-x86 ovmf
+# QEMU itself is used from inside the runtime: pk-get install -y qemu-system-x86 ovmf
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 RT=${PK_RUNTIME_ROOT:-/opt/pk}

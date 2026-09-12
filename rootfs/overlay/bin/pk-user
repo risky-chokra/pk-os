@@ -1,24 +1,25 @@
 #!/bin/sh
-# pk's OS :: user add/remove/list/autologin  (naya - "user bhi add/remove hone chahiye")
+# pk's OS :: user add / remove / list / autologin
 #
 #   pk-user list
 #   pk-user info <user>
 #   pk-user add <user> [--password=<pw>] [--uid=N] [--shell=S] [--groups=a,b] [--admin] [--no-home]
-#   pk-user passwd <user> [newpw]          # newpw na do to interactive
+#   pk-user passwd <user> [newpw]          # interactive if newpw is omitted
 #   pk-user del <user> [--home] [--force]
-#   pk-user autologin <user>|off            # tty1 par bina password ke kaun andar aaye
-#   pk-user doctor                          # groups/homes/device-perms check + theek karo
+#   pk-user autologin <user>|off            # who gets logged in on tty1 without a password
+#   pk-user doctor                          # check + repair groups/homes/device permissions
 #
-# Design notes (live system ke hisaab se):
-#  * busybox ke adduser/deluser/addgroup/delgroup/chpasswd use karte hain - koi
-#    shadow-utils dependency nahi, isliye base ISO me bhi chalta hai.
-#  * naye user ko turant ye groups milte hain: users audio input video render dialout lp
-#    -> /dev/snd/*, /dev/input/event*, /dev/dri/card*, /dev/ttyUSB* inhi groups se
-#    khulte hain (mdev.conf wahi mode/group lagata hai). Device access = user access.
-#  * --admin -> wheel me; agar runtime/installed system me sudo hai to sudoers.d line
-#    bhi likh dete hain (guarded, warna chhodd dete hain).
-#  * LIVE ISO me /etc ek RAM overlay me hai: reboot par users gayab, jab tak
-#    'persistent' boot option (ya permanent install) na ho - ye output me batate hain.
+# Design notes (for a live system):
+#  * no shadow-utils dependency: /etc/passwd, /etc/group, /etc/shadow and /etc/gshadow
+#    are edited directly, so this works on the base ISO too, where busybox has no
+#    adduser/deluser applet.
+#  * a new user immediately joins: users audio input video render dialout lp
+#    -> /dev/snd/*, /dev/input/event*, /dev/dri/card*, /dev/ttyUSB* are reachable through
+#    exactly those groups (mdev.conf applies that group/mode). Device access = user access.
+#  * --admin -> wheel; if sudo exists in the runtime/installed system a sudoers.d line is
+#    written too (guarded: skipped silently when sudo is absent).
+#  * in the live ISO /etc is a RAM overlay: users vanish at reboot unless you boot with
+#    'persistent' (or install to disk) - the tool says this in its output as well.
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 BASE_GROUPS="users,audio,input,video,render,dialout,lp"

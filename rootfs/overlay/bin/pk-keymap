@@ -1,9 +1,9 @@
 #!/bin/sh
-# pk's OS :: keyboard layout (console + desktop dono)
-#   pk-keymap              current + available layouts
-#   pk-keymap in           console (busybox loadkmap) + GUI (setxkbmap) dono set
+# pk's OS :: keyboard layout (console and desktop together)
+#   pk-keymap              show the current + the available layouts
+#   pk-keymap in           sets both: console (busybox loadkmap) and GUI (setxkbmap)
 #   pk-keymap us --console-only / --gui-only
-# Boot option:  pk_keymap=in      (pk-boot khud yehi chalata hai)
+# Boot option:  pk_keymap=in      (pk-boot runs exactly this)
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 RT=${PK_RUNTIME_ROOT:-/opt/pk}
@@ -58,7 +58,7 @@ case "${1:-}" in
     echo "console : $(avail)"
     echo "          (naya layout chahiye to builder par 'kbd' package install karke make iso karo)"
     ;;
-  --help|-h) sed -n '2,8p' "$0" ;;
+  --help|-h) sed -n '2,6p' "$0" ;;
   list) avail; echo ;;
   *)
     lay=$1; shift 2>/dev/null || true

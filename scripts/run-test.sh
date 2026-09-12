@@ -457,14 +457,40 @@ stage "7/8  app runtime (Linux/Windows/.deb dispatch) + pk-run selftest"
     -kernel "$RK" -initrd "$RI" -append "$A7"
   LA=$LOGDIR/07a-apps.log
   check "$LA" 'PK: RUNTIME-OK'        "app runtime /opt/pk par attach hua (PK-RUNTIME disk se)"
+
+  # --- essential software that ships inside the ISO (release requirement) ----------
+  ESSLIST=$BUILD/work/runtime/etc/pk-essentials.txt
+  total=$((total + 1))
+  if [ -f "$ESSLIST" ] && grep -q 'missing=0' "$ESSLIST"; then
+    pass "build record: essential commands present ($(tail -1 "$ESSLIST"))"
+  elif [ -f "$ESSLIST" ]; then
+    bad "build record says some essentials are missing: $(tail -1 "$ESSLIST")"
+  else
+    note "no desktop-runtime build record ($ESSLIST) - created by 'make runtime-desktop'"
+  fi
+  if [ "$REALRT" = 1 ]; then
+    check "$LA" 'PK: ESSENTIALS-OK'   "guest boot ne runtime ke essentials verify kiye"
+  else
+    note "guest essentials marker not asserted (tiny QA runtime; run with PK_TEST_REAL_RUNTIME=1)"
+  fi
   check "$LA" 'PK: APP-ELF-OK'        "native Linux ELF app chali"
   check "$LA" 'PK: APP-SCRIPT-OK'     "script app chali"
   check "$LA" 'PK: APP-DEB-OK'        ".deb install + launcher bana"
   if [ "$REALRT" = 1 ]; then
+      # Does the runtime we booted actually contain Wine? Ask the image instead of
+      # assuming: `make runtime` (lean) ships none, `make runtime-desktop` ships it -
+      # so the expectation differs per runtime. This branch used to always demand the
+      # no-Wine diagnostic, which failed a correct desktop runtime (stage 7 only).
+      rhavewine=0
+      if have unsquashfs; then
+        unsquashfs -l "$RTQ" 2>/dev/null | grep -qE "/usr/bin/wine$" && rhavewine=1
+      fi
     if [ "${PK_TEST_WINE:-0}" = 1 ]; then
       check "$LA" 'PK: APPS-GET-OK (wine)' "asli Wine install hua (apt) aur 'wine --version' chala"
+    elif [ "$rhavewine" = 1 ]; then
+      check "$LA" 'PK: APP-EXE-OK'      ".exe dispatched through the runtime's real Wine"
     else
-      check "$LA" 'PK: APP-EXE-DIAG'   ".exe: Wine nahi (lean runtime) - sahi diagnostic aaya"
+      check "$LA" 'PK: APP-EXE-DIAG'    ".exe: this runtime has no Wine - the honest diagnostic appeared instead"
     fi
   else
     check "$LA" 'PK: APP-EXE-OK'        "Windows .exe Wine dispatch se chala (fake wine, tiny runtime)"

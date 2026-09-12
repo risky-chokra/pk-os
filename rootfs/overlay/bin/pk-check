@@ -1,14 +1,15 @@
 #!/bin/sh
-# pk's OS :: ek command me poora health + hardware check
+# pk's OS :: whole health + hardware check in one command
 #   pk-check              boot, net, runtime, apps, disk, USB, display, KVM, Secure Boot...
-#   pk-check --verbose    har check ka detail
-#   pk-check --save       report /run/pk/check.txt (+ /tmp/pk-check.txt) me likho
-#   pk-check --apps       app battery bhi chala do (pk-run --selftest)
-#   pk-check --gui        Xvfb/weston utha ke ek X client se display test karo
-#   pk-check --speed      disk write speed (pendrive pe khaali jagah me 64 MB)
+#   pk-check --verbose    detail for every check
+#   pk-check --save       write the report to /run/pk/check.txt (and /tmp/pk-check.txt)
+#   pk-check --apps       also run the app battery (pk-run --selftest)
+#   pk-check --gui        start Xvfb/weston and test the display with a real client
+#   pk-check --speed      disk write speed (64 MB in the free space of the pendrive)
+#   pk-check --users      real pk-user round-trip: add -> groups -> login -> delete
 #
-# Real PC / pendrive test ke liye bana: sab kuch PASS dikhaye to image + hardware
-# dono theek hain. Kuch FAIL ho to `pk-check --save` ki file hi bhej dena.
+# Made for the real PC / pendrive test: if everything says PASS, both the image and the
+# hardware are fine. If something FAILs, send the file written by --save.
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 VERB=0 SAVE=0 DOAPPS=0 DOGUI=0 DOSPEED=0 DOUN=0

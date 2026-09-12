@@ -1,16 +1,17 @@
 #!/bin/sh
-# pk's OS :: binfmt_misc - foreign-architecture Linux binaries ko transparently chalane ke liye
-#   pk-binfmt status              kaun-kaun se handlers registered hain
-#   pk-binfmt register            qemu-user (runtime ke andar) ke liye handlers banao
-#   pk-binfmt unregister          sab hatao
+# pk's OS :: binfmt_misc - to run foreign-architecture Linux binaries transparently
+#   pk-binfmt status              which handlers are registered
+#   pk-binfmt register            create handlers for qemu-user (inside the runtime)
+#   pk-binfmt unregister          remove them all
 #
-# Handler host kernel me register hote hain, par qemu-<arch> binary App Runtime ke andar
-# hota hai (Debian: qemu-user-static) -> isliye /proc/sys/fs/binfmt_misc me path
-# /opt/pk/usr/bin/qemu-aarch64 jaisa dikhega (kernel mount ke *root* se path resolve
-# karta hai, aur /opt/pk hamare host mount me hi hai -> kaam karta hai).
+# The handlers are registered in the host kernel, but the qemu-<arch> binary lives inside
+# the app runtime (Debian: qemu-user-static) - so /proc/sys/fs/binfmt_misc shows a path
+# like /opt/pk/usr/bin/qemu-aarch64: the kernel resolves that path from *its* root, and
+# /opt/pk is a mount of the host, so it works.
 #
-# Kya milta hai: arm64/arm/riscv64/ppc64le/s390x/mips Linux ELF -> direct ./binary chalo.
-# Mach-O (macOS/iOS) isse nahi chalta (Darwin syscalls chahiye) - ye sirf Linux ABI hai.
+# What you get: arm64/arm/riscv64/ppc64le/s390x/mips Linux ELF -> run ./binary directly.
+# Mach-O (macOS/iOS) does not work this way (Darwin syscalls are needed) - this is only
+# the Linux ABI.
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 BM=/proc/sys/fs/binfmt_misc

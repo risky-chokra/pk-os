@@ -1,16 +1,16 @@
 #!/bin/sh
-# pk's OS :: desktop session uthao (weston/KMS -> Xorg -> Xvfb fallback)
-#   pk-desktop                start + ek terminal + welcome
-#   pk-desktop app <x>        GUI app kholo (pk-run --gui)
-#   pk-desktop status         kya chal raha hai, kaunsa display
-#   pk-desktop stop           session band
-#   pk-desktop vnc <port>     Xvfb + vnc (headless machine ko screen dikhane ke liye)
-#   pk-desktop shot [file]      weston se desktop ki PNG (QA/evidence ke liye)
-#   pk-desktop outputs        connected displays + current modes (DRM se)
-#   pk-desktop scale 2 [OUT]  High-DPI scaling (weston.ini)   mode/transform/arrange bhi
-#   pk-desktop restart        ini reload (session dobara start)
+# pk's OS :: start a desktop session (weston/KMS -> Xorg -> Xvfb fallback)
+#   pk-desktop                start + one terminal + welcome
+#   pk-desktop app <x>        open a GUI app (pk-run --gui)
+#   pk-desktop status         what is running, which display
+#   pk-desktop stop           end the session
+#   pk-desktop vnc <port>     Xvfb + vnc (to see the screen of a headless machine)
+#   pk-desktop shot [file]    PNG of the desktop straight from weston (QA / evidence)
+#   pk-desktop outputs        connected displays + current modes (from DRM)
+#   pk-desktop scale 2 [OUT]  high-DPI scaling (weston.ini); mode/transform/arrange too
+#   pk-desktop restart        reload the ini (restart the session)
 #
-# Sabse achha experience: runtime me weston + xterm (make runtime --variant=desktop/full).
+# Best experience with weston + xterm in the runtime (make runtime --variant=desktop/full).
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 RT=${PK_RUNTIME_ROOT:-/opt/pk}
@@ -242,6 +242,6 @@ case "${1:-start}" in
     start ;;
   stop)     pk-x stop ;;
   vnc)      shift; vnc "${1:-5900}" ;;
-  --help|-h) sed -n '2,10p' "$0" ;;
+  --help|-h) sed -n '2,13p' "$0" ;;
   *) warn "unknown: $1"; exit 1 ;;
 esac

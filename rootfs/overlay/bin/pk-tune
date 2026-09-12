@@ -1,19 +1,19 @@
 #!/bin/sh
-# pk's OS :: scheduler / CPU / IO / network / IPC tuning + P-E core awareness
-#   pk-tune report              abhi kya chal raha hai (read-only)
+# pk's OS :: scheduler / CPU / IO / network / IPC tuning + P-core/E-core awareness
+#   pk-tune report              what is active now (read-only)
 #   pk-tune desktop             desktop profile: governor+EPP, IO scheduler, sysctls, cgroups
-#   pk-tune hybrid              Intel P/E (ya ARM big.LITTLE) detect karke daemons ko
-#                               efficiency cores par daalo, foreground ko performance par
-#   pk-tune fg <pid|name>       use process ko foreground weight do (cgroup + nice)
+#   pk-tune hybrid              detect Intel P/E (or ARM big.LITTLE) and put daemons on the
+#                               efficiency cores, foreground work on the performance cores
+#   pk-tune fg <pid|name>       give that process foreground weight (cgroup + nice)
 #   pk-tune bg <pid|name>       background: low weight, idle nice
 #   pk-tune io [mq-deadline|bfq|kyber|none]   disk scheduler
-#   pk-tune net                 rmem/wmem + qdisc + offloads (jo ethtool de)
+#   pk-tune net                 rmem/wmem + qdisc + offloads (whatever ethtool allows)
 #   pk-tune ipc                 /dev/shm size, mqueue, io_uring status
-#   pk-tune swap [MB]           swapfile banao/chalao (demand paging ke liye; 0 = off)
-#   pk-tune undo                desktop/hybrid ke changes wapas defaults par
+#   pk-tune swap [MB]           create/enable a swapfile (for demand paging; 0 = off)
+#   pk-tune undo                revert the desktop/hybrid changes to defaults
 #
-# Sab kuch sysfs/procfs/cgroup se karta hai - naye daemons nahi, kernel hi karta hai.
-# Jo cheez machine pe nahi (EPP, bfq, cpuset) wo warn karke skip karti hai.
+# Everything goes through sysfs/procfs/cgroups - no new daemons, the kernel does it.
+# Features this machine lacks (EPP, bfq, cpuset) are skipped with a warning.
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 CG=/sys/fs/cgroup
@@ -384,6 +384,6 @@ case "${1:-report}" in
   net)      net_tune ;;
   ipc)      ipc_tune ;;
   swap)     shift; swap_tune "${1:-1024}" ;;
-  --help|-h) sed -n '2,15p' "$0" ;;
+  --help|-h) sed -n '2,16p' "$0" ;;
   *) warn "unknown: $1"; exit 1 ;;
 esac

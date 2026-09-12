@@ -1,8 +1,8 @@
 #!/bin/sh
-# pk's OS :: runtime ke andar command chalane ka primitive (mounts + chroot)
-#   pk-chroot <cmd> [args...]     -> /opt/pk me chroot karke cmd
-#   pk-chroot --umount            -> binds hatao
-# pk-shell / pk-get isi par bane hain.
+# pk's OS :: the primitive for running a command inside the runtime (binds + chroot)
+#   pk-chroot <cmd> [args...]     -> chroot into /opt/pk and run cmd
+#   pk-chroot --umount            -> drop the bind mounts
+# pk-shell and pk-get are built on this.
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 RT=${PK_RUNTIME_ROOT:-/opt/pk}

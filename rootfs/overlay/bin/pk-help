@@ -1,51 +1,77 @@
 #!/bin/sh
-# pk's OS :: help (live + installed system me 'help' ya pk-help se milti hai)
+# pk's OS :: built-in help (also shown as "help" in the live and installed system).
 DOC=/usr/share/doc/pkos/README.md
 cat <<'TXT'
-pk's OS 1.0 - commands
+pk's OS @PK_VER@ - commands
 ----------------------
-  pk-info        system report (boot mode, disk, net, modules)
-  pk-check       hardware + OS self-test (pendrive test!)  --save --gui --all
-  pk-help        ye list
+  pk-info        system report (boot mode, media, disks, network, mounts, runtime)
+  pk-check       hardware + OS self-test:  pk-check [--save|--gui|--apps|--users|--speed|--all]
+  pk-help        this list
 
-apps (App Runtime - 'sudo make runtime' + WITH_RUNTIME=1 se ISO me, ya kisi
-partition par pk-runtime.sqfs; phir boot par /opt/pk par apne aap mount)
-  pk-run <x>     kuch bhi chalao: ELF, script, .deb, .exe/.msi (Wine), AppImage, .jar
-                 pk-run --info <file>     type batao (pehchanno ke liye)
-                 pk-run --install <file>  .deb/.rpm/binary install
-                 pk-run --list            installed apps + runtime ka haal
-                 pk-run --gui <app>       display ke saath       pk-run --selftest  (QA)
-  pk-shell       runtime ke andar shell (Debian userland)   [pk-shell -c "cmd"]
-  pk-get         runtime ke andar apt-get:  pk-get install -y htop wine
-  pk-runtime     start | stop | status | find | --setup <pk-runtime.sqfs> [dev]
-  pk-chroot      runtime me koi command:  pk-chroot /usr/bin/htop
-  pk-x           GUI: pk-x start weston | pk-x status | pk-x stop
-  pk-desktop     desktop session (weston -> Xvfb fallback) | pk-desktop app <x>
-  pk-keymap      keyboard layout (console + GUI):  pk-keymap in | uk | de
-  pk-user        users add/remove/list/autologin:  pk-user add bob --admin
-  pk-seatd       session manager (weston ko VT/dri/input):  pk-seatd status
-  pk-devperms    /dev nodes ke group/mode theek karo (audio/input/video/dialout)
-  pk-desktop shot /root/d.png   desktop ki PNG (weston se) - proof ke liye
-  pk-wifi        Wi-Fi (experimental): status | scan | connect <ssid> <pw> | stop
-                 boot option: pk_wifi=<ssid>:<password>   (wpa_supplicant runtime me: pk-get install -y wpasupplicant iw)
-  pk-ios         iOS apps ka sach: why | info file.ipa | web <url> | mac-guest | darling
-  pk-android     Android: doctor | enable | install file.apk | kernel-frag
-  pk-vm          guest VM (Windows / Android-x86 / macOS raasta):
-                 pk-vm new win --size=40G | pk-vm run win --cdrom=x.iso | pk-vm list
+apps  (the "App Runtime": a Debian userland shipped inside the ISO as pk-runtime.sqfs,
+       mounted at /opt/pk at boot; it has its own apt and its own Wine prefix)
+  pk-run <x>     run anything: ELF binary, script, .deb, .rpm, AppImage, .jar,
+                 Windows .exe/.msi (through Wine)
+                 pk-run --info <file>     just identify the file type
+                 pk-run --install <file>  put .deb/.rpm/binary into the apps dir
+                 pk-run --list            installed launchers + runtime status
+                 pk-run --gui <app>       start it with a display
+  pk-shell       shell inside the runtime (Debian userland)      [pk-shell -c "cmd"]
+  pk-get         apt-get inside the runtime:  pk-get install -y vlc
+                 (already installed, no download needed: git, python3, vim, nano, htop,
+                  tmux, rsync, jq, zip/unzip/7z, ncdu, strace, lsof, iperf3, dig,
+                  man, pciutils, usbutils, poppler-utils, dillo, sxiv, xpdf, mpg123,
+                  wpasupplicant, iw, rfkill, bluez ...)
+  pk-runtime     start | stop | status | find | --setup <pk-runtime.sqfs> [device]
+  pk-chroot      run one command inside the runtime:  pk-chroot /usr/bin/htop
+  pk-binfmt      foreign-arch Linux binaries (arm64, riscv64, ...) via qemu-user:
+                 pk-binfmt status | register | unregister
+
+desktop (Wayland/KMS, no systemd - the session manager is seatd)
+  pk-desktop     start a session (+ terminal);  pk-desktop status | stop
+  pk-desktop app <x>        open a GUI app          pk-desktop vnc <port>  (headless)
+  pk-desktop shot [file]    screenshot of the desktop (proof that you see graphics)
+  pk-x           the display layer: pk-x start weston|Xorg|Xvfb | status | stop
+  pk-seatd       session manager (gives the compositor VT + /dev/dri + /dev/input):
+                 pk-seatd start | stop | status      (boot: pk_seatd=on|off)
+  pk-devperms    fix /dev node groups/modes (audio, input, video, dialout)
+  pk-keymap      keyboard layout for console + GUI:  pk-keymap [us|in|de...] [--console-only|--gui-only]
+  pk-tune        performance profile: report | desktop | hybrid | fg <pid>
+
+users and devices
+  pk-user list | info <u> | add <u> [--password=pw] [--admin] | passwd <u>
+  pk-user del <u> [--home] | autologin <u>|off | doctor
+                 new users automatically join audio, input, video, render, seat, dialout
+  pk-check --users   real round-trip: create -> groups -> login -> delete
+
+network and remote use
+  pk-net dhcp | status | down          (boot option: pk_net=dhcp)
+  pk-wifi status | scan | connect <ssid> <pw> | stop   (boot: pk_wifi=ssid:password)
+  pk-ssh start | stop | status         dropbear on :22 (boot option: pk_ssh=on)
+
+iOS / Android (honest answer, with the routes that work)
+  pk-ios why | doctor | info file.ipa | extract file.ipa | web <url> | mac-guest | darling
+  pk-android doctor | enable | install file.apk | kernel-frag
 
 system
-  pk-net dhcp          DHCP se IP        (boot option: pk_net=dhcp)
-  pk-ssh start         dropbear :22      (boot option: pk_ssh=on)
-  pk-install           internal disk pe install  (--info / --target=auto / --help)
-  pk-persist setup     live USB pe hi persistence partition
-  dmesg | grep PK      boot markers (BOOT-OK, NET-OK, RUNTIME-OK, APPS-OK...)
-  vi                   editor          reboot / poweroff
+  pk-install     install to the internal disk (--info | --target=auto | --help)
+  pk-persist [/dev/sdX]  persistence partition on the live stick (boot option: persistent)
+  pk-vm          guest VM helper (Windows / Android-x86): new | run | list
+  dmesg | grep '### PK'    boot markers (BOOT-OK, NET-OK, SEATD-OK, DESKTOP-OK, ...)
+  vi / nano      editor                       reboot / poweroff
 
-boot options (GRUB menu me 'e' dabao): pk_net=dhcp, pk_ssh=on, persistent, toram,
-  pk_install=auto (ya /dev/sda, ask), pk_rootpw=..., pk_runtime=off|auto|/dev/sda3,
-  pk_apps_get=<pkg>[:args], pk_selftest, pk_debug, break=mount, single
+boot options (press 'e' on a GRUB entry):
+  pk_net=dhcp  pk_ssh=on  pk_keymap=in  pk_desktop=1  pk_seatd=on  pk_tune=desktop
+  pk_user=bob pk_userpw=bob  pk_rootpw=secret  persistent  toram  pk_swap=auto
+  pk_check=1|gui  pk_verify=1  pk_media=/dev/sdb  pk_iso=/path/file.iso
+  pk_runtime=off|auto|/dev/sda3  pk_apps_get=<pkg>[:args]  pk_run=<cmd>  pk_silent
+  pk_install=auto|/dev/sda|ask  pk_install_user=bob  pk_debug  break=mount  single
+  (pk_run=: spaces as '+', several commands with '!' - e.g. pk_run=cat+/run/pk/x.log)
+
+Full documentation in the ISO and in the repository: docs/ (BUILD, VM-TEST, PENDRIVE,
+REAL-PC, APPS, TROUBLE, ARCHITECTURE, PERSISTENCE, IOS-ANDROID, KERNEL, COMPARE).
 TXT
 if [ -f "$DOC" ]; then
   echo
-  echo "puri detail:  less $DOC   (apps section: 'Apps chalana')"
+  echo "longer form:  less $DOC   (apps section: 'Running applications')"
 fi

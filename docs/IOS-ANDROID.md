@@ -1,99 +1,82 @@
-# pk's OS · iOS aur Android apps — kya chalta hai, kyun, aur kaam kaise nikalein
+# iOS and Android apps: what is true, and what to do instead
 
-Chhota jawab:
-* **Android `.apk`** — *possible* hai, par apne kernel + waydroid ke saath (abhi default me band).
-* **iOS (`.ipa`)** — native **impossible** hai; 3 practical raaste hain (web wrapper,
-  macOS guest + Xcode Simulator, Darling sirf macOS binaries ke liye).
-  `pk-run` isliye `.ipa` par crash/hang nahi karta — reason + route print karta hai.
+Short answer: an `.ipa` cannot run on this OS, an `.apk` can run only with extra parts
+that are not in the base image. Both tools, `pk-ios` and `pk-android`, exist so that you
+get the diagnosis, the file inspection and the working route instead of a broken promise.
 
----
+## iOS / iPadOS (`.ipa`)
 
-## 1. iOS apps kyun nahi chalti (technical, 3 line)
+Why native execution is impossible:
+1. the binary format is **Mach-O** and the syscalls are **XNU/BSD**, not Linux ELF/syscalls;
+2. every iOS binary is **code-signed** against Apple's TEE/App ID chain — an unmodified
+   iOS binary will not run on a device Apple has not attested;
+3. the app links against **UIKit/SwiftUI/Metal/CoreLocation**, closed frameworks with no
+   Linux implementation; and Apple's EULA restricts iOS to Apple hardware.
 
-| layer | iOS app ko kya chahiye | Linux par |
-|---|---|---|
-| binary format | Mach-O arm64, XNU kernel loader | Linux kernel Mach-O load nahi karta (binfmt aur `Darwin` translation layer ke bina) |
-| frameworks | UIKit / SwiftUI / CoreAnimation / Foundation (closed source) | inka koi open port nahi; Darling me bhi UIKit nahi hai |
-| runtime contract | codesign + entitlements + sandbox, `libsystem`, mach ports | Apple ka signing chain ke bina iOS khud bhi install nahi karta |
+So no "iOS emulator for x86 PC" exists in the way Wine exists for Windows: there is
+nothing on the machine that can host the frameworks.
 
-Search/koi shortcut se ye nahi badalta: 2026 tak Linux par **iOS app runtime** exist nahi
-karta (Simulator bhi macOS ka hissa hai — `Xcode.app` Apple EULA ke tehat sirf Apple hardware).
-
-## 2. `pk-ios` — jo kaam karta hai wahi, ek command me
+What you *can* do, in the order of practicality:
 
 ```sh
-pk-ios why                     # ye page ka saar (terminal me)
-pk-ios doctor                  # machine me kya-kya hai (runtime, unzip, browser, qemu, kvm, darling)
-pk-ios info ./App.ipa          # .ipa khol ke: bundle id, display name, executable, arch, min iOS
-pk-ios extract ./App.ipa ~/apps # Payload/*.app nikaal do (icons/nibs/documents padhne ke liye)
-pk-ios web https://icloud.com [naam]   # iOS-only *service* ko desktop app bana do
-pk-ios mac-guest [--run]              # QEMU macOS guest + Xcode Simulator recipe likhta/chalata hai
-pk-ios darling [--setup]              # macOS (x86_64/arm64) console binaries; iOS NAHI
+pk-ios why                       # this explanation, one line at a time
+pk-ios doctor                    # what this machine/runtime has (qemu, kvm, mac tools)
+pk-ios info App.ipa              # bundle id, minimum iOS, archs, what would be needed
+pk-ios extract App.ipa outdir    # payload inspection (Contents/Info.plist, *.app)
+pk-ios web <url>                 # a mobile site is the real cross-platform answer
+pk-ios mac-guest [--run]         # writes/runs a QEMU macOS guest recipe, then Xcode Simulator
+pk-ios darling                   # notes on Darling (macOS *binaries*, not iOS apps)
 ```
 
-### 2a. Web wrapper (sabse practical)
-`pk-ios web <url> [name]` → `/opt/pk/apps/bin/<name>` launcher + `.desktop` banata hai jo
-browser ko kiosk me us URL par kholta hai (firefox-esr/epiphany/chromium/surf me se jo ho).
-iCloud/Netflix-banking-jaisi "iOS-only" cheezein isi se chal jaati hain; browser na ho to
-`pk-get install -y firefox-esr` bol deta hai (rc 73, hang nahi karta).
+Routes that actually work:
+* **Web app / PWA** in the shipped `dillo` or in a browser you install with
+  `pk-get install -y firefox-esr`: `pk-ios web <url>` prints the mobile-UA recipe. This
+  is what most iOS apps really are, plus a native shell.
+* **macOS guest + iOS Simulator** (`pk-ios mac-guest`): QEMU with OpenCore
+  (`opencore-ia32/ia64` images are published by the Axose project), then Xcode's iOS
+  Simulator inside macOS. Needs ~40 GB disk, a licensed macOS, and is slow; the tool
+  writes the `pk-vm` command and the checklist for you. This is a *development* path
+  (build/run/debug), not a "run App Store apps" path, because of point 2 above.
+* **Darling** (`pk-ios darling`): a macOS compatibility layer for **macOS** command-line
+  binaries. It does not run iOS apps, and it is not in the runtime yet — the tool tells
+  you what it would take.
+* If you own the source: rebuild the app for Linux. Flutter, Qt, SDL, Godot, Electron
+  and Unity all export Linux — that is a real, supported path (`pk-run` then handles
+  the produced ELF/AppImage/deb).
 
-### 2b. macOS guest + Xcode Simulator (asli iOS runtime chahiye to)
+## Android (`.apk`)
+
+An `.apk` is a ZIP of DEX + resources + optional native ELF for `arm64-v8a`. The
+blocking pieces are not the CPU (our `qemu-user` path already runs foreign ELF) but:
+
+1. the **Android framework** (Activity/PackageManager/SurfaceFlinger) — a whole OS, not a library;
+2. **binder** (`/dev/binder` or binderfs) — Linux needs `CONFIG_ANDROID_BINDERFS`;
+3. usually **ARM-only** native code + the NDK ABI expectations;
+4. Google Play's safety/attestation for many commercial apps.
+
 ```sh
-pk-ios mac-guest                     # /root/pk-ios-mac.sh banata hai
-sh /root/pk-ios-mac-guest… --run <macOS.iso>    # ya: pk-vm run macos --cdrom=… --uefi --vnc=:1
-```
-Zarooratein: runtime me `qemu-system-x86` + `ovmf` (`pk-get install -y qemu-system-x86 ovmf`),
-disk 60-80 GB, RAM 8 GB, aur legal macOS image (Apple license: Apple hardware par hi allowed).
-Guest ke andar Xcode → Settings → Platforms → iOS Simulator; `.ipa`/project wahan run hota hai.
-Recipe ka maintained source: `github.com/kholia/OSX-KVM`.
-**Status:** is repo me helper + script hai, par sandbox me macOS guest boot karke test
-nahi kiya gaya (legal image + 8 GB RAM + KVM chahiye; yahan KVM nahi hai).
-
-### 2c. Darling (aur jo nahi karta)
-Darling = Linux par macOS userspace translator. Console/small GUI **macOS** binaries
-chala sakta hai; **iOS/.ipa nahi** (UIKit/CoreAnimation usme bhi nahi hain). Linux kernel
-module (`darwin.ko`) chahiye → `make kernel` + build (~ghanton ka compile).
-`pk-ios darling --setup` dependencies install karta hai; build steps print karta hai.
-**Status:** untested here (by design; honest flag ke saath).
-
-## 3. Android: `pk-android`
-
-```sh
-pk-android doctor        # binderfs/ashmem/kvm/waydroid/runtime ka haal + blockers
-pk-android enable        # /dev/binderfs mount karne ki try (kernel support ho to)
-pk-android install x.apk  # extract + (ready ho to) waydroid app install
-pk-android list          # extracts + waydroid status
-pk-android kernel-frag    # make kernel me ye config lines add karo
+pk-android doctor            # binder/ashmem/kvm/waydroid/adb status on this system
+pk-android enable            # try to mount /dev/binderfs (works if the kernel has it)
+pk-android kernel-frag       # the CONFIG_* fragment for 'make kernel' (binder, ashmem)
+pk-android install app.apk   # unpack + tell you exactly what is still missing
+pk-vm new android --size=20G # emulator route: Android-x86 / Waydroid image as a VM
 ```
 
-Blocker (is machine pe): shipped kernel me `CONFIG_ANDROID_BINDERFS` nahi →
-`pk-android doctor` exactly yehi kehta hai. Do raaste:
-1. **apna kernel**: `make kernel` (docs/KERNEL.md) + `pk-android kernel-frag` ki lines, phir
-   `make clean-rootfs && make iso PK_KERNEL=… PK_MODULES=…` → `pk-android enable` mount ho jaayega.
-2. **guest**: Android-x86 / Waydroid-ka-apna-container — `pk-vm new droid --size=20G` +
-   Android-x86 ISO (guest ke andar sab chal jaata hai, host kernel par depend nahi karta).
+Working routes today:
+* **Waydroid** — after `pk-android kernel-frag` is built into your own kernel
+  (`make kernel`, `CONFIG_ANDROID_BINDERFS=y`), plus `pk-get install -y waydroid` in the
+  runtime. `pk-android doctor` says which of those two are missing.
+* **A VM with Android-x86/Bliss OS** via `pk-vm` (needs KVM: `pk-check` shows the `kvm` row).
+* **`scrcpy`** (`pk-get install -y scrcpy adb`) to mirror and control a real phone you
+  already own — for testing an app on genuine hardware this beats any emulator and it is
+  what most people actually want.
+* Rebuild the app for Linux (Flutter/Qt/Godot/SDL) — same advice as iOS.
 
-## 4. Test/QA me kya prove hai
+## What the QA covers
 
-| cheez | kaise | status |
-|---|---|---|
-| `.ipa` pe honest dispatch (crash nahi) | `pk-run --selftest` → `### PK: APP-IOS-DIAG-OK ###` | ✅ QA (stage 7) |
-| `.apk` pe honest dispatch | `APP-APK-DIAG-OK` | ✅ QA |
-| `.exe`/`.msi` → Wine | `APP-EXE-OK` (tiny: stub wine; real runtime: **wine-8.0** se dispatch) | ✅ QA (stage 7, dono modes) |
-| AppImage extract+AppRun | `APP-APPIMAGE-OK` (selftest sample khud banata hai) | ✅ QA |
-| `.jar` (JRE ho to) | `APP-JAR-OK` | ✅ QA (stub java); real JRE = `pk-get install -y default-jre-headless` |
-| `.rpm` | `APP-RPM-DIAG-OK` | ✅ QA |
-| `pk-check` | stage 8 me `CHECK-OK` (0 fail) | ✅ QA |
-| desktop session (Xvfb fallback + xterm round-trip) | `DESKTOP-OK`, `GUI-X-OK`, `GUI-XCLIENT-OK`, `GUI-APP-OK` | ✅ QA stage 8 (`make gui-test`) |
-| Android waydroid / binderfs | — | ❌ is sandbox me kernel rebuild possible nahi (30-90 min, phir bhi nested VM me binder test flaky) |
-| macOS guest / iOS Simulator | — | ❌ test nahi kiya (legal image + KVM + 8 GB chahiye) |
-| Darling | — | ❌ test nahi kiya |
-
-## 5. Filhaal ka "best" combo (aapke pendrive test ke liye)
-
-```
-pkos-1.0-apps.iso  →  Linux apps (apt) + Wine se Windows apps        ✓ boot + apps ready
-pk-desktop         →  weston (KMS) ya Xvfb fallback; xterm/htop/firefox --gui
-iOS                →  pk-ios info file.ipa / pk-ios web <url> / pk-ios mac-guest
-Android            →  pk-android doctor  (kernel me binderfs na ho to "blocked" saaf dikhega, hang nahi)
-```
+`make test` asserts the honest behaviour, not magic: `pk-ios why`/`info` on a synthetic
+`.ipa` (it must identify Mach-O and refuse politely), `pk-run --info` on the same file,
+`pk-android doctor` reporting binder/kvm state, and the `APP-*` markers for the paths
+that do work (Linux ELF, scripts, `.deb`, AppImage, `.exe` through Wine, foreign-arch
+ELF through `qemu-user`). If a claim in this file ever stops matching the code, that is
+a bug worth reporting.

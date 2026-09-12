@@ -1,11 +1,10 @@
 #!/bin/sh
-# pk's OS :: /dev nodes ke group/mode theek karta hai (mdev jin nodes ko chhu leta
-# hai nahi - khaaskar jo devtmpfs ne pehle se bana diye the, ya jo GPU driver
-# load hone par *baad* me bante hain).
-#   pk-devperms            # ek fix-up phera
-#   pk-devperms --watch      # 5 baar, 2s gap (driver late bind ho to bhi lag jaaye)
-# Groups /etc/group se resolve hote hain; na milte ho to chup-chaap skip (base ISO
-# me sound hardware na ho to /dev/snd hi nahi hota) .
+# pk's OS :: fixes the group/mode of /dev nodes that mdev did not touch - especially nodes
+# devtmpfs had already created, and nodes that only appear once the GPU driver has loaded.
+#   pk-devperms            # one fix-up pass
+#   pk-devperms --watch    # five passes, 2 s apart (for drivers that bind late)
+# Groups are resolved from /etc/group; a missing group means the entry is skipped quietly
+# (a base ISO without sound hardware has no /dev/snd at all).
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 GRP() { awk -F: -v G="$1" '$1==G{print $3; exit}' /etc/group 2>/dev/null; }

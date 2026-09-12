@@ -73,7 +73,9 @@ docs_guard() {
   fi
   say "docs language guard: English only, OK ($(printf '%s\n' $files | grep -c '') files)"
 }
-[ "$DOCS_ONLY" = 1 ] && { docs_guard; exit 0; }
+# the guard always runs: a release must never ship documentation that is not English
+docs_guard
+[ "$DOCS_ONLY" = 1 ] && exit 0
 
 # ------------------------------------------------------------------ preconditions
 [ -n "$GITHUB_TOKEN" ] || die "GITHUB_TOKEN set karo (classic PAT, scope 'repo')"
@@ -83,8 +85,11 @@ have git   || die "git missing"
 have curl  || die "curl missing -> sudo apt install -y curl"
 have sha256sum || die "sha256sum missing"
 API=https://api.github.com
+UPLOAD=https://uploads.github.com
 AUTH="Authorization: Bearer $GITHUB_TOKEN"
-accept() { curl -sS -H "$AUTH" -H "Accept: application/vnd.github+json" "$@"; }
+# accept <api-path> [curl extras...]   (path first: it is what carries the host)
+accept() { api_p="$1"; shift; curl -sS -H "$AUTH" -H "Accept: application/vnd.github+json" \
+             -H "X-GitHub-Api-Version: 2022-11-28" "$@" "$API$api_p"; }
 
 # asset list: "<basename>|<asset name>"
 assets=""
@@ -108,13 +113,13 @@ gh_err() { # <json> <context>
 
 # ------------------------------------------------------------------ 2. create repo
 if [ "$CREATE" = 1 ]; then
-  code=$(accept -o /tmp/pk-pub-repo.json -w '%{http_code}' "/repos/$OWNER/$REPO")
+  code=$(accept "/repos/$OWNER/$REPO" -o /tmp/pk-pub-repo.json -w '%{http_code}')
   case "$code" in
     200) say "repository $OWNER/$REPO already exists (private=$(sed -n 's/.*"private":[a-z]*/&/p' /tmp/pk-pub-repo.json | head -1))" ;;
     404) say "creating public repository $OWNER/$REPO"
          body=$(printf '{"name":"%s","description":"%s","private":false,"has_issues":true,"has_wiki":false,"auto_init":false,"license_template":"mit","gitignore_template":"null"}' \
                 "$REPO" "pk's OS - a small self-built Linux live/install ISO (docs, sources, releases)")
-         res=$(accept -X POST -H "Content-Type: application/json" -d "$body" "/user/repos")
+         res=$(accept "/user/repos" -X POST -H "Content-Type: application/json" -d "$body")
          printf '%s' "$res" | grep -q '"full_name"' || { gh_err "$res" "repo create"; die "could not create the repository (classic PAT with 'repo' scope? org permissions?)"; }
          say "created: $(printf '%s' "$res" | sed -n 's/.*"html_url":"\([^"]*\)".*/\1/p' | head -1)" ;;
     *)   gh_err "$(cat /tmp/pk-pub-repo.json 2>/dev/null)" "repo lookup"; die "unexpected HTTP $code while looking up the repository" ;;
@@ -160,16 +165,16 @@ run env GIT_TERMINAL_PROMPT=0 git -C "$PK_ROOT" push -f origin "refs/tags/$TAG" 
 # ------------------------------------------------------------------ 4. tag + release
 notes=$( [ -f "$NOTES" ] && head -c 120000 "$NOTES" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}' || echo "")
 rel=$(accept -X POST -H "Content-Type: application/json" \
-      -d "{\"tag_name\":\"$TAG\",\"name\":\"pk's OS $VERSION\",\"body\":\"$notes\",\"draft\":false,\"prerelease\":false,\"target_commitish\":\"$BR\"}" \
-      "/repos/$OWNER/$REPO/releases")
-RELID=$(printf '%s' "$rel" | sed -n 's/.*"id":[ ]*\([0-9]*\).*/\1/p' | head -1)
+      "/repos/$OWNER/$REPO/releases" -X POST -H "Content-Type: application/json" \
+      -d "{\"tag_name\":\"$TAG\",\"name\":\"pk's OS $VERSION\",\"body\":\"$notes\",\"draft\":false,\"prerelease\":false,\"target_commitish\":\"$BR\"}")
+RELID=$(printf '%s' "$rel" | grep -o '"id":[ ]*[0-9]*' | head -1 | tr -dc 0-9)
 if [ -z "$RELID" ]; then
   say "release already exists for $TAG -> reusing it"
   all=$(accept "/repos/$OWNER/$REPO/releases/tags/$TAG")
-  RELID=$(printf '%s' "$all" | sed -n 's/.*"id":[ ]*\([0-9]*\).*/\1/p' | head -1)
+  RELID=$(printf '%s' "$all" | grep -o '"id":[ ]*[0-9]*' | head -1 | tr -dc 0-9)
   [ -n "$RELID" ] || { gh_err "$rel" "release create"; die "could not create or find the release"; }
-  accept -X PATCH -H "Content-Type: application/json" -d "{\"name\":\"pk's OS $VERSION\",\"body\":\"$notes\"}" \
-    "/repos/$OWNER/$REPO/releases/$RELID" >/dev/null
+  accept "/repos/$OWNER/$REPO/releases/$RELID" -X PATCH -H "Content-Type: application/json" \
+    -d "{\"name\":\"pk's OS $VERSION\",\"body\":\"$notes\"}" >/dev/null
 fi
 RELURL=$(printf '%s' "$rel" | sed -n 's/.*"html_url":"\([^"]*\)".*/\1/p' | head -1)
 say "release id=$RELID ${RELURL:+url=$RELURL}"
@@ -183,19 +188,18 @@ while IFS='|' read -r path name; do
   size=$(wc -c < "$path" | tr -d ' ')
   sha=$(sha256sum "$path" | cut -c1-64)
   # replace an asset of the same name (upload is not idempotent on GitHub)
-  aid=$(printf '%s' "$existing" | tr ',' '\n' | grep -n "\"name\":\"$name\"" | head -1 | cut -d: -f1 || true)
   if [ -n "$aid" ]; then
     oldid=$(printf '%s' "$existing" | sed -n 's/.*"assets":\[{.*"id":[ ]*\([0-9]*\).*/\1/p' | head -1)
     for j in $(printf '%s' "$existing" | sed 's/},{/}\n{/g' | grep -n "\"name\":\"$name\"" | cut -d: -f1); do
       oldid=$(printf '%s' "$existing" | sed -n "${j}p" | sed -n 's/.*"id":[ ]*\([0-9]*\).*/\1/p' | head -1)
       [ -n "$oldid" ] && { say "  replacing existing asset $name (id=$oldid)"
-        run accept -X DELETE "/repos/$OWNER/$REPO/releases/assets/$oldid" >/dev/null || true; }
+        run accept "/repos/$OWNER/$REPO/releases/assets/$oldid" -X DELETE >/dev/null || true; }
     done
   fi
   say "  uploading $name ($size bytes, sha256 ${sha%%??????????????????????????????????????????????????????????????????????????????????????}…)"
   tries=1
   until [ "$DRY" = 1 ] || curl -sS --fail -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
-        --data-binary "@$path" "$API/uploads/repos/$OWNER/$REPO/releases/$RELID/assets?name=$name" >/tmp/pk-pub-asset.json; do
+        --data-binary "@$path" "$UPLOAD/repos/$OWNER/$REPO/releases/$RELID/assets?name=$name" > /tmp/pk-pub-asset.json; do
     tries=$((tries+1)); [ "$tries" -gt 3 ] && { warn "upload failed 3x: $name"; exit 1; }
     warn "  retry $tries for $name"; sleep 5
   done

@@ -142,6 +142,8 @@ stage "1/8  live boot from ISO (grub + cdrom)"
   check "$L" 'PK: VERIFY-OK'          "live payload ka sha256 match hua (pk_verify=1)"
   check "$L" 'PK: TUNE-REPORT-OK'     "pk-tune report (sched/io/ipc/security knobs padhe)"
   check "$L" 'PK: DISPLAY-'            "S08display hook chala (blank off / backlight state)"
+  check "$L" 'PK: DISPLAY-KMS'           "late display probe ne KMS device dikha (GPU driver live me ship hote hain)"
+  check "$L" 'driver=bochs'              "QEMU -vga std ka bochs-drm guest me load hua (weston ko /dev/dri milta hai)" 
   check "$L" 'PK: TUNE-SWAP-SKIP'      "live (tmpfs/overlay) par swap guard ne rok diya (RAM nahi khayega)"
   if grep -q "boot/grub/grub.cfg" /dev/null 2>/dev/null; then :; fi
   if [ -f "$WORK/iso/boot/grub/grub.cfg" ] && grep -q "consoleblank=0" "$WORK/iso/boot/grub/grub.cfg" 2>/dev/null; then

@@ -159,7 +159,15 @@ else
       "apt-get update -qq && apt-get install -y --no-install-recommends wine mesa-utils weston xterm xvfb x11-utils x11-xkb-utils xkb-data" >/dev/null 2>&1 || \
       warn "wine/weston install fail (baad me runtime ke andar 'pk-get install -y wine' se kar lena)"
   fi
-  printf '%s\n' "pk's OS runtime: Debian $DEB_DIST ($VARIANT) built $(date -u +%Y-%m-%dT%H:%MZ)" > "$SUIT/etc/pk-runtime-release"
+  printf '%s\n' "pk's OS runtime: Debian $DEB_DIST ($VARIANT) built $(date -u +%Y-%m-%dT%H:%MZ)" > "$WORK/pk-runtime-release.tmp"
+  # ^ debootstrap + chroot root se chalte hain, isliye '$SUIT/etc' root-owned reh jaata
+  # hai: seedha `>` write EACCES deta aur `make runtime` poora fail ho jaata (bina-root
+  # user ke liye asli blocker). File $WORK me likh kar privileged copy karte hain, phir
+  # poori tree wapas caller ke haath de dete hain (agle run/tools ke liye).
+  ${SUDO:-sudo} cp -f "$WORK/pk-runtime-release.tmp" "$SUIT/etc/pk-runtime-release" 2>/dev/null \
+    || cp -f "$WORK/pk-runtime-release.tmp" "$SUIT/etc/pk-runtime-release" 2>/dev/null \
+    || warn "release file nahi likh paye (image phir bhi theek hai)"
+  run_as chown -R "$(id -u):$(id -g)" "$SUIT" 2>/dev/null || true
 fi
 
 # ---------------------------------------------------------------- squash it

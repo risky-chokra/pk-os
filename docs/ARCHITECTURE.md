@@ -105,3 +105,15 @@ pk-check --save     # + hardware, net, USB speed, display, runtime, apps, Secure
 > Note: kuch items ("segfault khatam", "DirectX 12 on Linux", "iOS apps native") category-galated hain —
 > ya to language/runtime ki zimedari hai ya vendor ka locked stack. Maine unki jagah
 > wo diya jo Linux par actually possible hai, aur baaki ko 🚫 + reason ke saath chhoda hai.
+
+### Display/GPU (desktop session ke liye) — kya-kya live me hai
+- GPU KMS drivers live image me ship: `vmwgfx` (VMware/VBox VMSVGA), `vboxvideo`
+  (VBoxVGA), `qxl`, `bochs`+`cirrus` (QEMU std/cirrus), `virtio_gpu`, `ast`,
+  `mgag200`, `i915` (Intel), `nouveau`/`radeon` (purane NVIDIA/ATI).
+- `S99zdisplay` hook (mdev/runtime ke baad) inhe explicitly load karta hai, aur
+  final `fb=/drm=/driver=` status motd + `/run/pk/display.txt` me likhta hai;
+  marker `DISPLAY-KMS` / `DISPLAY-TEXTONLY`.
+- KMS na mile to weston ke bajaye `pk-x` Xvfb + `pk-desktop vnc <port>` se GUI
+  reachable rehta hai (screen par nahi, network par haan) — kabhi fail nahi hoti.
+- `amdgpu`/`xe` intentionally base live me nahi (firmware .bin ke bina probe fail
+  karte hain + ~4 MB) — installed system / `pk-firmware` pack me wo cover hote hain.

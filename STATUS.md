@@ -263,6 +263,39 @@ Koi 6 GB artifact kabhi bana hi nahi. Galati sirf **docs/release-body ki guidanc
 `auto` (6144 nahi). Chhota download chahiye to: **base ISO (84 MB)** + runtime ko pendrive ke
 free partition par `pk-runtime --setup <file>` se rakho (ISO me embed karne ki zarurat nahi).
 
+### 4j. Desktop screen par kyun nahi aata tha — asli karan (test ke saath)
+
+Aapne poochha: "GRUB me live/install select karne ke baad desktop aayega ya nahi?"
+Live/install ke saath text console aata hai (ye pehle prove ho chuka hai), par
+**desktop nahi aa raha tha** — reason dhoondhne ke liye published apps ISO ko QEMU me
+boot karke screen capture kiya (5.5 min tak 26 frames): frame hamesha 720x400 text
+raha, resolution change nahi hua = weston chala hi nahi.
+
+Guest ke andar serial console se ghus kar dekha:
+
+- `/lib/modules/6.12.../kernel/drivers/gpu/drm/` me **koi GPU driver tha hi nahi**
+  (live-modules.txt me sirf `simpledrm.ko*` + `drm_kms_helper.ko*` the, aur is Debian
+  kernel me simpledrm build hi nahi hota) -> `mdev` ke paas load karne ko kuch nahi.
+- `ls /sys/class/drm` -> sirf `version`; `/dev/dri` -> `No such file or directory`;
+  weston ko device nahi milta, to session chup-chaap Xvfb par chala jaata hai
+  (screen par kuch nahi, VNC par sab kuch).
+
+Fix (additive, kuch hataya nahi):
+1. `config/live-modules.txt` me GPU drivers: `vmwgfx vboxvideo qxl tiny(bochs+cirrus)
+   virtio ast mgag200 i915 nouveau radeon` + `vga16fb`. Base ISO 88,031,232 -> 91,813,888 B.
+2. Naya boot hook `rootfs/overlay/etc/pk-boot.d/S99zdisplay`: display-class PCI device
+   ho to ye drivers explicitly `modprobe` karta hai (mdev coldplug par bharosa nahi),
+   phir **final** `fb/drm/driver` numbers se `/run/pk/display.txt` + motd line update
+   karta hai, aur `### PK: DISPLAY-KMS ...###` / `### PK: DISPLAY-TEXTONLY ...###`
+   marker maarta hai. (S08display `drm=0` isliye dikha raha tha kyunki wo mdev se
+   *pehle* chalta hai — wo reporting bug bhi isi ne theek kiya.)
+3. `scripts/run-test.sh` me 2 nayi QA checks: `PK: DISPLAY-KMS` + `driver=bochs`
+   (73 -> 75 checks) — taaki koi future build GPU drivers bhool jaye to test pakad le.
+4. `docs/VM-TEST.md` me "2b. Graphics device ka chunav" table: QEMU `-vga vmware`
+   par kernel `probe with driver vmwgfx failed with error -38` deta hai (QEMU sirf
+   SVGA v2 emulate karta hai) — wahan desktop ki jagah `-vga std`/`-vga virtio` use karo;
+   VirtualBox ke `vmsvga`/`vboxvga` dono ab desktop dete hain.
+
 ## 5. Aapke PC pe ab kya karna hai (emulator → pendrive → install)
 
 ```sh

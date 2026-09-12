@@ -32,8 +32,30 @@ kernel/drivers/usb/class
 kernel/drivers/usb/serial
 kernel/drivers/hid
 kernel/drivers/input
-kernel/drivers/gpu/drm/tiny/simpledrm.ko*
+# (is kernel me CONFIG_DRM_SIMPLEDRM nahi -> simpledrm.ko bhi nahi)
 kernel/drivers/gpu/drm/drm_kms_helper.ko*
+
+# --- display / GPU (KMS) ---------------------------------------------------
+# Ye list ke bina VM/VBox/real-PC par /dev/dri/card0 hi nahi banta, aur weston
+# (desktop session) ke paas device nahi aata -> screen text-mode me hi reh jaati
+# hai. Is kernel me CONFIG_DRM_SIMPLEDRM/SYSFB_SIMPLEFB OFF hain, isliye 'koi na
+# koi' native driver load hona zaroori hai; kharcha ~1 MB (xz) - desktop ke
+# muqable bilkul kuch nahi.
+kernel/drivers/gpu/drm/vmwgfx            # VMware + VirtualBox 'VMSVGA' (VBox ka default)
+kernel/drivers/gpu/drm/vboxvideo         # VirtualBox purana 'VBoxVGA' device
+kernel/drivers/gpu/drm/qxl               # QEMU/SPICE (-vga qxl)
+kernel/drivers/gpu/drm/tiny              # bochs (-vga std) + cirrus (-vga cirrus)
+kernel/drivers/gpu/drm/virtio            # virtio-gpu (-vga virtio): fast + clean
+kernel/drivers/gpu/drm/ast               # server/BMC on-board graphics
+kernel/drivers/gpu/drm/mgag200           # Matrox G200 (bohat servers me)
+kernel/drivers/video/fbdev/vga16fb.ko*   # legacy text-mode fb (/dev/fb0 fallback)
+# Physical PCs ke liye (bade but real display ka asli raasta):
+kernel/drivers/gpu/drm/i915              # Intel HD/UHD/Arc-ish (display bina firmware ke chalta hai)
+kernel/drivers/gpu/drm/nouveau           # purane/mid NVIDIA
+kernel/drivers/gpu/drm/radeon            # purane ATI/AMD (display bina firmware ke)
+# amdgpu/xe isme JAAN-BOOJH ke nahi: inhe /lib/firmware/{amdgpu,xe} ke .bin chahiye
+# (warna probe fail), size ~4 MB+. In GPUs par text console + 'pk-desktop vnc'
+# chalega; full desktop installed system me (firmware pack ke saath) behtar.
 # --- NIC drivers (udev nahi hai, isliye pk-net boot par modprobe karta hai)
 # virtio: QEMU/KVM guests; ethernet: real PCs; usb: laptops ke USB-Ethernet dongles
 kernel/drivers/net/virtio*

@@ -1,0 +1,89 @@
+#!/bin/sh
+# pk's OS boot hook :: display ka FINAL probe (mdev/runtime ke baad) + GPU driver ensure
+# ---------------------------------------------------------------------------
+# S08display bahut jaldi chalta hai (us waqt /dev/dri banta hi nahi), isliye wo
+# hamesha 'fb=0 drm=0' likhta tha - jo log padhne wale ko "display mar gaya"
+# jaisa galat signal deta tha. Ye hook kaam khatam hone ke baad dobara dekhta hai:
+#   1) display class ke liye jaane-pechane GPU KMS drivers explicitly load karta hai
+#      (mdev coldplug par bharosa mat karo - VM/VBox me aksar uevent late/missing hota hai)
+#   2) /run/pk/display.txt aur /etc/motd ki status line FINAL numbers se update karta hai
+#   3) marker: ### PK: DISPLAY-KMS (drm=N driver=X) ###  ya ### PK: DISPLAY-TEXTONLY ###
+#      (TEXTONLY ka matlab screen par text chalega par weston/KMS session ke liye
+#       device nahi - tab 'pk-desktop vnc' ya GRUB ka 'v' safe-graphics entry use karo)
+# Kabhi bhi fail ho to boot chalta rahega: set -e nahi, sab guarded, exit 0.
+# Band karne ke liye: pk_display=off (S08display ke saath ye bhi skip ho jaata hai)
+# ---------------------------------------------------------------------------
+set -u
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+[ "${pk_display:-}" = off ] && exit 0
+grep -q 'pk_display=off' /proc/cmdline 2>/dev/null && exit 0
+
+mark() { ( printf '### PK: %s ###\n' "$*" > /dev/console ) 2>/dev/null; ( printf '%s\n' "$*" > /dev/kmsg ) 2>/dev/null; }
+say() { printf 'pk-display-late: %s\n' "$*"; }
+
+# --- 1) GPU drivers: chhota, targeted set (jo live /lib/modules me hain wahi) --
+# Naam Debian ke module file-naam se match karne chahiye: 'bochs-drm' naam ka
+# module is kernel me hai hi nahi (file tiny/bochs.ko.xz hai) -> pehle maine galat
+# naam se modprobe kiya tha, isliye -vga std par bhi drm=0 aa raha tha.
+GPU="vmwgfx vboxvideo qxl bochs cirrus virtio_gpu ast mgag200 i915 radeon nouveau vga16fb"
+need=0
+for m in $GPU; do
+  [ -d /sys/module/$m ] && { need=1; break; }
+done
+if [ "$need" = 0 ]; then
+  # sirf tab modprobe karo jab koi display class ka PCI device dikhe (berang nahi)
+  disp=0
+  for c in /sys/bus/pci/devices/*/class; do
+    cl=$(cat "$c" 2>/dev/null) || continue
+    case "$cl" in 0x0300*|0x0301*|0x0302*|0x0380*) disp=1; break ;; esac
+  done
+  if [ "$disp" = 1 ]; then
+    for m in $GPU; do
+      modprobe -q "$m" 2>/dev/null && say "driver $m loaded"
+    done
+    i=0
+    while [ $i -lt 5 ]; do
+      ls /dev/dri/card* >/dev/null 2>&1 && break
+      usleep 300000 2>/dev/null || sleep 1
+      i=$((i + 1))
+    done
+  fi
+fi
+
+# --- 2) final numbers ----------------------------------------------------------------
+fbn=$(ls /dev/fb* 2>/dev/null | wc -l | tr -d ' ')
+drm=$(ls /dev/dri/card* 2>/dev/null | grep -c 'card[0-9]*$')
+[ -n "$drm" ] || drm=0
+[ -n "$fbn" ] || fbn=0
+drv=none
+for u in /sys/class/drm/card*/device/uevent; do
+  [ -f "$u" ] || continue
+  d=$(sed -n 's/^DRIVER=//p' "$u" 2>/dev/null | head -1)
+  [ -n "$d" ] && { drv="$d"; break; }
+done
+con=$(sed -n 's/^[[:space:]]*//;s/[[:space:]]*$//p' /proc/consoles 2>/dev/null | awk '{printf "%s ",$1}')
+line="screen console ok (consoles:${con:-none}) fb=$fbn drm=$drm driver=$drv blank=off"
+
+mkdir -p /run/pk 2>/dev/null
+printf '%s\n' "$line" > /run/pk/display.txt 2>/dev/null || true
+
+# motd ki pehli line [ pk-display-status ] hoti hai -> use FINAL se badalna
+if [ -f /etc/motd ] && head -1 /etc/motd 2>/dev/null | grep -qs 'pk-display-status'; then
+  tmp=/run/pk/motd.$$
+  { printf '[ pk-display-status ] %s (final)\n' "$line"; sed '1d' /etc/motd; } > "$tmp" 2>/dev/null \
+    && cat "$tmp" > /etc/motd 2>/dev/null
+  rm -f "$tmp" 2>/dev/null || true
+fi
+[ -w /dev/tty1 ] && printf 'pk'"'"'s OS: final display check -> fb=%s drm=%s driver=%s\n' "$fbn" "$drm" "$drv" > /dev/tty1 2>/dev/null
+
+# --- 3) desktop ke liye honest verdict -------------------------------------------------
+if [ "$drm" -gt 0 ] 2>/dev/null; then
+  mark "DISPLAY-KMS (drm=$drm driver=$drv fb=$fbn)"
+  say "KMS device ready: weston ko /dev/dri/card0 mil sakta hai (driver $drv)"
+else
+  if grep -q 'pk_desktop=1\|pk_desktop=on' /proc/cmdline 2>/dev/null; then
+    say "pk_desktop=1 par KMS device nahi -> desktop Xvfb(par) chalega, screen par nahi; 'pk-desktop vnc 5900' se dekho ya GRUB me 'v'"
+  fi
+  mark "DISPLAY-TEXTONLY (fb=$fbn drm=0; text console theek, weston/KMS ke liye driver nahi)"
+fi
+exit 0

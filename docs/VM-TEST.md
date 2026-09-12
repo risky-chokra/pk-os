@@ -160,6 +160,37 @@ VirtualBox: Settings → Serial Ports → Port 1 → **Check "Enable Serial Port
 `console=ttyS0,115200n8 pk_check=1 pk_selftest pk_poweroff`
 → poori boot log file me aa jaayegi (markers + pk-check table).
 
+## 2b. Graphics device ka chunav — desktop (weston) ke liye ye zaroori hai
+
+`pk's OS` ka text console har device par chalta hai. **Desktop session (weston) ko
+DRM/KMS device chahiye** (`/dev/dri/card0`). Live image me ab ye drivers ship hote
+hain: `vmwgfx vboxvideo qxl bochs cirrus virtio_gpu ast mgag200 i915 radeon nouveau`
+(iske liye ISO ~3.6 MB badi hui — 88 MB -> 92 MB — desktop ke muqable sasta saudagar).
+
+| Host | Device flag | Result (QEMU 10 + kernel 6.12 par naapa gaya) |
+|---|---|---|
+| QEMU | `-vga std` (default) | `bochs` driver bind -> `/dev/dri/card0` -> **desktop aata hai** |
+| QEMU | `-vga virtio` | `virtio_gpu` -> desktop, fastest |
+| QEMU | `-vga qxl` | `qxl` -> desktop (SPICE ke saath) |
+| QEMU | `-vga vmware` | `vmwgfx` load hota hai par probe fail: `Hardware has no pitchlock` / `probe with driver vmwgfx failed with error -38` — **QEMU ka VMware emulatikon SVGA v2 tak hai**, kernel use reject karta hai. Text console theek, desktop nahi. (Asli VMware/VirtualBox VMSVGA me ye device SVGA v3+ deta hai wahan vmwgfx chalta hai.) |
+| VirtualBox | `--graphicscontroller vmsvga` | `vmwgfx` -> desktop on-screen ✅ (VBox ka default bhi yehi) |
+| VirtualBox | `--graphicscontroller vboxvga` | `vboxvideo` -> desktop on-screen |
+| VirtualBox | `--accelerate3d on` | zaroori NAHI; 3D off par bhi weston (pixman) chal jaata hai |
+
+Note: is Debian kernel me `CONFIG_DRM_SIMPLEDRM`/`CONFIG_SYSFB_SIMPLEFB` **band**
+hain — yaani "koi driver nahi to basic framebuffer to chalega" wala raasta available
+hi nahi. Isliye GPU module list itni matter karti hai. AMD ke naye GPUs (`amdgpu`)
+aur Intel Arc (`xe`) deliberately nahi hain: woh `/lib/firmware/{amdgpu,xe}/*.bin`
+maangte hain (na mile to probe fail) + ~4 MB — un par text console +
+`pk-desktop vnc` chalega, full support installed system me (firmware pack ke saath).
+
+Boot ke baad screen par desktop aaya ya nahi, ye **do marker** batate hain
+(`### PK: ... ###`, ya `/etc/motd` ke upar wali `[ pk-display-status ]` line):
+
+- `DISPLAY-KMS (drm=1 driver=bochs fb=0)` -> KMS device hai, weston ko milega
+- `DISPLAY-TEXTONLY (fb=0 drm=0; ...)` -> device nahi: screen par text aayega,
+  desktop `pk-desktop vnc 5900` se dekho (Xvfb fallback) — ya VM ka graphics device badlo
+
 ## 3. VM me andar jaake ye 8 commands (expected output ke saath)
 
 ```sh
@@ -227,7 +258,9 @@ rahe to isi order me try karo:
 3. **VBox: 3D off + controller badlo** (Windows host par Hyper-V/NEM ke saath aksar atakta hai):
    ```bash
    VBoxManage controlvm <vm> poweroff
-   VBoxManage modifyvm <vm> --accelerate3d off --graphicscontroller vboxvga --vram 128
+   VBoxManage modifyvm <vm> --accelerate3d off --graphicscontroller vmsvga --vram 128
+#   (vmsvga = VMware SVGA; live me vmwgfx+bochs+vboxvideo ship hote hain -> desktop on-screen
+#    aana chahiye. Agar DISPLAY-TEXTONLY dikhe to 'v' = safe-graphics entry use karo.)
    VBoxManage startvm <vm> --type gui
    ```
    (VBoxVGA purana hai par text-mode ke liye robust; VMSVGA 3D ke liye - dono par hamara GUI

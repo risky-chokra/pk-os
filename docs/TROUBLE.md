@@ -112,6 +112,30 @@ Sandbox/nested-VM environment me `/dev/kvm` nahi milta → QEMU TCG se boot 60-9
 lagta hai; `make test` ka timeout (`PK_TEST_TIMEOUT=220`) isi hisaab se hai.
 Host pe KVM ho to `make run` me `-accel kvm` add kar do (run-qemu.sh me `PK_QEMU_EXTRA`).
 
+## 4b. Desktop (weston) screen par nahi aaya
+
+Pehle **marker** dekho — ye batata hai ki display subsystem ne kya paya:
+
+```
+dmesg | grep -a 'PK: DISPLAY'        # ya boot ke waqt serial log
+cat /run/pk/display.txt              # final status: fb=N drm=N driver=X
+grep -a pk-display-status /etc/motd  # login screen ke upar bhi yehi dikhta hai
+```
+
+| Kya dikha | Matlab | Kya karo |
+|---|---|---|
+| `DISPLAY-NO-RUNTIME` (GRUB ke baad) | aap base/serial ISO chala rahe ho — weston/xterm App Runtime me hote hain | `pkos-1.0-apps.iso` use karo, ya `pk-runtime --setup <file>` se runtime lagao |
+| `DISPLAY-TEXTONLY (fb=0 drm=0 ...)` | koi KMS device nahi -> weston ke paas /dev/dri/card0 nahi | VM ka graphics device badlo (`-vga std` / `-vga virtio`; VBox me `vmsvga`), ya `pk-desktop vnc 5900` |
+| `pk-x: ... weston HEADLESS par chal raha hai` | session utha par physical screen nahi | `pk-x stop; pk-x start Xvfb` phir `pk-desktop vnc 5900` |
+| `DISPLAY-KMS (drm=1 driver=...)` par phir bhi kaali screen | `pk_desktop=1` nahi tha (default live entry desktop *start nahi karti* — base ISO tez rahe) | GRUB menu me entry 5 (`live: desktop + apps GUI`) chuno, ya login ke baad `pk-desktop start` |
+| kernel log: `vmwgfx ... probe with driver vmwgfx failed with error -38` | QEMU ka emulated VMware SVGA purana (v2) hai, kernel reject karta hai | `-vga vmware` chhodo; `-vga std`/`-vga virtio` use karo (asli VMware/VBox par vmwgfx chalta hai) |
+
+```
+pk-desktop status      # session/Xvfb ke baare me + weston.ini
+pk-x status            # konsa display server chala (weston/Xvfb) + log
+pk-check --gui         # GUI round-trip test (xterm khola, screenshot/exit check)
+```
+
 ## 5. Root password bhool gaye (installed system)
 
 Live USB se boot karo, phir:

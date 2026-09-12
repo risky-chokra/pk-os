@@ -18,6 +18,15 @@ rbin() { [ -x "$RT/usr/bin/$1" ] || [ -x "$RT/bin/$1" ]; }
 start() {
   want=${1:-auto}
   mounted "$RT" || { say "runtime attach nahi hai -> pk-runtime start"; exit 64; }
+  # KMS device ke bina weston sirf 'headless' backend par chadhta hai -> session ready
+  # dikhega par SCREEN PAR KUCH NAHI (log isi ko "desktop nahi aaya" kehte hain).
+  # Isliye auto mode me /dev/dri/card* dekho: na ho to Xvfb (VNC-able) prefer karo.
+  hasdrm=0
+  for c in /dev/dri/card*; do [ -e "$c" ] && { hasdrm=1; break; }; done
+  if [ "$want" = auto ] && [ "$hasdrm" = 0 ] && rbin Xvfb; then
+    say "KMS device nahi (/dev/dri/card*) -> weston ki jagah Xvfb select kiya (screen par kuch nahi aayega; 'pk-desktop vnc 5900' se GUI dekho)"
+    want=Xvfb
+  fi
   [ "$want" = auto ] && for c in weston Xorg Xvfb; do rbin "$c" && { want=$c; break; }; done
   case "$want" in
     weston)
@@ -38,6 +47,7 @@ start() {
         # clients chroot ke andar chalte hain -> in-chroot path hi do
         printf 'WAYLAND_DISPLAY=wayland-1\nXDG_RUNTIME_DIR=/run/pk-x\nPK_XDG_RUNTIME_HOST=%s\nDISPLAY=\n' "$RT/run/pk-x" > /run/pk/x-env
         say "weston ready (socket: $RT/run/pk-x/wayland-1, ${j}s)"
+        [ "$hasdrm" = 1 ] || warn "weston HEADLESS par chal raha hai: koi physical screen nahi. 'pk-x stop' ke baad 'pk-desktop vnc 5900' use karo, ya VM ka graphics device badlo (docs/VM-TEST.md #2b)"
       else
         warn "weston ka socket nahi aaya (/dev/dri ya GL nahi?) -> $(tail -2 "$LOGF" 2>/dev/null | tr '\n' '|' | cut -c1-90)"
         kill "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null || true

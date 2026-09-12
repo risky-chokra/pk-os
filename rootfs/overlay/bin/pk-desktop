@@ -186,8 +186,10 @@ do_shot() {
     return 66
   fi
   tmp=/root/.pk-shot.$$.png
-  pk-chroot /bin/sh -c "export XDG_RUNTIME_DIR=/run/pk-x WAYLAND_DISPLAY=wayland-1; cd /root; weston-screenshooter $tmp" >/run/pk/shot.log 2>&1
+  to=""; have timeout && to="timeout 25"   # screenshooter compositor ka wait karta hai ->
+  $to pk-chroot /bin/sh -c "export XDG_RUNTIME_DIR=/run/pk-x WAYLAND_DISPLAY=wayland-1; cd /root; weston-screenshooter $tmp" >/run/pk/shot.log 2>&1
   rc=$?
+  [ "$rc" = 124 ] && warn "screenshot 25s me nahi aaya (compositor busy/debug off?) - log: /run/pk/shot.log"
   if [ -s "$RT/root/.pk-shot.$$.png" ] || [ -s "/root/.pk-shot.$$.png" ]; then
     src="$RT/root/.pk-shot.$$.png"; [ -s "$src" ] || src=$tmp
     mkdir -p "$(dirname "$out")" 2>/dev/null

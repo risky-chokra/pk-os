@@ -179,3 +179,28 @@ wale target ko live session me dekh lena behtar.
 
 Extra help: [docs/TROUBLE.md](TROUBLE.md) — initramfs shell, `pk_debug`, `break=mount`,
 manual mount steps, aur `dmesg` se QA markers padhna.
+
+## I/O devices + user (real PC checklist)
+
+Pendrive boot karke ye commands - har ek ka expected output:
+
+```sh
+pk-check                              # rows: input, audio, serial, webcam, seatd, users
+ls -l /dev/snd /dev/input /dev/dri    # group/mode: audio 0660, input 0660, video 0660
+pk-seatd status                       # 'RUNNING' + /opt/pk/run/seatd.sock
+pk-user add ravi --admin --password=ravi ; pk-user list ; pk-user autologin ravi
+pk-desktop start                      # ya GRUB entry 'g'; phir:
+pk-desktop shot /root/desktop.png     # desktop ki PNG = 'aaya ya nahi' ka pixel proof
+```
+
+Expected result:
+- `audio` row `[ok]` (HDA/USB sound) -> `amixer sget Master` volume bataye
+- `input` row `[ok]` -> touchpad/mouse ke `event*` nodes (group `input`)
+- `drm` row `[ok]` + `/dev/dri/card0` group `video` -> weston KMS par desktop
+- `seatd` row `[ok]` -> normal user ko bhi session mil sakta hai
+- `users` row `[ok]` -> naya user device groups ke saath; `pk-user del ravi --home` se hata diya jaata hai
+- `pk-desktop shot` ki PNG me desktop (terminal window) dikhe -> **wo file bhej dena**
+
+Koi row `[FAIL]` ya marker `DESKTOP-VTMISMATCH`/`SEATD-FAIL` ho to ye 3 logs bhejo:
+`/run/pk/check.txt`, `/run/pk/x-weston.log`, `/run/pk/seatd.log` (last 10 lines each).
+

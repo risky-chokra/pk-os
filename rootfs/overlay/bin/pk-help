@@ -24,6 +24,8 @@ partition par pk-runtime.sqfs; phir boot par /opt/pk par apne aap mount)
   pk-keymap      keyboard layout (console + GUI):  pk-keymap in | uk | de
   pk-user        users add/remove/list/autologin:  pk-user add bob --admin
   pk-seatd       session manager (weston ko VT/dri/input):  pk-seatd status
+  pk-devperms    /dev nodes ke group/mode theek karo (audio/input/video/dialout)
+  pk-desktop shot /root/d.png   desktop ki PNG (weston se) - proof ke liye
   pk-wifi        Wi-Fi (experimental): status | scan | connect <ssid> <pw> | stop
                  boot option: pk_wifi=<ssid>:<password>   (wpa_supplicant runtime me: pk-get install -y wpasupplicant iw)
   pk-ios         iOS apps ka sach: why | info file.ipa | web <url> | mac-guest | darling

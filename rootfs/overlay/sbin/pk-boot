@@ -112,6 +112,22 @@ fi
 if has pk_desktop=1 || has pk_desktop=on; then
   say "pk-desktop start (weston/Xvfb; detail /run/pk/desktop.log)"
   pk-desktop start >/run/pk/desktop.log 2>&1 || say "pk-desktop fail (log: /run/pk/desktop.log)"
+  # 'desktop kyun nahi aaya' ka jawab ab screen par hi milna chahiye: pk-x ka detail
+  # /run/pk/x.log me aur pk-desktop ka /run/pk/desktop.log me dab jaata tha.
+  d_tail=$(tr '\n' '|' < /run/pk/x-weston.log 2>/dev/null | tail -c 220)
+  [ -n "${d_tail:-}" ] || d_tail=$(tr '\n' '|' < /run/pk/x.log 2>/dev/null | tail -c 160)
+  if grep -qs 'WAYLAND_DISPLAY' /run/pk/x-env 2>/dev/null; then
+    printf 'pk-desktop: weston/Wayland session chalu (%s)\n' "${d_tail:-ok}" > /dev/console 2>/dev/null
+  else
+    printf '### PK: DESKTOP-XVFB (screen par kuch nahi; reason: %s) ###\n' "${d_tail:-no-log}" > /dev/console
+    if [ -w /dev/tty1 ]; then
+      { printf "\npk's OS: desktop session Xvfb par chala (virtual -> screen par khali dikhega)\n"
+        printf "  reason: %s\n" "${d_tail:-no-log}"
+        printf "  GUI dekhne ke liye: pk-desktop vnc 5900  (viewer host par, guest IP port 5900)\n"
+        printf "  ya VM ka graphics device KMS-wala chuno: docs/VM-TEST.md #2b\n"
+      } > /dev/tty1 2>/dev/null || true
+    fi
+  fi
   if has pk_check=1 || has pk_check=on || has pk_check=gui; then
     say "desktop ke baad dobara: pk-check --gui"
     pk-check --save --gui > /run/pk/check2.out 2>&1
@@ -277,6 +293,23 @@ if has 'pk_selftest'; then
     echo "### PK: LIVE-AUTOLOGIN ###"
   fi
   echo "### PK: SELFTEST-OK ###"
+fi
+
+# ---------------------------------------------------------------- pk_run=<cmd> (diagnostics)
+# "desktop kyun nahi aaya / ye file kyun khaali hai" jaise sawaal ka jawab lene ke liye
+# boot ke baad ek command chalao, output console par. Kernel args me space nahi jaata,
+# isliye '+' se space likho:
+#   pk_run=cat+/run/pk/x-weston.log!ls+-l+/dev/dri
+#   space = '+', commands ka separator = '!'  (GRUB config me ';' command separator
+#   hai -> ';' likhte hi kernel args katt jaate hain, ye product-level baat hai)
+# (poora output /run/pk/pk_run.out me bhi likha jaata hai)
+_pkrun=$(sed -n 's/.*pk_run=\([^ ]*\).*/\1/p' /proc/cmdline 2>/dev/null | head -1)
+if [ -n "${_pkrun:-}" ]; then
+  echo "### PK: RUN-START ###"
+  sh -c "$(printf '%s' "$_pkrun" | tr '+' ' ' | tr '!' ';')" > /run/pk/pk_run.out 2>&1
+  _rc=$?
+  tail -40 /run/pk/pk_run.out 2>/dev/null | sed 's/^/[pk_run] /'
+  printf '### PK: RUN-DONE rc=%s (full: /run/pk/pk_run.out) ###\n' "$_rc"
 fi
 
 if has 'pk_poweroff'; then

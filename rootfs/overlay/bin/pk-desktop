@@ -104,7 +104,19 @@ start() {
       warn "install fail (net? 'pk-net dhcp') - manual: pk-get install -y weston xterm xvfb x11-utils"
       mark "DESKTOP-INSTALL-FAIL"; return 70; }
   fi
-  pk-x start >/dev/null 2>&1 || pk-x start weston >/dev/null 2>&1
+  # weston ka default background black hota hai (theme image ke bina) -> "desktop aayi
+  # ya nahi" ka farak screen par dikhna chahiye, isliye solid-color set karte hain.
+  if ini_set output background-type solid-color >/dev/null 2>&1; then
+    ini_set output background-color 0xFF1a5fb4 >/dev/null 2>&1 || true
+  fi
+  # xkb layout (pk_keymap= se diya ho to weston ko bhi batao)
+  kl=$(sed -n 's/.*pk_keymap=\([^ ]*\).*/\1/p' /proc/cmdline 2>/dev/null | head -1)
+  [ -n "${kl:-}" ] && { ini_set xkb layout "$kl" >/dev/null 2>&1 || true; }
+  pk-x start >/run/pk/desktop.log 2>&1 || pk-x start weston >>/run/pk/desktop.log 2>&1
+  # weston ka aakhri error user ko marker me dikhe (warna "DESKTOP-OK (:0)" ke peeche
+  # pura reason /run/pk/x-weston.log me dab jaata tha - debug namumkin jaisa).
+  wx=$(tail -c 220 /run/pk/x-weston.log 2>/dev/null | tr '\n' '|' | tr -s ' ')
+  [ -n "${wx:-}" ] && printf '### PK: DESKTOP-WESTON-LOG %s ###\n' "$wx" > /dev/console 2>/dev/null
   if [ -r /run/pk/x-env ]; then . /run/pk/x-env; fi
   if [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
     warn "session nahi utha; detail: cat /run/pk/x.log"

@@ -257,7 +257,7 @@ config/live-bins.txt     live image me jaane wale host binaries (parted, mke2fs,
 config/live-modules.txt  live /lib/modules me jaane wale module patterns
 init/init                initramfs ka /init  (media dhoondho → squashfs+overlay → run-init)
 init/kernel-modules     initrd me jaane wale modules (boot-critical)
-init/grub.cfg            ISO ka GRUB menu template (9 boot options)
+init/grub.cfg            ISO ka GRUB menu template (13 menuentries + hotkeys)
 scripts/build-rootfs     squashfs ke liye tree stage karta hai
 scripts/collect-bins     ELF + ldd closure → rootfs me absolute paths ke saath
 scripts/mk-squashfs      mksquashfs (zstd, 1 MiB blocks, -all-root)
@@ -336,6 +336,7 @@ pk-android doctor|enable|install x.apk|kernel-frag      # Android (binderfs) ka 
 ```
 
 Boot options (GRUB me `e`, ya menu entries `g`/`k`): `pk_check=1` (ya `pk_check=gui`),
+`pk_run=<cmd>` (boot ke baad ek command ka output console par — debug ke liye; space `+`, commands `!` se alag)
 `pk_desktop=1`, `pk_keymap=<layout>`, `pk_install_user=<name> pk_install_userpw=<pw>`.
 
 | doc | kis liye |

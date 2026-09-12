@@ -187,9 +187,18 @@ maangte hain (na mile to probe fail) + ~4 MB — un par text console +
 Boot ke baad screen par desktop aaya ya nahi, ye **do marker** batate hain
 (`### PK: ... ###`, ya `/etc/motd` ke upar wali `[ pk-display-status ]` line):
 
-- `DISPLAY-KMS (drm=1 driver=bochs fb=0)` -> KMS device hai, weston ko milega
+- `DISPLAY-KMS (drm=1 driver=bochs-drm fb=1)` -> KMS device ready; weston ko `/dev/dri/card0`
+  milta hai (ye QEMU `-vga std` par naapa gaya actual result hai)
 - `DISPLAY-TEXTONLY (fb=0 drm=0; ...)` -> device nahi: screen par text aayega,
   desktop `pk-desktop vnc 5900` se dekho (Xvfb fallback) — ya VM ka graphics device badlo
+- `DESKTOP-OK (wayland-1)` -> **weston KMS par chalu, screen par desktop aayega** ✅
+- `DESKTOP-OK (:0)` -> session Xvfb(par) — apps chalenge par physical screen par kuch nahi
+- `DESKTOP-WESTON-LOG ...` -> weston ka aakhri notice/error, marker me hi (debug ke liye)
+- `DESKTOP-NO-RUNTIME` -> ye base/serial ISO hai; desktop apps ISO me hota hai
+
+Guest me aur cheezein check karni ho to boot option `pk_run=<cmd>`:
+`+` = space, `!` = commands ka separator (`;` GRUB khaata hai, isliye nahi chalta) —
+jaise `pk_run=cat+/run/pk/x-weston.log!ls+-l+/dev/dri`
 
 ## 3. VM me andar jaake ye 8 commands (expected output ke saath)
 

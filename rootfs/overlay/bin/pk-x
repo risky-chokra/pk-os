@@ -34,8 +34,19 @@ start() {
         [ -e "$d" ] && { mkdir -p "$RT$d"; mounted "$RT$d" || mount --bind "$d" "$RT$d" 2>/dev/null || true; }
       done
       mkdir -p "$RT/run/pk-x"; chmod 700 "$RT/run/pk-x"
+      { printf 'pk-x: weston try (RT=%s hasdrm=%s bin=%s)\n' "$RT" "$hasdrm" "$(ls "$RT/usr/bin/weston" 2>/dev/null || echo none)"; } > /run/pk/x-weston.log 2>&1
+      mkdir -p "$RT/run/pk-x" 2>/dev/null; rm -f "$RT/run/pk-x/wayland-1" 2>/dev/null || true
+      # NOTE 1: `exec weston ... || exec weston ...` mat likho - exec shell kha jaata hai,
+      #   to fallback attempts KABHI nahi chalte the (isi wajah se desktop kabhi nahi aaya).
+      # NOTE 2: weston ke DRM backend ko VT chahiye: '<stdin> not a vt -> use --tty'. Isliye
+      #   --tty=/dev/tty1 + stdin ko /dev/tty1 par redirect. (pehle '2>/dev/null' ki wajah se
+      #   ye message dikhta hi nahi tha, aur sirf headless backend chup-chaap chal jaata tha.)
+      # NOTE 3: LIBSEAT_BACKEND=builtin - logind/seatd wale live system me VT khud milta hai.
+      # (purana note) `exec weston ... || exec weston ...` me
+      # pehla exec shell kha jaata hai, to fallback attempts KABHI nahi chalte the (aur
+      # screen par desktop nahi aata tha - GL na hone par weston marta tha, chup) .
       say "weston (Wayland) start - console switch: Ctrl+Alt+F7"
-      pk-chroot /bin/sh -c 'mkdir -p /run/pk-x; chmod 700 /run/pk-x; export XDG_RUNTIME_DIR=/run/pk-x; exec weston --socket=wayland-1 --renderer=gl 2>/dev/null || exec weston --backend=drm-backend.so --socket=wayland-1 || exec weston --backend=headless --socket=wayland-1 || exec weston --backend=headless-backend.so --socket=wayland-1' >"$LOGF" 2>&1 &
+      pk-chroot /bin/sh -c 'mkdir -p /run/pk-x; chmod 700 /run/pk-x; export XDG_RUNTIME_DIR=/run/pk-x; export XKB_DEFAULT_LAYOUT=us; test -d /usr/lib/dri || { export LIBGL_ALWAYS_SOFTWARE=1; export GALLIUM_DRIVER=llvmpipe; }; if command -v seatd-launch >/dev/null 2>&1; then SEATD="seatd-launch --"; else SEATD=""; LIBSEAT_BACKEND=builtin weston --backend=drm-backend.so --renderer=gl --tty=/dev/tty1 </dev/tty1; fi; test -S /run/pk-x/wayland-1 || $SEATD weston --backend=drm-backend.so --renderer=gl --socket=wayland-1; test -S /run/pk-x/wayland-1 || $SEATD weston --backend=drm-backend.so --socket=wayland-1; test -S /run/pk-x/wayland-1 || weston --backend=headless-backend.so --socket=wayland-1' >/run/pk/x-weston.log 2>&1 &
       echo $! > "$PIDF"
       # socket ka wait: iske bina 'x-env' likh dena = jhootha success
       j=0
@@ -49,7 +60,7 @@ start() {
         say "weston ready (socket: $RT/run/pk-x/wayland-1, ${j}s)"
         [ "$hasdrm" = 1 ] || warn "weston HEADLESS par chal raha hai: koi physical screen nahi. 'pk-x stop' ke baad 'pk-desktop vnc 5900' use karo, ya VM ka graphics device badlo (docs/VM-TEST.md #2b)"
       else
-        warn "weston ka socket nahi aaya (/dev/dri ya GL nahi?) -> $(tail -2 "$LOGF" 2>/dev/null | tr '\n' '|' | cut -c1-90)"
+        warn "weston ka socket nahi aaya (GL/DRM?) -> $(tail -3 /run/pk/x-weston.log 2>/dev/null | tr '\n' '|' | cut -c1-160)"
         kill "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null || true
         rm -f "$PIDF"
         if rbin Xvfb; then say "fallback: Xvfb"; start Xvfb; return $?; fi

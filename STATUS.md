@@ -263,38 +263,100 @@ Koi 6 GB artifact kabhi bana hi nahi. Galati sirf **docs/release-body ki guidanc
 `auto` (6144 nahi). Chhota download chahiye to: **base ISO (84 MB)** + runtime ko pendrive ke
 free partition par `pk-runtime --setup <file>` se rakho (ISO me embed karne ki zarurat nahi).
 
-### 4j. Desktop screen par kyun nahi aata tha — asli karan (test ke saath)
+### 4j. "GRUB ke baad desktop screen par kyun nahi aata tha" — 5 layered wajahen (sab fix, sab measured)
 
-Aapne poochha: "GRUB me live/install select karne ke baad desktop aayega ya nahi?"
-Live/install ke saath text console aata hai (ye pehle prove ho chuka hai), par
-**desktop nahi aa raha tha** — reason dhoondhne ke liye published apps ISO ko QEMU me
-boot karke screen capture kiya (5.5 min tak 26 frames): frame hamesha 720x400 text
-raha, resolution change nahi hua = weston chala hi nahi.
+Aapka sawaal: *live/install select karne ke baad desktop aayega ya nahi?* Live aur
+install (text console + login) pehle se proven hai. **Desktop** nahi aa raha tha —
+raasta saaf karne me 5 alag-alag layer ka bug nikla, ek ke baad ek test karke:
 
-Guest ke andar serial console se ghus kar dekha:
+1. **Live image me GPU KMS driver the hi nahi.** `config/live-modules.txt` me sirf
+   `tiny/simpledrm.ko*` + `drm_kms_helper` the, aur is Debian kernel me
+   `CONFIG_DRM_SIMPLEDRM`/`CONFIG_SYSFB_SIMPLEFB` **off** hain (yaani driver na hone par
+   `/dev/fb0` bhi nahi banta) -> guest me `ls /sys/class/drm` = sirf `version`,
+   `/dev/dri` = *No such file or directory*. weston ko device mil hi nahi sakta tha.
+   **Fix:** `vmwgfx vboxvideo qxl tiny(bochs+cirrus) virtio ast mgag200 i915 nouveau
+   radeon vga16fb` ship hote hain (base ISO 88,031,232 -> 91,813,888 B, ~+3.6 MB).
+   Debian me file ka naam `tiny/bochs.ko.xz` hai (`bochs-drm.ko` nahi) — purana pattern
+   isliye 0 files match kar raha tha.
+2. **Display status jhooth bata raha tha:** `S08display` hook `S15mdev` se *pehle* chalta
+   hai, to `fb=0 drm=0` hamesha — "display mar gaya" jaisa galat signal.
+   **Fix:** naya `etc/pk-boot.d/S99zdisplay` — display-class PCI device ho to drivers
+   explicitly `modprobe` karta hai, phir **final** `fb=/drm=/driver=` se
+   `/run/pk/display.txt` + motd line update karta hai, aur marker maarta hai:
+   `### PK: DISPLAY-KMS (drm=1 driver=bochs-drm fb=1) ###` / `### PK: DISPLAY-TEXTONLY ...###`.
+3. **`exec` ne poora fallback chain mara hua tha:** `pk-x` me
+   `exec weston A || exec weston B || ...` tha — `exec` shell ko replace kar deta hai,
+   isliye *pehla fail hone ke baad doosra attempt kabhi chala hi nahi*, aur har attempt
+   par `2>/dev/null` hone se error dikhta bhi nahi tha (file 0 bytes, koi clue nahi).
+   **Fix:** chain se `exec` hataya, errors ab `/run/pk/x-weston.log` me rehte hain aur
+   aakhri lines `### PK: DESKTOP-WESTON-LOG ... ###` marker me bhi aati hain.
+4. **weston 10 ko VT chahiye:** ab log me asli reason aaya —
+   `logind: cannot find systemd session for uid: 0` -> `could not get launcher fd from env`
+   -> `<stdin> not a vt` / `if running weston from ssh, use --tty to specify a tty`
+   -> `fatal: drm backend should be run using weston-launch binary, or your system should
+   provide the logind D-Bus API`. Hamare live me logind nahi hai (busybox + mdev).
+   **Fix:** weston ko `--tty=/dev/tty1` + `</dev/tty1` ke saath chalaya (direct launcher),
+   `LIBSEAT_BACKEND=builtin`. Result log me: `Trying direct launcher...` /
+   `using /dev/dri/card0` / `DRM: supports atomic modesetting` ✓
+5. **Runtime me software GL nahi tha:** Debian ka weston 10 sirf `gl-renderer.so`
+   banata hai (`pixman-renderer.so` build me hi nahi), aur hamare App Runtime me
+   `/usr/lib/dri` tha hi nahi -> `MESA-LOADER: failed to open bochs-drm:
+   /usr/lib/dri/bochs-drm_dri.so: No such file or directory` -> GL context nahi -> weston fatal.
+   **Fix:** desktop runtime me `libgl1-mesa-dri,libegl-mesa0` (llvmpipe = software GL) +
+   DRI na mile to `LIBGL_ALWAYS_SOFTWARE=1`. Ye "har PC/desktop hardware par chale" ke
+   liye bhi sahi raasta hai: jis GPU ka kernel driver ke paas DRI nahi, wahan bhi weston
+   ab paint karta hai (slow but working).
+   (Saath me `fonts-dejavu-core,adwaita-icon-theme` — inke bina weston-terminal/xterm
+   khulte to the par text render nahi hota tha, aur `could not load cursor` warn aata tha.)
 
-- `/lib/modules/6.12.../kernel/drivers/gpu/drm/` me **koi GPU driver tha hi nahi**
-  (live-modules.txt me sirf `simpledrm.ko*` + `drm_kms_helper.ko*` the, aur is Debian
-  kernel me simpledrm build hi nahi hota) -> `mdev` ke paas load karne ko kuch nahi.
-- `ls /sys/class/drm` -> sirf `version`; `/dev/dri` -> `No such file or directory`;
-  weston ko device nahi milta, to session chup-chaap Xvfb par chala jaata hai
-  (screen par kuch nahi, VNC par sab kuch).
+Is dauran jo *aur* product-level bugs raaste me mile, wo bhi fix kiye (kuch hataaya nahi):
+- `scripts/make-runtime`: debootstrap/chroot `$SUIT/etc` ko root-owned chhod dete hain ->
+  bina-root user ke liye `make runtime` / `make runtime-desktop` EACCES se **fail** (2 baar
+  reproduce hua). Ab release file privileged copy se likhi jaati hai + tree wapas chown.
+- `scripts/mk-iso`: chhote `/tmp` (1 GB tmpfs wale containers / live-USB build) par
+  `grub-mkrescue: No space left on device` se ISO build toot-ti thi -> ab `TMPDIR=$WORK/tmp`.
+- Makefile: `KERNEL_CMDLINE`/`init/grub.cfg`/`config/live.conf` badalne par bhi purani ISO
+  re-use ho jaati thi (stale image ship) -> `$(ISO)` ab in dono par depend karta hai.
+- `mk-iso` me `sed "s|@ARGS@|$args|g"` — args me `|`/`&`/`\` aate hi build toot-ta tha
+  (e.g. `pk_runtime=/dev/sdb1` jaise args ke saath) -> ab escape hota hai.
+- **GRUB config me `;` command separator hai** -> kernel args me `;` daalte hi args kat
+  jaate hain (ye humein debug ke dauran Khaas dafa dhokha de gaya). Naye `pk_run=` option
+  me isliye `!` separator hai (space = `+`).
+- **Naya boot option `pk_run=<cmd>`**: boot ke baad ek command ka output console par
+  (poora `/run/pk/pk_run.out` me) — "screen par desktop kyun nahi aaya" type sawaalon ke
+  liye, bina keyboard/mouse ke. Example: `pk_run=cat+/run/pk/x-weston.log`
+- `scripts/run-test.sh`: 2 nayi QA checks (73 -> 75): `PK: DISPLAY-KMS` + `driver=bochs`,
+  taaki koi future build GPU drivers bhool jaye to turant pakda jaaye.
+- `docs/VM-TEST.md` me naya section **#2b "Graphics device ka chunav"** (QEMU `-vga vmware`
+  par kernel `probe with driver vmwgfx failed with error -38` deta hai — QEMU sirf SVGA v2
+  emulate karta hai; `-vga std`/`-vga virtio` use karo. VirtualBox `vmsvga`/`vboxvga` dono
+  theek), `docs/TROUBLE.md` me **#4b** marker-table, `docs/BUILD.md` me chhote-/tmp note.
 
-Fix (additive, kuch hataya nahi):
-1. `config/live-modules.txt` me GPU drivers: `vmwgfx vboxvideo qxl tiny(bochs+cirrus)
-   virtio ast mgag200 i915 nouveau radeon` + `vga16fb`. Base ISO 88,031,232 -> 91,813,888 B.
-2. Naya boot hook `rootfs/overlay/etc/pk-boot.d/S99zdisplay`: display-class PCI device
-   ho to ye drivers explicitly `modprobe` karta hai (mdev coldplug par bharosa nahi),
-   phir **final** `fb/drm/driver` numbers se `/run/pk/display.txt` + motd line update
-   karta hai, aur `### PK: DISPLAY-KMS ...###` / `### PK: DISPLAY-TEXTONLY ...###`
-   marker maarta hai. (S08display `drm=0` isliye dikha raha tha kyunki wo mdev se
-   *pehle* chalta hai — wo reporting bug bhi isi ne theek kiya.)
-3. `scripts/run-test.sh` me 2 nayi QA checks: `PK: DISPLAY-KMS` + `driver=bochs`
-   (73 -> 75 checks) — taaki koi future build GPU drivers bhool jaye to test pakad le.
-4. `docs/VM-TEST.md` me "2b. Graphics device ka chunav" table: QEMU `-vga vmware`
-   par kernel `probe with driver vmwgfx failed with error -38` deta hai (QEMU sirf
-   SVGA v2 emulate karta hai) — wahan desktop ki jagah `-vga std`/`-vga virtio` use karo;
-   VirtualBox ke `vmsvga`/`vboxvga` dono ab desktop dete hain.
+### 4k. Desktop ka abhi ka sach (is round ka end-state, measured)
+
+`make test` ab **75/75 PASS** (naye `PK: DISPLAY-KMS` + `driver=bochs` checks ke saath),
+aur QEMU me live boot par guest ke andar:
+
+- `/dev/dri/card0` milta hai, `DISPLAY-KMS (drm=1 driver=bochs-drm fb=1)` ✅
+- `DESKTOP-OK (wayland-1)` + `TUNE-FG-OK (weston, 3)` -> **weston sach me chalu ho jaata
+  hai** (pehle `exec`-bug + `2>/dev/null` ki wajah se session chup-chaap Xvfb/headless par
+  gir jaata tha; `DESKTOP-WESTON-LOG` marker se ab wo sab saaf dikhta hai)
+- weston ka log: `Trying direct launcher... / using /dev/dri/card0 / DRM: supports atomic
+  modesetting` -> device + GL path (llvmpipe) dono ready
+- Par **screen par abhi bhi text console hi dikhta hai** (1280x800 me, `pk:/root#` tak):
+  weston compositor to chal raha hai, par hamare live system me **logind/seatd session
+  nahi** hai, isliye wo visible VT (tty1) ko graphics mode me nahi le jaata. `--tty=/dev/tty1`
+  + `</dev/tty1` aur `seatd-launch` dono try kiye — weston chalta hai par fbcon screen par
+  rehta hai. Ye ek *session-manager* ka kaam hai; baaki sab layer ab theek hain.
+
+Is state me user ke liye practical raaste (sab tested/tuned):
+1. **GUI chahiye to `pk-desktop vnc 5900`** -> Xvfb + VNC; apne PC se `10.0.2.15:5900`
+   (QEMU) / guest-IP (VBox NAT) se dekho. Apps, terminal, sab chalta hai.
+2. **Installed system** me (disk par `pk-install`) jab `systemd-logind` aa jaayega,
+   `weston` user session ke roop me chalani chahiye — *ye abhi test nahi hua* (sandbox me
+   systemd-based install boot nahi karate), isliye promise nahi kar raha.
+3. `make iso-full`/bade runtime me `seatd` service + `logind`-compatible session lane ka
+   kaam bacha hai (weston ko VT dilaane ka standard tareeka). Chahoge to agla round yehi karunga.
 
 ## 5. Aapke PC pe ab kya karna hai (emulator → pendrive → install)
 

@@ -128,6 +128,7 @@ grep -a pk-display-status /etc/motd  # login screen ke upar bhi yehi dikhta hai
 | `DISPLAY-TEXTONLY (fb=0 drm=0 ...)` | koi KMS device nahi -> weston ke paas /dev/dri/card0 nahi | VM ka graphics device badlo (`-vga std` / `-vga virtio`; VBox me `vmsvga`), ya `pk-desktop vnc 5900` |
 | `pk-x: ... weston HEADLESS par chal raha hai` | session utha par physical screen nahi | `pk-x stop; pk-x start Xvfb` phir `pk-desktop vnc 5900` |
 | `DISPLAY-KMS (drm=1 driver=...)` par phir bhi kaali screen | `pk_desktop=1` nahi tha (default live entry desktop *start nahi karti* — base ISO tez rahe) | GRUB menu me entry 5 (`live: desktop + apps GUI`) chuno, ya login ke baad `pk-desktop start` |
+| `DESKTOP-OK (:0)` (yaani Xvfb) par KMS device maujood | weston start fail hua (ab iska reason `DESKTOP-WESTON-LOG` marker me dikhta hai) | `pk_run=cat+/run/pk/x-weston.log` se log padho; runtime me `weston` + `fonts-dejavu-core` hone chahiye: `pk-get install -y weston fonts-dejavu-core` |
 | kernel log: `vmwgfx ... probe with driver vmwgfx failed with error -38` | QEMU ka emulated VMware SVGA purana (v2) hai, kernel reject karta hai | `-vga vmware` chhodo; `-vga std`/`-vga virtio` use karo (asli VMware/VBox par vmwgfx chalta hai) |
 
 ```

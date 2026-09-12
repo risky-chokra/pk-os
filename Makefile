@@ -128,7 +128,9 @@ clean-runtime:
 	@echo "runtime images hataye (make runtime se dobara ban jayenge)"
 
 iso: $(ISO)
-$(ISO): $(STAMP)/squash $(STAMP)/initrd
+$(ISO): $(STAMP)/squash $(STAMP)/initrd $(PK_ROOT)/init/grub.cfg $(PK_ROOT)/config/live.conf
+	# ^ grub.cfg/live.conf ko prerequisite isliye: inme (KERNEL_CMDLINE, menu entries) badlav
+	#   hone par purani ISO dobara bane, warna stale image ship ho jaati (asli footgun).
 	@scripts/mk-iso
 	@touch $@
 

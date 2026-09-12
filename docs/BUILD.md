@@ -176,3 +176,10 @@ VirtualBox/VMware me screen na bhi dikhe to serial-port->file me GRUB menu + ker
 `scripts/mk-initrd` ab check karta hai: dynamic busybox milne par **die** (pehle wo initrd me
 chala jaata tha aur `/init` -> `Attempted to kill init!` kernel panic deta tha — screen bilkul khali).
 Jaante-bujhke dynamic chahiye to `PK_ALLOW_DYNAMIC_BUSYBOX=1` (initrd me lib closure khud copy ho jaata hai).
+
+## /tmp chhota hai to ISO build fail (`No space left on device`)
+
+`grub-mkrescue` staging ke liye `$TMPDIR` use karta hai; 1 GB tmpfs (containers, live
+USB par build) me ye bharr jaata tha. Ab `scripts/mk-iso` khud `TMPDIR=$WORK/tmp`
+(build/ ke andar, disk-backed) set kar deta hai — extra kuch karne ki zaroorat nahi.
+Apni marzi se badalna ho to: `TMPDIR=/mnt/big make iso`.

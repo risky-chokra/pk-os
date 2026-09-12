@@ -64,7 +64,11 @@ if [ "${PK_SERIAL:-0}" = 1 ]; then
   args="$args console=tty0 console=ttyS0,115200n8"
   log "  PK_SERIAL=1 -> default args me serial console (VM headless debug)"
 fi
-sed -e "s|@ARGS@|$args|g" \
+# $args ko sed ke delimiter/escape chars se bachao: kernel args me '/', '|', '&'
+# aate hain (pk_runtime=/dev/sdb1, pk_run=...;...) -> pehle ye grub.cfg generation
+# todta tha (sed: unknown option to `s') . Ab escape karke daalte hain.
+args_esc=$(printf '%s' "$args" | sed -e 's/[\\|&]/\\&/g')
+sed -e "s|@ARGS@|$args_esc|g" \
     -e "s|@LABEL@|${ISO_LABEL:-PKOS}|g" \
     -e "s|@VER@|${OS_VERSION:-1.0}|g" \
     "$PK_ROOT/init/grub.cfg" > "$STAGE/boot/grub/grub.cfg"
@@ -92,6 +96,10 @@ TXT
 cp "$STAGE/README.txt" "$BUILD/README-ISO.txt" 2>/dev/null || true
 
 log "grub-mkrescue chal raha hai..."
+# grub-mkrescue /tmp me apna staging banata hai (~100 MB). Jahan /tmp chhota tmpfs
+# hai (1 GB wale containers, live-USB par build) wahan "No space left on device" se
+# ISO build fail ho jaata tha -> staging ko build/ ke andar (disk-backed) bhej dete hain.
+mkdir -p "$WORK/tmp"; export TMPDIR="$WORK/tmp"
 rm -f "$ISO"
 if ! grub-mkrescue -o "$ISO" "$STAGE" > "$WORK/mk-iso.log" 2>&1; then
   tail -25 "$WORK/mk-iso.log"

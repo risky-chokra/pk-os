@@ -570,7 +570,7 @@ stage "8/8  pendrive kit: pk-check + keymap + install (user + runtime) + install
       pass "desktop ki screenshot bani (weston se) - pixel-level proof: /run/pk/desktop-shot.png"
       total=$((total + 1))
     else
-      info "screenshot row warn tha (weston static screen par frame nahi bhejta) - pixel proof guest me: pk-desktop shot /root/d.png"
+      note "screenshot row warn tha (weston static screen par frame nahi bhejta) - pixel proof guest me: pk-desktop shot /root/d.png"
     fi
     check "$L" 'PK: GUI-APP-OK'       "GUI client (xterm ya weston-terminal) session me chala"
     if grep -q 'GUI-XCLIENT-OK' "$L" 2>/dev/null; then

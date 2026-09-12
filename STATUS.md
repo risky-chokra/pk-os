@@ -409,9 +409,10 @@ Kya-kya joda (sab additive; purana fallback chain intact):
 | Users | `USER-ADD-OK (bob)`, `USER-AUTOLOGIN (bob)`, `USERS-OK (… autologin=…)`; screen par `logged in as: bob (uid 1001 …)` ✅ |
 | User ka device access | `su -m bob -c id` -> `groups=…,44(video),63(audio),100(users),108(input),160(render),990(seat)` ✅ |
 | User delete | `pk-user del bob --home` -> passwd/shadow/group/home sab saaf ✅ |
-| Device perms (nodes) | `/dev/input/event0 = crw-rw---- root input` (mdev.conf) + `pk-devperms: /dev/tty[0-9]* -> :tty 620 (64 nodes)` ✅ |
+| Device perms (nodes) | `/dev/input/event0 = crw-rw---- root input` (mdev.conf) + `pk-devperms: /dev/dri/card* -> :video (660), /dev/input/event* -> :input (660), /dev/tty[0-9]* -> :tty (620), /dev/ttyS* -> :dialout (660)` ✅ |
 | Audio | `snd-hda-intel` load hua, `/dev/snd/timer` bana, par **pcm node nahi** -> is QEMU build me `-audiodev` backend hi nahi (`-device hda-duplex: no default audio driver available`), yaani emulated codec hi nahi. Real PC/VBox par test bacha hai (modules + perms side verify ho chuka) ⚠ |
-| Screenshot | `pk-desktop shot` in-tree (weston ko `--debug` chahiye -> pk-x lagata hai); meri serial-console extraction flaky rahi, isliye **PNG ka pixel proof aapki machine par chhodta hoon** (`pk-desktop shot /root/desktop.png`) ⚠ |
+| Screenshot | `pk-desktop shot` in-tree + `weston --debug` laga; `timeout 25` wrap bhi (pehle `weston-screenshooter` static desktop par frame ka wait karta tha -> QA stage-8 hang). pk-check me row warn rahta hai, QA use hard-fail nahi karta; **PNG ka pixel proof aap machine par**: `pk-desktop shot /root/desktop.png` ⚠ |
+| QA (is tree par, final) | `make test` = **QA PASS 77 checks ok** (8 stages: live, FAT32/frugal media, install, installed-boot, toram, UEFI, persistence+net+ssh, apps, kit+GUI) aur `make gui-test` = **QA PASS 24 checks ok** — usme `seatd session manager chalu`, `weston ne active VT liya`, `no VTMISMATCH`, `GUI-APP-OK (weston-terminal)`, `pk-check: koi FAIL nahi`, install + installed-boot sab ✅ |
 
 Is round me jo *aur* latent bugs gare (sab fix):
 - `pk-boot` me `say()` define hi nahi tha -> 7 jagah `pk-boot: line N: say: not found` (log ka

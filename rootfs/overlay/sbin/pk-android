@@ -56,12 +56,12 @@ do_enable() {
   mkdir -p /dev/binderfs 2>/dev/null
   if grep -q binderfs /proc/filesystems 2>/dev/null; then
     if mount -t binder binder /dev/binderfs 2>/dev/null; then
-      say "/dev/binderfs mount ho gaya ✓"; mark "ANDROID-BINDERFS-OK"; return 0
+      say "/dev/binderfs is mounted"; mark "ANDROID-BINDERFS-OK"; return 0
     fi
     say "mount fail (perms?)"; mark "ANDROID-BINDERFS-FAIL"; return 1
   fi
-  warn "kernel me binderfs support nahi (CONFIG_ANDROID_BINDERFS=y chahiye)"
-  warn "filhaal /dev/binder bhi nahi -> Android apps is kernel par nahi chalengi"
+  warn "the kernel has no binderfs support (needs CONFIG_ANDROID_BINDERFS=y)"
+  warn "there is no /dev/binder either -> Android apps cannot run on this kernel"
   mark "ANDROID-BINDERFS-NOSUPPORT"
   return 1
 }
@@ -74,7 +74,7 @@ do_install() {
   if have unzip; then
     unzip -q -o "$apk" -d "$d/$(basename "$apk" .apk)" >/dev/null 2>&1 || warn "unzip fail"
   else
-    warn "unzip nahi (base image me) - sirf record kar rahe hain"
+    warn "no unzip (not in the base image) - only recording the file"
   fi
   name=$(basename "$apk" .apk)
   say "apk extract: $d/$name  (AndroidManifest binary XML hai; isliye package/activity khud nahi padh sakte)"
@@ -82,7 +82,7 @@ do_install() {
   has_binder && BR=yes
   { [ -x "$RT/usr/bin/waydroid" ] || [ -e "$RT/usr/bin/waydroid" ]; } && WD=yes
   if [ "$BR" = yes ] && [ "$WD" = yes ]; then
-    say "binder + waydroid hain -> install kar rahe hain:"
+    say "binder + waydroid present -> installing:"
     pk-chroot /usr/bin/waydroid app install "$RT${d#/}/$name.apk" 2>&1 | tail -3
     return $?
   fi

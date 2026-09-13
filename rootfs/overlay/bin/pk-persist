@@ -27,5 +27,5 @@ mkfs.ext4 -q -F -L PK-PERSIST "/dev/$pn" || { echo "mkfs fail"; exit 1; }
 mkdir -p /mnt/p
 mount "/dev/$pn" /mnt && mkdir -p /mnt/pk-persist && umount /mnt
 echo
-echo "OK - ab reboot karo aur grub me 'pk's OS (live: persistent)' chuno."
+echo "OK - reboot now and pick 'pk's OS @VER@ (live: persistent)' in GRUB."
 echo "changes us USB partition pe save honge."

@@ -9,8 +9,8 @@ set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 rt=${PK_RUNTIME_ROOT:-/opt/pk}
 if ! grep -q " $rt " /proc/mounts 2>/dev/null; then
-  echo "pk-get: runtime attached nahi hai. 'pk-runtime start' chalao, ya WITH_RUNTIME=1 wali ISO use karo." >&2
-  echo "        (runtime banane ke liye host pe: scripts/make-runtime)" >&2
+  echo "pk-get: the runtime is not attached. Run 'pk-runtime start', or use an ISO built with WITH_RUNTIME=1." >&2
+  echo "        (to build the runtime on the host: scripts/make-runtime)" >&2
   exit 64
 fi
 ip=$(ip -4 addr show 2>/dev/null | awk '/inet /{if($2!~/^127\./){print $2; exit}}')
@@ -34,9 +34,9 @@ case "$1" in
     fi ;;
 esac
 if [ "$need_update" = 1 ]; then
-  echo "pk-get: apt lists khali hain -> pehle 'apt-get update' (net se, ek bar)" >&2
+  echo "pk-get: apt's package lists are empty -> run 'apt-get update' once (needs network)" >&2
   pk-chroot /usr/bin/apt-get update -qq -o 'Acquire::Retries=2' >&2 || \
-    echo "pk-get: update fail hua (net/debian mirror check karo) - install phir bhi try kar rahe hain" >&2
+    echo "pk-get: update failed (check the network/Debian mirror) - trying the install anyway" >&2
 fi
 
 case "$1" in

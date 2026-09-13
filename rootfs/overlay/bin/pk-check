@@ -57,7 +57,7 @@ mode=$(cat /run/pk/mode 2>/dev/null)
 if [ -n "$mode" ]; then
   row ok boot "mode=$mode  media=$(cat /run/pk/media 2>/dev/null || echo '?')"
 else
-  row warn boot "/run/pk/mode nahi mila (pk-boot chala? init: $(cat /proc/1/comm 2>/dev/null))"
+  row warn boot "/run/pk/mode missing (did pk-boot run? init: $(cat /proc/1/comm 2>/dev/null))"
 fi
 if [ -r /run/pk/boot.env ]; then row ok bootenv "$(tr '\n' ' ' < /run/pk/boot.env | cut -c1-120)"; else row warn bootenv "/run/pk/boot.env nahi mila (pk-boot chala?)"; fi
 
@@ -96,7 +96,7 @@ if [ -n "$spd" ]; then
     *)                                                        row info usb "usb devices:$spd" ;;
   esac
 else
-  row info usb "koi USB device speed file nahi (toram? ya USB boot nahi)"
+  row info usb "no USB device speed file (toram boot, or not booted from USB)"
 fi
 
 # disks
@@ -110,7 +110,7 @@ for d in /sys/block/*; do
   [ -w "/dev/$n" ] || ro=' (ro)'
   disks="$disks $n=${gb}G$ro"
 done
-row info disks "${disks:- koi block dev nahi}"
+row info disks "${disks:-no block devices found}"
 if [ "$DOSPEED" = 1 ]; then
   t=/var/tmp/pk-speed.$$
   s=$( ( dd if=/dev/zero of="$t" bs=1M count=64 2>&1; sync ) 2>/dev/null | tail -2 | tr '\n' ' ' )
@@ -128,23 +128,23 @@ for c in /dev/dri/renderD128*; do [ -e "$c" ] && drm="$drm $c"; done
 if [ -n "$drm" ]; then row ok drm "KMS devices:$drm (weston KMS backend chalega)"; else row info drm "/dev/dri nahi (weston ko headless/Xvfb chahiye)"; fi
 # ---- I/O devices + session manager (audio/input/serial/seatd) --------------------
 if [ -S "$RT/run/seatd.sock" ]; then
-  row ok seatd "seatd chalu ($RT/run/seatd.sock) - weston ko VT+DRM+input isi se milta hai"
+  row ok seatd "seatd is running ($RT/run/seatd.sock) - weston gets VT+DRM+input from it"
 elif have pk-seatd; then
-  row info seatd "seatd band -> 'pk-seatd start' (weston bina session manager ke headless par gir sakta hai)"
+  row info seatd "seatd is stopped -> 'pk-seatd start' (weston may fall back to headless without a session manager)"
 fi
 sndn=$(ls /dev/snd/pcmC*D*p 2>/dev/null | wc -l | tr -d ' ')
 if [ -n "$sndn" ] && [ "$sndn" != 0 ]; then
-  row ok audio "/dev/snd: $sndn pcm node (group=$(ls -l /dev/snd/pcmC0D0p 2>/dev/null | awk '{print $4}' | head -1)) - users ko audio group me rakha hai"
+  row ok audio "/dev/snd: $sndn pcm node (group=$(ls -l /dev/snd/pcmC0D0p 2>/dev/null | awk '{print $4}' | head -1))"
 elif [ -d /dev/snd ]; then
-  row info audio "/dev/snd hai par pcm node nahi (codec bind nahi hua? 'dmesg | grep -i snd' dekho)"
+  row info audio "/dev/snd exists but no pcm node (codec not bound? check 'dmesg | grep -i snd')"
 else
-  row info audio "sound card nahi mila (live me snd-hda-intel, snd-usb-audio, snd-ac97 ship hote hain)"
+  row info audio "no sound card found (the live image ships snd-hda-intel, snd-usb-audio, snd-ac97)"
 fi
 inp=$(ls /dev/input/event* 2>/dev/null | wc -l | tr -d ' ')
 if [ -n "$inp" ] && [ "$inp" != 0 ]; then
-  row ok input "$inp event devices (group=$(ls -l /dev/input/event0 2>/dev/null | awk '{print $4}' | head -1); mdev.conf se 0660)"
+  row ok input "$inp event devices (group=$(ls -l /dev/input/event0 2>/dev/null | awk '{print $4}' | head -1))"
 else
-  row info input "/dev/input/event* nahi (PS/2 hidpi? 'dmesg | grep -i input' dekho)"
+  row info input "no /dev/input/event* (PS/2 without atkbd? check 'dmesg | grep -i input')"
 fi
 ser=$(ls /dev/ttyS* /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | wc -l | tr -d ' ')
 [ -n "$ser" ] && [ "$ser" != 0 ] && row ok serial "$ser serial nodes (ttyS/ttyUSB/ttyACM; dialout group)"
@@ -153,7 +153,7 @@ cam=$(ls /dev/video* 2>/dev/null | wc -l | tr -d ' ')
 if [ -f /run/pk/x-how ]; then
   row ok desktop "$(cat /run/pk/x-how 2>/dev/null)"
 else
-  row info desktop "desktop session nahi chala (GRUB entry 5 / boot option pk_desktop=1 se chalu hota hai)"
+  row info desktop "no desktop session running (start it with GRUB entry 'g' or the pk_desktop=1 boot option)"
 fi
 # ---- users: add/remove kaam karta hai? (--users se full round-trip) ----------------
 nu=$(awk -F: '$3>=1000' /etc/passwd 2>/dev/null | wc -l | tr -d ' ')
@@ -197,7 +197,7 @@ if [ -n "$bl" ]; then
     *) row ok backlight "on ($bl)" ;;
   esac
 else
-  row info backlight "koi /sys/class/backlight nahi (desktop/VM - panel ki roshni BIOS/host ke paas hai)"
+  row info backlight "no /sys/class/backlight (desktop/VM: panel brightness is owned by the BIOS/host)"
 fi
 case "$fbb" in
   *="1"*|*" 1"*) row warn fb-blank "framebuffer blanked:$fbb - fix: echo 0 > /sys/class/graphics/fb*/blank (boot par S08display karta hai), consoleblank=0 default set hai";;
@@ -231,7 +231,7 @@ if [ "$DOGUI" = 1 ]; then
           row ok xclient "xdpyinfo ($xd): $out"
           ( printf '### PK: GUI-XCLIENT-OK ###\n' > /dev/console ) 2>/dev/null
         else
-          row warn xclient "xdpyinfo ne output nahi diya (X server ready ho sakta hai, client fail)"
+          row warn xclient "xdpyinfo printed nothing (X server may be up while the client failed)"
         fi
       fi
       # ek asli GUI client: xterm (X11) ya weston-terminal (Wayland)
@@ -255,7 +255,7 @@ if [ "$DOGUI" = 1 ]; then
         wlp=$!
         sleep 4
         if kill -0 "$wlp" 2>/dev/null; then
-          row ok guiapp "weston-terminal zinda hai (compositor ne client accept kiya) ✓"
+          row ok guiapp "weston-terminal is alive (the compositor accepted a client)"
           ( printf '### PK: GUI-APP-OK (weston-terminal) ###\n' > /dev/console ) 2>/dev/null
           kill "$wlp" 2>/dev/null
         else
@@ -263,9 +263,9 @@ if [ "$DOGUI" = 1 ]; then
           ( printf '### PK: GUI-APP-FAIL (weston-terminal) ###\n' > /dev/console ) 2>/dev/null
         fi
       elif rt_has xterm; then
-        row warn guiapp "DISPLAY nahi set (Wayland-only, XWayland nahi) - xterm skip"
+        row warn guiapp "DISPLAY is not set (Wayland-only session, no XWayland) - skipping xterm"
       else
-        row info guiapp "runtime me koi terminal client nahi (pk-get install -y xterm weston)"
+        row info guiapp "no terminal client in the runtime (pk-get install -y xterm weston)"
       fi
       sz_shot=""
       if [ -n "${WAYLAND_DISPLAY:-}" ] && have pk-desktop; then
@@ -278,11 +278,11 @@ if [ "$DOGUI" = 1 ]; then
       fi
       [ "$VERB" = 1 ] && { echo '  -- pk-x log --'; tail -6 /run/pk/x.log 2>/dev/null | sed 's/^/  /'; }
     else
-      row fail display "pk-x start fail (rc=$rc) -- runtime me weston/Xvfb hai?  pk-get install -y weston xvfb x11-utils"
+      row fail display "pk-x start failed (rc=$rc) - does the runtime have weston/Xvfb?  pk-get install -y weston"
       tail -4 /run/pk/gui-start.log 2>/dev/null | sed 's/^/       /'
     fi
   else
-    row warn display "pk-x nahi mila (image purani?)"
+    row warn display "pk-x not found (image too old?)"
   fi
 fi
 
@@ -299,10 +299,10 @@ if [ -n "$ip" ]; then
     row info dns "resolver=$dns"
     if ping -c1 -W3 "$dns" >/dev/null 2>&1; then row ok dns "$dns reachable (real resolve ke liye: wget -qO- http://deb.debian.org/ )"; else row warn dns "$dns ping nahi gaya (user-net gw DNS block karta hai)"; fi
   else
-    row warn dns "/etc/resolv.conf me nameserver nahi"
+    row warn dns "no nameserver in /etc/resolv.conf"
   fi
 else
-  row warn net "koi IP nahi - 'pk-net dhcp' chalao (boot option pk_net=dhcp)"
+  row warn net "no IP address - run 'pk-net dhcp' (or the pk_net=dhcp boot option)"
 fi
 if [ -d /sys/class/net ]; then
   for n in /sys/class/net/*; do
@@ -331,27 +331,27 @@ fi
 # ------------------------------------------------------------------ runtime + apps
 if mounted "$RT" && [ -d "$RT/usr" ]; then
   rel=$(cat "$RT/etc/pk-runtime-release" 2>/dev/null | head -1)
-  row ok runtime "$RT attached (${rel:- no release file})"
+  row ok runtime "$RT attached (${rel:-no release file})"
   [ -x "$RT/usr/bin/apt-get" ] && row ok apt "runtime me apt-get hai -> pk-get install -y <pkg>" || row warn apt "runtime me apt-get nahi (tiny/QA runtime?)"
   [ -x "$RT/usr/bin/dpkg" ] && row info dpkg "dpkg hai (.deb install direct hoga)"
   if [ -x "$RT/usr/bin/wine" ] || [ -e "$RT/usr/bin/wine" ] || [ -L "$RT/usr/bin/wine" ]; then
     wv=$(pk-chroot /usr/bin/wine --version 2>/dev/null | head -1)
     row ok wine "wine: ${wv:-present}"
   else
-    row info wine "wine nahi -> Windows apps ke liye: pk-get install -y wine"
+    row info wine "no wine -> for Windows apps: pk-get install -y wine"
   fi
   n=$(ls "$RT/var/lib/dpkg/info" 2>/dev/null | grep -c '\.list$')
   row info pkgcount "installed pkgs in runtime: ${n:-0}"
   m=$(ls -1 "$RT/apps/bin" 2>/dev/null | wc -l)
   row info appcount "pk apps: ${m:-0}"
 else
-  row info runtime "app runtime nahi laga (pk-runtime status) - base OS me bhi static/busybox apps chalti hain"
+  row info runtime "app runtime is not attached (pk-runtime status) - static/busybox apps still run on the base OS"
 fi
 if [ "$DOAPPS" = 1 ] && [ -x /sbin/pk-run ]; then
   out=$(pk-run --selftest 2>&1 | tr '\n' '|' | cut -c1-140)
   arc=$?
   if [ "$arc" = 0 ]; then
-    row ok appbattery "pk-run --selftest pass: ${out:-(markers console/kmsg par)}"
+    row ok appbattery "pk-run --selftest passed: ${out:-(markers on console/kmsg)}"
   else
     row fail appbattery "pk-run --selftest rc=$arc: ${out:-(<khaali>)}"
   fi
@@ -383,10 +383,10 @@ else
 fi
 if dmesg 2>/dev/null | grep -qiE "error|fail"; then
   n=$(dmesg 2>/dev/null | grep -ciE "error|fail")
-  row warn dmesg "$n error/fail lines (verbose me dekho: dmesg | grep -iE 'error|fail')"
+  row warn dmesg "$n error/fail lines (see details: dmesg | grep -iE 'error|fail')"
   [ "$VERB" = 1 ] && dmesg 2>/dev/null | grep -iE "error|fail" | tail -8 | sed 's/^/       /'
 else
-  row ok dmesg "koi error/fail line nahi"
+  row ok dmesg "no error/fail lines in the log"
 fi
 
 # ------------------------------------------------------------------ summary

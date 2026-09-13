@@ -83,9 +83,9 @@ if [ -n "${WSPEC:-}" ] && command -v pk-wifi >/dev/null 2>&1; then
   [ "$wpw" = "$WSPEC" ] && wpw=""
   ip0=$(ip -4 addr show 2>/dev/null | awk '/inet /{if($2!~/^127\./){print $2; exit}}')
   if [ -n "${ip0:-}" ]; then
-    say "pk_wifi: pehle se IP hai ($ip0) - wifi skip"
+    say "pk_wifi: already have an IP ($ip0) - skipping wifi"
   else
-    say "pk_wifi: '$wssid' se connect try (experimental)"
+    say "pk_wifi: trying to connect to '$wssid' (experimental)"
     pk-wifi connect "$wssid" "$wpw" > /run/pk/wifi-boot.log 2>&1 || say "  wifi fail - detail: /run/pk/wifi-boot.log"
   fi
 fi
@@ -106,11 +106,11 @@ if has pk_check=1 || has pk_check=on || has pk_check=gui; then
   done
   ckargs="--save --verbose"
   if has pk_check=gui; then ckargs="$ckargs --gui"; fi
-  say "pk-check chal raha hai (runtime wait ${jw}s; args: $ckargs)"
+  say "running pk-check (waiting ${jw}s for the runtime; args: $ckargs)"
   pk-check $ckargs > /run/pk/check.out 2>&1
   fr=$(grep '^\[FAIL\]' /run/pk/check.out 2>/dev/null | tr '\n' '|' | cut -c1-180)
   [ -n "${fr:-}" ] && printf '### PK: CHECK-ROWS %s ###\n' "$fr" > /dev/console
-  say "pk-check done (rc=$?) - poori report: less /run/pk/check.txt"
+  say "pk-check done (rc=$?) - full report: less /run/pk/check.txt"
 fi
 # ------------------------------------------------ user: pk_user=<name> [+ pk_userpw=<pw>]
 # "root ke alawa koi user nahi" wali kami yahan khatam: boot option se user banta hai
@@ -120,7 +120,7 @@ _pu=$(sed -n 's/.*pk_user=\([^ ]*\).*/\1/p' /proc/cmdline 2>/dev/null | head -1)
 if [ -n "${_pu:-}" ] && [ "${_pu:-}" != root ]; then
   if ! grep -qs "^$_pu:" /etc/passwd; then
     _ppw=$(sed -n 's/.*pk_userpw=\([^ ]*\).*/\1/p' /proc/cmdline 2>/dev/null | head -1)
-    say "user '$_pu' nahi hai -> pk-user add se bana raha hoon"
+    say "user '$_pu' does not exist -> creating it with pk-user add"
     if [ -n "${_ppw:-}" ]; then
       pk-user add "$_pu" --password="$_ppw" >/run/pk/user-boot.log 2>&1
     else
@@ -168,7 +168,7 @@ if has pk_desktop=1 || has pk_desktop=on; then
     fi
   fi
   if has pk_check=1 || has pk_check=on || has pk_check=gui; then
-    note "desktop ke baad dobara: pk-check --gui"
+    note "re-run after the desktop is up: pk-check --gui"
     pk-check --save --gui > /run/pk/check2.out 2>&1
   fi
 fi
@@ -185,7 +185,7 @@ if [ -f /run/pk/boot.env ]; then
     [ -n "${INSTUSER:-}" ] && iopt="$iopt --user=$INSTUSER"
     [ -n "${INSTUSERPW:-}" ] && iopt="$iopt --user-password=$INSTUSERPW"
     if [ "$INSTALLDEV" = ask ]; then
-      echo "[install] interactive mode - pk-install khud poochhega" > /dev/console
+      echo "[install] interactive mode - pk-install will ask you itself" > /dev/console
       /sbin/pk-install --target= ; rc=$?
     elif [ "${SILENT:-0}" = 1 ]; then
       ilog=/run/pk-install.log
@@ -257,7 +257,7 @@ if has 'pk_selftest'; then
   fi
   if [ -n "${ip:-}" ]; then echo "### PK: NET-OK ($ip) ###"
   elif [ "${PK_DHCP:-no}" = yes ]; then
-    echo "### PK: NET-FAIL (DHCP ko IP nahi mila) ###"
+    echo "### PK: NET-FAIL (DHCP got no IP) ###"
     echo "--- pk-net.log ---" >> /dev/console 2>/dev/null
     tail -8 /var/log/pk-net.log 2>/dev/null | sed 's/^/  net-log: /'
     echo "--- NIC ---" >> /dev/console 2>/dev/null
@@ -326,7 +326,7 @@ if has 'pk_selftest'; then
     if [ -f /run/pk/require-login ]; then
       echo "### PK: LOGIN-REQUIRED ###"
     else
-      echo "### PK: LOGIN-REQUIRED-MISSING (installed system autologin kar raha?!) ###"
+      echo "### PK: LOGIN-REQUIRED-MISSING (installed system autologging in?!) ###"
     fi
   else
     echo "### PK: LIVE-AUTOLOGIN ###"

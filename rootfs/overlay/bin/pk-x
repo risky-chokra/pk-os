@@ -21,7 +21,7 @@ start() {
   # idempotent: pk-boot aur pk-check --gui dono se do baar call ho sakta hai - dusre
   # instance par weston "unable to lock wayland-1.lock" de kar Xvfb par gir jaata tha.
   if [ -S "$RT/run/pk-x/wayland-1" ] && pidof weston >/dev/null 2>&1; then
-    say "Wayland session pehle se chal raha hai (weston pid $(pidof weston)) - dobara nahi uthayenge"
+    say "a Wayland session is already running (weston pid $(pidof weston)) - not starting a second one"
     [ -r "$ENVR" ] || printf 'WAYLAND_DISPLAY=wayland-1\nXDG_RUNTIME_DIR=/run/pk-x\nPK_XDG_RUNTIME_HOST=%s\nDISPLAY=\n' "$RT/run/pk-x" > "$ENVR" 2>/dev/null
     return 0
   fi
@@ -31,7 +31,7 @@ start() {
   hasdrm=0
   for c in /dev/dri/card*; do [ -e "$c" ] && { hasdrm=1; break; }; done
   if [ "$want" = auto ] && [ "$hasdrm" = 0 ] && rbin Xvfb; then
-    say "KMS device nahi (/dev/dri/card*) -> weston ki jagah Xvfb select kiya (screen par kuch nahi aayega; 'pk-desktop vnc 5900' se GUI dekho)"
+    say "no KMS device (/dev/dri/card*) -> chose Xvfb instead of weston (nothing on the panel; use VNC)"
     want=Xvfb
   fi
   [ "$want" = auto ] && for c in weston Xorg Xvfb; do rbin "$c" && { want=$c; break; }; done
@@ -72,7 +72,7 @@ start() {
         say "weston ready (socket: $RT/run/pk-x/wayland-1, ${j}s, VT=tty$VT seatd=$SEATD)"
         printf '### PK: DESKTOP-VT (want=tty%s active=tty%s seatd=%s) ###\n' "$VT" "${NOWVT:-?}" "$SEATD" > /dev/console 2>/dev/null
         if [ "${NOWVT:-}" != "$VT" ]; then
-          warn "weston chala par screen par abhi bhi tty${NOWVT:-?} dikhta hai (VT switch nahi hua) - 'pk-desktop vnc 5900' use karo"
+          warn "weston is running but the screen still shows tty${NOWVT:-?} (no VT switch) - 'pk-desktop vnc 5900'"
           printf '### PK: DESKTOP-VTMISMATCH (want=tty%s active=tty%s) ###\n' "$VT" "${NOWVT:-?}" > /dev/console 2>/dev/null
         fi
         # session ke baad ek client chahiye, warna weston ki screen plain black dikhti
@@ -85,7 +85,7 @@ start() {
         fi
         [ "${hasdrm:-1}" = 1 ] || warn "weston HEADLESS par: koi physical screen nahi -> 'pk-desktop vnc 5900' ya VM ka graphics device badlo (docs/VM-TEST.md #2b)"
       else
-        warn "weston ka socket nahi aaya - reason: $(tail -3 /run/pk/x-weston.log 2>/dev/null | tr '\n' '|' | cut -c1-160)"
+        warn "weston's socket never appeared - reason: $(tail -3 /run/pk/x-weston.log 2>/dev/null | tr '\n' '|' | head -c 200)"
         kill "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null || true
         rm -f "$PIDF"
         if rbin Xvfb; then say "fallback: Xvfb"; start Xvfb; return $?; fi
@@ -112,11 +112,11 @@ start() {
         printf 'DISPLAY=:0\n' > "$ENVR"
         say "Xvfb ready (:0, ${j}s)"
       else
-        warn "Xvfb ready nahi hua (tail $LOGF)"; rm -f "$ENVR"; return 1
+        warn "Xvfb did not become ready (tail $LOGF)"; rm -f "$ENVR"; return 1
       fi
       ;;
     none|'')
-      say "runtime me koi display server nahi (weston/Xorg/Xvfb). Install karo:"
+      say "no display server in the runtime (weston/Xorg/Xvfb). Install one:"
       say "  pk-get install -y weston xterm        # Wayland, DRM/KMS par direct"
       say "  pk-get install -y xvfb x11vnc         # headless + VNC"
       say "  pk-get install -y xserver-xorg xterm  # X11 (intel/amd/nouveau/fbdev)"
@@ -129,16 +129,16 @@ start() {
     sleep 1; i=$((i + 1))
   done
   . "$ENVR" 2>/dev/null || true
-  say "env: $ENVR (apps ke liye pk-run --gui use karo)"
+  say "env: $ENVR (apps should be started with pk-run --gui)"
   return 0
 }
 
 status() {
   if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then
-    echo "pk-x: session chal raha hai (pid $(cat "$PIDF"))"
+    echo "pk-x: session running (pid $(cat "$PIDF"))"$PIDF"))"
     [ -r "$ENVR" ] && sed 's/^/  /' "$ENVR"
   else
-    echo "pk-x: koi session nahi.  pk-x start"
+    echo "pk-x: no session.  pk-x start"
   fi
   [ -s "$LOGF" ] && { echo "  last log:"; tail -6 "$LOGF" | sed 's/^/    /'; }
 }
@@ -147,7 +147,7 @@ stop() {
   [ -f "$PIDF" ] && { kill "$(cat "$PIDF")" 2>/dev/null; rm -f "$PIDF"; }
   pk-chroot /bin/sh -c 'pkill -f "weston|Xvfb|Xorg" 2>/dev/null' 2>/dev/null || true
   rm -f "$ENVR"
-  say "band kiya"
+  say "stopped"
 }
 
 case "${1:-status}" in

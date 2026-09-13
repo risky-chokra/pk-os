@@ -23,7 +23,7 @@ case $TTY in
   ttyS*|ttyAMA*|ttyUSB*|hvc*|ttyGS*) AUTO="" ;;
 esac
 if [ -n "$AUTO" ] && ! grep -qs "^$AUTO:" /etc/passwd; then
-  echo "pk-console: autologin user '$AUTO' /etc/passwd me nahi -> root"
+  echo "pk-console: autologin user '$AUTO' is not in /etc/passwd -> root"
   AUTO=""
 fi
 if [ -e /run/pk/require-login ] && [ -z "$AUTO" ]; then
@@ -40,7 +40,7 @@ if [ -n "$AUTO" ] && [ "$AUTO" != root ]; then
   # HOME (/root) barkarar rakh deta tha -> apps root ki home me likhne ki koshish karti
   su - "$AUTO" -c "exec /bin/sh -l" 2>/dev/null \
     || su -m "$AUTO" -c "cd \"$H\" 2>/dev/null || cd /tmp; exec /bin/sh -l"
-  echo "pk-console: '$AUTO' ka shell band hua -> root shell"
+  echo "pk-console: shell of '$AUTO' exited -> root shell"
 fi
 cd /root || cd /
 exec /bin/sh -l

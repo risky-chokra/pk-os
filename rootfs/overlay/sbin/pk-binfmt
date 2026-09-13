@@ -49,7 +49,7 @@ emulator_for() { # <arch>
 }
 status() {
   if [ ! -e "$BM/status" ]; then
-    say "binfmt_misc mount nahi hai (kernel module 'binfmt_misc' chahiye)"
+    say "binfmt_misc is not mounted (needs the 'binfmt_misc' kernel module)"
     mark "BINFMT-NOMOUNT"
     return 1
   fi
@@ -86,7 +86,7 @@ register() {
 $(archs)
 EOF
   if [ "$have_any" = 0 ]; then
-    warn "koi qemu-user nahi mila. Install:  pk-get install -y qemu-user-static"
+    warn "no qemu-user found. Install it:  pk-get install -y qemu-user-static"
     mark "BINFMT-NOQEMU"; return 70
   fi
   say "$reg handlers registered -> ab arm64/arm/riscv64 ELF direct:  pk-run ./binary"

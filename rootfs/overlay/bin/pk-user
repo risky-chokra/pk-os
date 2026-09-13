@@ -139,7 +139,7 @@ cmd_info() {
   h=$(home_of "$u")
   row home "$h"
   row home-mode "$([ -n "$h" ] && [ -d "$h" ] && stat -c '%a %U:%G' "$h" 2>/dev/null || echo missing)"
-  row login-ok "$( [ -n "$h" ] && [ -d "$h" ] && echo yes || echo 'NO (home nahi hai -> pk-user doctor)')"
+  row login-ok "$( [ -n "$h" ] && [ -d "$h" ] && echo yes || echo 'NO (home directory missing -> run pk-user doctor)')"
 }
 
 cmd_add() {
@@ -169,7 +169,7 @@ cmd_add() {
   gid=$(group_gid "$u"); [ -n "$gid" ] || { gid=$uid; ensure_group "$u" "$gid"; }
   hsh=$(hash_pw "${pw:-x}" 2>/dev/null || true)
   if [ -n "$pw" ] && [ -z "${hsh:-}" ]; then
-    say "WARNING: password hash banane ka koi tool nahi (mkpasswd/openssl) -> account LOCKED rahega"
+    say "WARNING: no tool available to hash a password (mkpasswd/openssl) -> the account stays LOCKED"
   fi
   add_line "$PW" "$u:x:$uid:$gid:$u:$home:$shell"
   if [ -f "$SH" ]; then
@@ -201,7 +201,7 @@ cmd_add() {
     [ -d /etc/skel ] && cp -a /etc/skel/. "$home"/ 2>/dev/null
     chown -R "${uid:-$u}:${gid:-$u}" "$home" 2>&1 | sed 's/^/  chown: /' | sed 's/^/pk-user:/1' || true
     chmod 700 "$home" 2>/dev/null
-    say "home: $(stat -c '%n %a %U:%G' "$home" 2>/dev/null || echo "$home (stat nahi laga)")"
+    say "home: $(stat -c '%n %a %U:%G' "$home" 2>/dev/null || echo "$home (stat failed)")"
   fi
   # password
   if [ -n "$pw" ]; then
@@ -210,12 +210,12 @@ cmd_add() {
       awk -v U="$u" -v H="$h2" 'BEGIN{OFS=":"} $1==U {$2=H} {print}' "$SH" > "$SH.pk-tmp" 2>/dev/null && write_back "$SH.pk-tmp" "$SH"
       say "password set kiya (shadow me sha-512 hash)"
     elif printf '%s:%s\n' "$u" "$pw" | chpasswd >/dev/null 2>&1; then
-      say "password set kiya (chpasswd se)"
+      say "password set (with chpasswd)"
     else
-      say "WARNING: password set nahi ho paya -> 'pk-user passwd $u' khud chalao"
+      say "WARNING: could not set the password -> run 'pk-user passwd $u' yourself"
     fi
   else
-    say "password set nahi kiya - abhi: pk-user passwd $u   (ya --password=... do)"
+    say "no password set yet - run: pk-user passwd $u   (or pass --password=...)"
   fi
   # sudo (installed system me sudo ho to)
   if [ "$admin" = 1 ]; then
@@ -223,14 +223,14 @@ cmd_add() {
       printf '%s ALL=(ALL) ALL\n' "$u" > /etc/sudoers.d/90-$u 2>/dev/null && chmod 440 /etc/sudoers.d/90-$u 2>/dev/null \
         && say "sudoers.d/90-$u likha (admin)" || say "sudoers.d me likh nahi paye (wheel me hai hi)"
     else
-      say "sudo is image me nahi - --admin ka matlab abhi sirf 'wheel' group"
+      say "this image has no sudo - --admin currently only means the 'wheel' group"
     fi
   fi
   say "USER-ADDED $u (uid $(uid_of "$u")) groups:*$added"
   [ -n "$failed" ] && say "  ye groups add nahi ho paye: $failed"
   printf '### PK: USER-ADD-OK (%s) ###\n' "$u" > /dev/console 2>/dev/null
   if is_live && ! grep -qs 'upperdir=/mnt/persist' /proc/mounts; then
-    say "note: live ISO me /etc RAM overlay me hai -> reboot pe ye user gayab (persistent=... ya installed system me save rahega)"
+    say "note: on the live ISO /etc is a RAM overlay -> this user disappears at reboot (use persistent=... or install)"
   fi
 }
 
@@ -243,7 +243,7 @@ cmd_del() {
   for a in "$@"; do case "$a" in --home) rmhome=1 ;; --force) force=1 ;; *) die "unknown option: $a" ;; esac; done
   uid=$(uid_of "$u")
   if [ -n "$uid" ] && [ "$uid" -lt 1000 ] && [ "$force" = 0 ]; then
-    die "system user (uid $uid) delete karne se pehle --force do"
+    die "pass --force to delete a system user (uid $uid)"
   fi
   # user ke process pehle band karo, warna delete ke baad bhi chaleinge
   pkill -u "$u" >/dev/null 2>&1 || true
@@ -270,9 +270,9 @@ cmd_passwd() {
     if [ -n "${h:-}" ] && [ -f "$SH" ]; then
       awk -v U="$u" -v H="$h" 'BEGIN{OFS=":"} $1==U {$2=H; $3=19000} {print}' "$SH" > "$SH.pk-tmp" 2>/dev/null && write_back "$SH.pk-tmp" "$SH"         && say "password badal diya ($u)" || die "shadow update fail"
     elif printf '%s:%s\n' "$u" "$pw" | chpasswd >/dev/null 2>&1; then
-      say "password badal diya ($u, chpasswd se)"
+      say "password changed ($u, via chpasswd)"
     else
-      die "password set karne ka koi tareeka nahi (mkpasswd/openssl/chpasswd koi nahi)"
+      die "no way to set a password here (no mkpasswd/openssl/chpasswd)"
     fi
   else
     [ -t 0 ] || die "non-interactive: pk-user passwd $u <newpw>  (ya 'passwd $u' khud chalao)"
@@ -290,8 +290,8 @@ cmd_autologin() {
   user_exists "$u" || die "user nahi mila: $u"
   printf 'PK_CONSOLE_AUTOLOGIN=%s\n' "$u" > "$CONF" 2>/dev/null || say "$CONF likhne me dikkat (installed system me root se karo)"
   printf '%s\n' "$u" > "$RUNAUTO" 2>/dev/null || true
-  say "ab tty1 par '$u' bina password ke andar aayega (agla boot / agla getty restart)"
-  say "  wapas chahiye to: pk-user autologin off"
+  say "tty1 will now log in as '$u' without a password (next boot / next getty restart)"
+  say "  to undo that: pk-user autologin off"
 }
 
 cmd_doctor() {
@@ -318,9 +318,9 @@ cmd_doctor() {
     [ -n "$home" ] || continue
     mkdir -p "$home" 2>/dev/null && chown "$uid":"$gid" "$home" 2>/dev/null && chmod 700 "$home" 2>/dev/null
     [ -d /etc/skel ] && cp -a /etc/skel/. "$home"/ 2>/dev/null
-    say "home banaya: $home ($u)"; bad=$((bad + 1))
+    say "created home: $home ($u)"; bad=$((bad + 1))
   done < /etc/passwd
-  say "$bad homes banaye"
+  say "$bad homes created"
   say "check: login test =  su - <user> -c id"
 }
 

@@ -8,6 +8,6 @@ set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 if [ "${1:-}" = --clean ]; then exec pk-chroot --umount; fi
 [ -t 0 ] || { exec pk-chroot "$@"; }
-echo "pk's OS runtime shell - '(exit)' se bahar.  pkgs: apt-get, dpkg  |  apps: pk-run --list"
-echo "release: $(cat /opt/pk/etc/pk-runtime-release 2>/dev/null || echo '(runtime me koi release file nahi)')"
+echo "pk's OS runtime shell - type 'exit' to leave.  pkgs: apt-get, dpkg  |  apps: pk-run --list"
+echo "release: $(cat /opt/pk/etc/pk-runtime-release 2>/dev/null || echo '(no release file in the runtime)')"
 exec pk-chroot /bin/sh

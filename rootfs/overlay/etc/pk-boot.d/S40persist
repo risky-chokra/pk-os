@@ -1,5 +1,5 @@
 #!/bin/sh
 # boot hook: persistence ka status bata do
 [ -e /run/pk-persist-on ] || exit 0
-echo "pk-boot: persistence ON (changes /persistence me save ho rahe hain)"
+echo "pk-boot: persistence ON (changes are written to /persistence)"
 exit 0

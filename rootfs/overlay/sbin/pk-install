@@ -133,7 +133,7 @@ lsblk -o NAME,SIZE,TYPE,MOUNTPOINT 2>/dev/null | head -15 || true
 if [ "$INFOONLY" = 1 ]; then echo "### PK: INSTALL-INFO target=$TARGET size=${TMB}GiB ###"; exit 0; fi
 if [ "$YES" != 1 ]; then
   echo
-  echo "!! $TARGET ka saara data DELETE ho jaayega. Aage badhne ke liye  YES  type karo."
+  echo "!! ALL data on $TARGET will be DELETED. Type  YES  to continue."
   printf "> "
   read ans
   [ "$ans" = YES ] || die "cancel kiya gaya"
@@ -146,7 +146,7 @@ done
 
 # ---------------------------------------------------------------- partitioning
 have parted || die "parted missing in live image (build me config/live-bins.txt me daalo)"
-note "partition table bana raha hoon ($LAYOUT)"
+note "writing the partition table ($LAYOUT)"
 parted -s "$TARGET" mklabel gpt >/dev/null 2>&1 || die "mklabel fail"
 BIOSNO=0; ESPNO=0; ROOTNO=1
 case "$LAYOUT" in
@@ -190,7 +190,7 @@ ESPP=""
 note "root = $ROOTP   esp = ${ESPP:-none}"
 
 # ---------------------------------------------------------------- filesystems
-note "filesystems format kar raha hoon"
+note "formatting filesystems"
 # ext4 + journal EXPLICITLY, and through the real binary name (mke2fs). This used to be
 #   mkfs.ext4 ... 2>/dev/null || mke2fs ...
 # In the live image that produced a filesystem with only "dir_index filetype
@@ -222,7 +222,7 @@ note "  ext4 journal check: $JRN"
   # (fs abhi unmounted hai, isliye safe) aur phir dobara probe karte hain: marker hamesha
   # jo *actually* bana hai wahi batata hai.
   if [ "$JRN" != ok ] && have tune2fs; then
-    note "  journal nahi mila -> tune2fs -O has_journal se add kar rahe hain"
+    note "  no journal found -> adding one with tune2fs -O has_journal"
     tune2fs -q -O has_journal "$ROOTP" >/dev/null 2>&1 && dumpe2fs -h "$ROOTP" 2>/dev/null | grep -q has_journal && JRN=ok
     case "$JRN" in ok) note "  journal added (re-verified with dumpe2fs)" ;; *) JRN="${JRN:-fail}" ;; esac
   fi
@@ -233,7 +233,7 @@ mount "$ROOTP" "$TGT" || die "root mount fail"
 [ -n "$ESPP" ] && { mkdir -p "$TGT/boot/efi"; mount "$ESPP" "$TGT/boot/efi" || die "esp mount fail"; }
 
 # ---------------------------------------------------------------- copy rootfs
-note "root filesystem copy ho raha hai (thoda time lagega)..."
+note "copying the root filesystem (this takes a moment)..."
 rm -f /var/log/messages /var/log/* 2>/dev/null
 SRC=/
 if [ -d /live-base ]; then
@@ -274,7 +274,7 @@ cp -f "$INITRDIMG" "$TGT/boot/pk-initrd" 2>/dev/null || die "initrd copy fail"
 KVER=$(cat "$SRC/etc/pk-kversion" 2>/dev/null)
 
 # ---------------------------------------------------------------- target config
-note "target config likh raha hoon"
+note "writing the target configuration"
 : > "$TGT/etc/fstab"
 RU=$(blkid -s UUID -o value "$ROOTP" 2>/dev/null)
 printf 'UUID=%s  /  ext4  defaults,noatime,errors=remount-ro  0 1\n' "$RU" >> "$TGT/etc/fstab"
@@ -289,7 +289,7 @@ rm -f "$TGT/etc/pk-live-base"
 
 # root password (pehle --root-password-hash, phare mkpasswd/openssl se bana)
 if [ -n "$ROOTPWHASH" ]; then
-  note "  --root-password-hash diya gaya (already hashed)"
+  note "  --root-password-hash given (already hashed)"
   H=$ROOTPWHASH
 elif [ -n "$ROOTPW" ] && have mkpasswd; then
   H=$(mkpasswd -m sha-512 "$ROOTPW" 2>/dev/null)
@@ -301,10 +301,10 @@ elif [ -n "$ROOTPW" ] && have mkpasswd; then
     if awk -F: 'NR==1{exit ($2 ~ /^\$[56ya]\$/ ? 0 : 1)}' "$TGT/etc/shadow" 2>/dev/null; then
       note "  root password set kiya (sha-crypt hash verify hua)"
     else
-      note "  WARNING: /etc/shadow ka root field update nahi hua"
+      note "  WARNING: the root field of /etc/shadow was not updated"
     fi
   else
-    note "  passwd hash nahi bana (live default 'pk' rahega)"
+    note "  could not build a passwd hash (the live default 'pk' stays)"
   fi
 fi
 chmod 600 "$TGT/etc/shadow" 2>/dev/null
@@ -315,7 +315,7 @@ if [ -n "$USER" ]; then
     *[!a-zA-Z0-9._-]*|'') note "  user name invalid: $USER (skip)" ;;
     *)
     if awk -F: -v u="$USER" '$1==u{f=1} END{exit !f}' "$TGT/etc/passwd" 2>/dev/null; then
-      note "  user '$USER' pehle se passwd me hai - skip"
+      note "  user '$USER' is already in passwd - skipping"
     else
       uh=1000
       while awk -F: -v x="$uh" '$3==x{f=1} END{exit !f}' "$TGT/etc/passwd" 2>/dev/null; do uh=$((uh + 1)); done
@@ -340,7 +340,7 @@ if [ -n "$USER" ]; then
       [ -d "$TGT/etc/skel" ] && cp -a "$TGT/etc/skel/." "$TGT/home/$USER/" 2>/dev/null
       chown -R "$uh:$uh" "$TGT/home/$USER" 2>/dev/null
       chmod 700 "$TGT/home/$USER" 2>/dev/null
-      note "  user '$USER' bana (uid=$uh, home=/home/$USER, password $([ "$uhz" = '!' ] && echo 'set NAHI kiya (mkpasswd nahi tha)' || echo 'set kiya'))"
+      note "  created user '$USER' (uid=$uh, home=/home/$USER, password $([ "$uhz" = '!' ] && echo 'NOT set (no mkpasswd available)' || echo 'set'))"
     fi ;;
   esac
 fi
@@ -370,19 +370,19 @@ if [ "$NORT" != 1 ]; then
   if [ -n "$rts" ]; then
     mkdir -p "$TGT/var/lib/pk" 2>/dev/null
     if cp -f "$rts" "$TGT/var/lib/pk/pk-runtime.sqfs" 2>/dev/null; then
-      note "  app runtime installed system me copy hui ($(du -h "$TGT/var/lib/pk/pk-runtime.sqfs" | cut -f1)) -> boot par /opt/pk auto mount"
+      note "  app runtime copied into the installed system ($(du -h "$TGT/var/lib/pk/pk-runtime.sqfs" | cut -f1)) -> it will auto-mount at /opt/pk on boot"$TGT/var/lib/pk/pk-runtime.sqfs" | cut -f1)) -> boot par /opt/pk auto mount"
       if [ ! -f "$TGT/var/lib/pk/pk-runtime-rw.img" ] && have mkfs.ext4; then
         sz=$(awk '/MemAvailable/{m=int($2/1048576)} END{print (m<1024?1024:2048)}' /proc/meminfo 2>/dev/null || echo 1024)
         if mk_sparse "$TGT/var/lib/pk/pk-runtime-rw.img" "$sz" && \
            mkfs.ext4 -q -F -L pk-runtime-rw "$TGT/var/lib/pk/pk-runtime-rw.img" 2>/dev/null; then
-          note "  rw image bhi banayi ($sz MiB sparse) -> installed apps reboot ke baad bhi rahengi"
+          note "  also created the rw image ($sz MiB sparse) -> installed apps survive a reboot"
         fi
       fi
     else
-      note "  runtime copy fail (jagah kam?) - installed system me 'pk-runtime --setup' kar lena"
+      note "  runtime copy failed (not enough space?) - run 'pk-runtime --setup' on the installed system"
     fi
   else
-    note "  live media par pk-runtime.sqfs nahi mila - installed system me apps layer nahi jayegi (theek hai, base OS chalega)"
+    note "  no pk-runtime.sqfs on the live media - the installed system gets no apps layer (fine: base OS works)"
   fi
 fi
 # installed system me host keys khud banane chahiye, live wale copy na hon

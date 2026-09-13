@@ -84,7 +84,7 @@ if [ -w /dev/tty1 ]; then
 fi
 
 if [ "$nofb" = 1 ]; then
-  say "screen console nahi mila (/proc/consoles:$con) - screen par kuch nahi aayega; serial console use karo (GRUB me b/c, ya pkos-1.0-serial.iso)"
+  say "no screen console found (/proc/consoles:$con) - nothing will appear on the panel; using the serial console"
   mark "DISPLAY-NOCONSOLE (fb=$fbn drm=$drm consoles:${con:-none})"
 else
   mark "DISPLAY-OK (text=on fb=$fbn drm=$drm${bl:+, bl:$bl})"

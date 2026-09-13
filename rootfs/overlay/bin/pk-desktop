@@ -84,7 +84,7 @@ status() {
     . /run/pk/x-env
     echo "display : DISPLAY=${DISPLAY:-none} WAYLAND=${WAYLAND_DISPLAY:-none}"
   else
-    echo "display : koi session nahi (/run/pk/x-env nahi hai)"
+    echo "display : no session (/run/pk/x-env is missing)"
   fi
   echo "compositor: $(cat /run/pk/x.kind 2>/dev/null || echo '?')"
   echo "log       : /run/pk/x.log (last 5)"
@@ -93,14 +93,14 @@ status() {
 
 start() {
   if ! runtime_ok; then
-    warn "app runtime nahi laga -> GUI ke liye runtime chahiye (weston/xterm uske andar hote hain)"
+    warn "no app runtime attached -> GUI needs the runtime (weston/xterm live inside it)"
     warn "  sudo make runtime  (build/pk-runtime.sqfs)  ->  make iso WITH_RUNTIME=1"
     warn "  ya live me:  pk-runtime start"
     mark "DESKTOP-NO-RUNTIME"
     return 71
   fi
   if ! rtbin weston && ! rtbin Xorg && ! rtbin Xvfb; then
-    say "runtime me koi compositor nahi -> install kar rahe hain (net chahiye)"
+    say "no compositor in the runtime -> installing one now (network required)"
     pk-get install -y weston xterm >/dev/null 2>&1 || pk-get install -y xvfb xterm >/dev/null 2>&1 || {
       warn "install fail (net? 'pk-net dhcp') - manual: pk-get install -y weston xterm xvfb x11-utils"
       mark "DESKTOP-INSTALL-FAIL"; return 70; }
@@ -120,7 +120,7 @@ start() {
   [ -n "${wx:-}" ] && printf '### PK: DESKTOP-WESTON-LOG %s ###\n' "$wx" > /dev/console 2>/dev/null
   if [ -r /run/pk/x-env ]; then . /run/pk/x-env; fi
   if [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
-    warn "session nahi utha; detail: cat /run/pk/x.log"
+    warn "session did not start; details: cat /run/pk/x.log"
     mark "DESKTOP-FAIL"
     return 1
   fi
@@ -135,7 +135,7 @@ pk's OS desktop
   iOS/Android: pk-ios why ; pk-android doctor
 W
   if [ -e /run/pk/x-term ]; then
-    say "terminal already chal chuka hai (pk-x ne bheja) - duplicate nahi khologe"
+    say "a terminal is already running (pk-x launched it) - not opening a second one"
   elif [ -n "${DISPLAY:-}" ] && rtbin xterm; then
     pk-run --gui xterm -e sh -c 'cat /root/pk-desktop-welcome.txt; echo; exec /bin/sh' >/dev/null 2>&1 &
     say "terminal khola (xterm)"
@@ -143,15 +143,15 @@ W
     pk-run --gui weston-terminal >/dev/null 2>&1 &
     say "terminal khola (weston-terminal)"
   else
-    say "session ready hai; client nahi khola (xterm/weston-terminal runtime me nahi)"
-    say "  app:  pk-desktop app <naam>   (jaise: pk-desktop app htop)"
+    say "session is ready; no client opened (xterm/weston-terminal are not in the runtime)"
+    say "  app:  pk-desktop app <name>   (for example: pk-desktop app htop)"
   fi
   # foreground priority (cgroup apps slice -> cpu.weight 200)
   if command -v pk-tune >/dev/null 2>&1; then
     for sess in weston Xorg Xvfb; do pk-tune fg "$sess" >/dev/null 2>&1 && break; done
   fi
-  say "session chal raha hai: DISPLAY=${DISPLAY:-} WAYLAND=${WAYLAND_DISPLAY:-}"
-  say "terminal khola (agar xterm hai). App:  pk-desktop app <naam>"
+  say "session running: DISPLAY=${DISPLAY:-} WAYLAND=${WAYLAND_DISPLAY:-}"
+  say "opened a terminal (if xterm is installed). App:  pk-desktop app <name>"
   mark "DESKTOP-OK (${DISPLAY:-${WAYLAND_DISPLAY:-?}})"
   return 0
 }
@@ -159,16 +159,16 @@ W
 vnc() {
   port=${1:-5900}
   if ! have pk-x; then
-    warn "pk-x nahi mila"; return 70
+    warn "pk-x not found"; return 70
   fi
   if ! rtbin Xvfb; then warn "Xvfb nahi -> pk-get install -y xvfb x11-xserver-utils"; return 70; fi
   pk-x start xvfb >/dev/null 2>&1
   if rtbin x11vnc; then
-    say "x11vnc :$port start (host se: ssh -L $port:localhost:$port root@<ip> phir vnc viewer)"
+    say "x11vnc :$port started (from another machine: ssh -L $port:localhost:$port root@<ip>, then a vnc viewer)"
     pk-chroot /usr/bin/x11vnc -forever -shared -localhost -rfbport "$port" >/run/pk/vnc.log 2>&1 &
     mark "DESKTOP-VNC-OK ($port)"
   else
-    warn "x11vnc nahi -> pk-get install -y x11vnc"
+    warn "no x11vnc -> pk-get install -y x11vnc"
     return 70
   fi
 }
@@ -181,7 +181,7 @@ do_shot() {
   out=${1:-/run/pk/desktop-shot.png}
   runtime_ok || { warn "runtime attach nahi -> pk-desktop start pehle"; return 66; }
   if ! grep -qs 'WAYLAND_DISPLAY' /run/pk/x-env 2>/dev/null; then
-    warn "Wayland session nahi chal raha (Xvfb/X11 session me ye kaam nahi karta)"
+    warn "no Wayland session running (this does not work under an Xvfb/X11 session)"
     warn "  X11 ke liye: pk-chroot /bin/sh -c 'DISPLAY=:0 xwd -root -out /root/s.xwd' (x11-utils)"
     return 66
   fi
@@ -198,7 +198,7 @@ do_shot() {
       printf '### PK: GUI-SHOT-OK (%s bytes -> %s) ###\n' "$(wc -c < "$out" 2>/dev/null)" "$out" > /dev/console 2>/dev/null
       return 0; }
   fi
-  warn "screenshot nahi bana (rc=$rc) - weston --debug laga hona chahiye; log:"
+  warn "no screenshot was written (rc=$rc) - weston must run with --debug for the screencopy gate; log:"
   tail -3 /run/pk/shot.log 2>/dev/null | sed 's/^/  /'
   printf '### PK: GUI-SHOT-FAIL (rc=%s) ###\n' "$rc" > /dev/console 2>/dev/null
   return 1
@@ -220,7 +220,7 @@ case "${1:-start}" in
   scale)
     shift; sc=${1:-1}; out=${2:-}
     [ -n "$out" ] && ini_set "output:$out" scale "$sc" || ini_set "output" scale "$sc"
-    say "scale=$sc set kiya (weston HiDPI); session reload: pk-desktop restart"
+    say "scale=$sc set (weston HiDPI); reload the session with: pk-desktop restart"
     mark "DESKTOP-SCALE-OK ($sc${out:+ on $out})" ;;
   mode)
     shift; out=${1:-}; m=${2:-}
@@ -235,7 +235,7 @@ case "${1:-start}" in
       ini_set "output:$o" x "$x"; ini_set "output:$o" y "0"
       x=$((x + 1920))
     done
-    say "layout likha (left-to-right: $*); restart karo"; mark "DESKTOP-ARRANGE-OK" ;;
+    say "layout written (left-to-right: $*); restart the session"; mark "DESKTOP-ARRANGE-OK" ;;
   ini)    ini_path; [ -f "$INI" ] && cat "$INI" || echo "(ini nahi bani abhi)"; ;;
   restart)
     pk-x stop >/dev/null 2>&1

@@ -82,10 +82,10 @@ fi
 # --- 3) desktop ke liye honest verdict -------------------------------------------------
 if [ "$drm" -gt 0 ] 2>/dev/null; then
   mark "DISPLAY-KMS (drm=$drm driver=$drv fb=$fbn)"
-  say "KMS device ready: weston ko /dev/dri/card0 mil sakta hai (driver $drv)"
+  say "KMS device ready: weston can get /dev/dri/card0 (driver $drv)"
 else
   if grep -q 'pk_desktop=1\|pk_desktop=on' /proc/cmdline 2>/dev/null; then
-    say "pk_desktop=1 par KMS device nahi -> desktop Xvfb(par) chalega, screen par nahi; 'pk-desktop vnc 5900' se dekho ya GRUB me 'v'"
+    say "pk_desktop=1 but no KMS device -> the desktop will run on Xvfb, not on the panel; view it with 'pk-desktop vnc 5900'"
   fi
   mark "DISPLAY-TEXTONLY (fb=$fbn drm=0; text console theek, weston/KMS ke liye driver nahi)"
 fi

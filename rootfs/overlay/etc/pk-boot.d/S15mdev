@@ -17,7 +17,7 @@ for a in $(cat /proc/cmdline 2>/dev/null); do
 done
 
 if [ ! -x /bin/mdev ] && ! have mdev; then
-  say "busybox mdev applet nahi mila - hook skip"
+  say "busybox mdev applet missing - skipping this hook"
   mark "MDEV-SKIP (no mdev applet)"
   exit 0
 fi
@@ -78,7 +78,7 @@ if [ "$lis" = 1 ]; then
   say "mdev ready (uevent listener on, coldplug rc=$rc)"
   mark "MDEV-OK (uevent listener + coldplug, rc=$rc)"
 else
-  say "mdev ready (sirf coldplug - uevent applet nahi mila)"
+  say "mdev ready (coldplug only - no uevent applet)"
   mark "MDEV-COLDPLUG (rc=$rc)"
 fi
 exit 0

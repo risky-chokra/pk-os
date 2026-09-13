@@ -190,11 +190,11 @@ if [ -n "$ROOTARG" ]; then
         say "installed mode: root=$ROOTDEV"
       else
         umount /newroot 2>/dev/null
-        say "root=$dev par /sbin/init nahi mila -> live boot try karta hoon"
+        say "root=%s has no /sbin/init -> falling back to a live boot"
       fi
     fi
   else
-    say "root=$ROOTARG resolve nahi hua -> live boot try"
+    say "could not resolve root=%s -> trying a live boot"
   fi
 fi
 
@@ -323,7 +323,7 @@ mount_live_base() {
     sc="/mnt/media${IMG}.sha256"
     if [ -r "$sc" ]; then
       want=$(head -c 128 "$sc" 2>/dev/null | tr -d ' \r\n' | cut -c1-64)
-      say "verify: $IMG ka sha256 nikaal rahe hain (pk_verify=$VERIFY)..."
+      say "verify: computing the sha256 of $IMG (pk_verify=$VERIFY)..."
       got=$(sha256sum "$SRC" 2>/dev/null | cut -c1-64)
       if [ -n "$got" ] && [ "$got" = "$want" ]; then
         printf '### PK: VERIFY-OK (%s) ###\n' "$(basename "$IMG")" > /dev/console 2>/dev/null
@@ -334,10 +334,10 @@ mount_live_base() {
         if [ "$VERIFY" = require ] || [ "$VERIFY" = 2 ]; then
           bail "live payload ka hash match nahi hua - ISO corrupt ya tampered (pk_verify=1 se warn-only boot karo)"
         fi
-        say "WARNING: payload hash mismatch - phir bhi boot kar rahe hain (pk_verify=require se rok denge)"
+        say "WARNING: payload hash mismatch - booting anyway (pk_verify=require would stop)"
       fi
     else
-      say "verify: sidecar $sc nahi mila - ISO purana hai? (mk-iso ab $(basename "$IMG").sha256 banata hai)"
+      say "verify: no sidecar $sc next to the image - old ISO? (mk-iso now writes $(basename "$IMG").sha256)"$IMG").sha256 banata hai)"
       printf '### PK: VERIFY-NOSIDECAR ###\n' > /dev/console 2>/dev/null
     fi
   fi
@@ -354,7 +354,7 @@ mount_live_base() {
       case "${MEDIA:-}" in
         /dev/loop*) losetup -d "$MEDIA" 2>/dev/null || true; umount /mnt/iso-src 2>/dev/null || true ;;
       esac
-      say "toram done - ab boot media nikaal sakte ho"
+      say "toram done - the boot medium can be removed now"
     else
       say "toram copy fail -> media se hi mount"
     fi
@@ -413,7 +413,7 @@ make_rw_root() {
       fi
       say "overlay(persistence) fail -> RAM overlay"
     else
-      say "persistence partition nahi mili (ext4, label=$PERSISTLABEL) -> changes sirf RAM me"
+      say "no persistence partition found (ext4, label=$PERSISTLABEL) -> changes stay in RAM only"
     fi
   fi
   mount -t tmpfs -o size=75% tmpfs /tmp.rw 2>/dev/null || { mkdir -p /tmp.rw; }
@@ -422,7 +422,7 @@ make_rw_root() {
     say "root = squashfs (ro) + RAM overlay - reboot pe sab reset"
     return 0
   fi
-  say "overlayfs nahi -> pura root RAM me copy kar raha hoon"
+  say "no overlayfs -> copying the whole root into RAM"
   umount /tmp.rw 2>/dev/null
   mount -t tmpfs -o size=75% tmpfs /newroot || return 1
   ( cd /ro && tar -cf - . ) | ( cd /newroot && tar -xf - ) || return 1

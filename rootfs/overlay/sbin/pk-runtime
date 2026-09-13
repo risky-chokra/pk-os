@@ -128,11 +128,11 @@ mkdir -p "$UP/upper" "$UP/work"
       [ -d "$w" ] && [ -w "$w" ] && { rwimg=$w/$RWWANT; break; }
     done
     if [ "$live_ram" = 1 ]; then
-      say "live mode (persistence off): rw image RAM me nahi banayenge -> apps ephemeral"
+      say "live mode (persistence off): not creating the rw image in RAM -> apps are ephemeral"
       say "  bachane ke liye: 'persistent' boot option, PK-RUNTIME partition, ya permanent install"
     fi
     if [ -n "$rwimg" ]; then
-      say "rw image banata hoon: $rwimg"
+      say "creating the rw image: $rwimg"
       mkdir -p "$(dirname "$rwimg")"
       sz=$(awk '/MemAvailable/{s=int($2/1048576)} END{print (s<512?512:2048)}' /proc/meminfo 2>/dev/null || echo 1024)
       mk_sparse "$rwimg.tmp" "$sz" || { rm -f "$rwimg.tmp"; rwimg=""; }
@@ -216,7 +216,7 @@ status() {
     echo "  pkgs: $(ls "$RT"/var/lib/dpkg/info 2>/dev/null | grep -c '\.list$')"
     echo "  wine: $(ls "$RT"/usr/bin/wine 2>/dev/null && echo yes || echo no)"
   else
-    echo "runtime: nahi laga hai (boot log me 'RUNTIME-NONE' dekho ya 'pk-runtime start' chalao)"
+    echo "runtime is not attached (see 'RUNTIME-NONE' in the boot log, or run 'pk-runtime start')"
   fi
 }
 
@@ -233,7 +233,7 @@ setup() {
   TOTAL=$(( $(cat "/sys/block/${dev#/dev/}/size" 2>/dev/null || echo 0) / 2048 ))
   NEED=$(( $(stat -c %s "$img") / 1048576 + 64 ))
   FREE=$(( TOTAL - LAST ))
-  echo "device=$dev used=${LAST}MiB total=${TOTAL}MiB free=${FREE}MiB chahiye=${NEED}MiB"
+  echo "device=$dev used=${LAST}MiB total=${TOTAL}MiB free=${FREE}MiB needed=${NEED}MiB"
   [ "$FREE" -gt "$NEED" ] || { echo "free space kam hai - ISO chhoti karo ya runtime alag disk pe rakho"; exit 1; }
   parted -s "$dev" mkpart runtime ext4 "${LAST}MiB" 100% || { echo "mkpart fail"; exit 1; }
   partprobe "$dev" 2>/dev/null; sleep 1
@@ -247,8 +247,8 @@ setup() {
   rw=${img%.sqfs}-rw.img
   [ -f "$rw" ] && { cp "$rw" "/mnt/pk-rt-set/$RWWANT" && sync; }
   umount /mnt/pk-rt-set
-  echo "OK - reboot karo; runtime apne aap /opt/pk par aa jaayega."
-  echo "     (ab 'pk-runtime start' se bhi laga sakte ho)"
+  echo "OK - reboot; the runtime will appear at /opt/pk by itself."
+  echo "     ('pk-runtime start' also attaches it right now)"
   attach
 }
 

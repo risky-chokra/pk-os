@@ -52,7 +52,7 @@ cg_setup() {
       return 0
     fi
   fi
-  warn "cgroup v2 nahi mila (cpu.weight/priority grouping skip)"
+  warn "no cgroup v2 (cpu.weight / priority grouping skipped)"
   return 1
 }
 mountpoint_ok() { grep -q " $1 " /proc/mounts 2>/dev/null; }
@@ -194,11 +194,11 @@ desktop() {
   w /proc/sys/kernel/sched_autogroup_enabled 1 || true
   net_tune
   if [ "$wrote" = 0 ]; then
-    warn "kuch bhi likhne ko na mila (sysfs read-only / container?) - report dekho: pk-tune report"
+    warn "nothing could be written (read-only sysfs / container?) - see: pk-tune report"
     mark "TUNE-DESKTOP-NONE"
     return 1
   fi
-  say "desktop profile set ($wrote knob likhe: governor+EPP, IO scheduler, dirty_ratio, autogroup, cgroups apps=200/bg=20)"
+  say "desktop profile set ($wrote knobs written: governor+EPP, IO scheduler, dirty_ratio, autogroup, cgroups apps=200/bg=20)"
   mark "TUNE-DESKTOP-OK"
   return 0
 }
@@ -214,7 +214,7 @@ undo() {
   w /proc/sys/vm/swappiness 60 || true
   w /proc/sys/kernel/sched_autogroup_enabled 0 || true
   for d in "$W/apps" "$W/bg" "$W/sandbox"; do rmdir "$d" 2>/dev/null; done
-  say "defaults par wapas (jo likha jaaki)"
+  say "back to defaults (whatever was written before)"
   mark "TUNE-UNDO-OK"
 }
 
@@ -223,7 +223,7 @@ hybrid() {
   hi=$(hybrid_info)
   kind=$(printf '%s\n' "$hi" | sed -n '1p')
   if [ "$kind" != hybrid ]; then
-    say "uniform topology (P/E signal nahi) -> cpuset split ki zaroorat nahi"
+    say "uniform topology (no P/E signal) -> no cpuset split needed"
     mark "TUNE-HYBRID-UNIFORM"
     return 0
   fi
@@ -277,7 +277,7 @@ io_tune() {
     say "$b: scheduler=$q ($(rd "/sys/block/$b/queue/scheduler"))"
     mark "TUNE-IO-OK ($q)"
   else
-    warn "$q available nahi ($(rd "/sys/block/$b/queue/scheduler"))"; return 1
+    warn "$q is not available ($(rd "/sys/block/$b/queue/scheduler"))"/sys/block/$b/queue/scheduler"))"; return 1
   fi
 }
 
@@ -336,7 +336,7 @@ swap_tune() {
       if [ "$free" -ge 320 ]; then
         mb=$((free - 128)); say "jagah kam thi -> size ${mb} MB kar di (fs=$fs, free=${free} MB)"
       else
-        say "skip $d (free ${free} MB < ${mb} MB chahiye)"; continue
+        say "skip $d (free ${free} MB < ${mb} MB needed)"; continue
       fi
     fi
     [ -w "$(dirname "$f")" ] || continue
@@ -348,7 +348,7 @@ swap_tune() {
     swapon "$f" 2>/dev/null && { say "swap on: $f (${mb} MB)"; mark "TUNE-SWAP-OK (${mb}M)"; return 0; }
     rm -f "$f" 2>/dev/null
   done
-  warn "koi swapfile banane layak jagah nahi (live me / = tmpfs/overlay -> installed system ya PK-PERSIST partition par chalega)"
+  warn "no place with room for a swapfile (live: / is tmpfs/overlay -> use the installed system or PK-PERSIST)"
   mark "TUNE-SWAP-SKIP"
   return 1
 }
@@ -367,7 +367,7 @@ ipc_tune() {
   if [ -f /proc/sys/kernel/io_uring_disabled ]; then
     say "io_uring: disabled=$(rd /proc/sys/kernel/io_uring_disabled)"
   else
-    say "io_uring: kernel me support (sysctl nahi, matlab enabled)"
+    say "io_uring: supported by the kernel (no sysctl, so it is enabled)"
   fi
   w /proc/sys/kernel/io_uring_disabled 0 || true
   mark "TUNE-IPC-OK"

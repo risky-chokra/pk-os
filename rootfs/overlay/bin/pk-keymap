@@ -37,7 +37,7 @@ set_console() { # <layout>
     fi
     warn "loadkmap fail"; return 1
   fi
-  warn "$KDIR/$l.kmap nahi (builder par kbd ka data copy nahi hua? build-rootfs isko /usr/share/keymaps se laata hai)"
+  warn "$KDIR/$l.kmap is missing (the build host had no 'kbd' data to copy; build-rootfs puts it in /usr/share/kmap)"
   return 1
 }
 
@@ -47,7 +47,7 @@ set_gui() { # <layout>
     pk-chroot /usr/bin/setxkbmap -layout "$l" 2>/dev/null && { say "GUI keymap (setxkbmap): $l ✓"; return 0; }
   fi
   if have setxkbmap; then setxkbmap -layout "$l" 2>/dev/null && { say "GUI keymap: $l ✓"; return 0; }; fi
-  warn "GUI keymap set nahi hua (runtime me x11-xkb-utils chahiye: pk-get install -y x11-xkb-utils xkb-data)"
+  warn "the GUI keymap was not set (needs x11-xkb-utils in the runtime: pk-get install -y x11-xkb-utils xkb-data)"
   return 1
 }
 
@@ -56,7 +56,7 @@ case "${1:-}" in
     cur=$(cat /run/pk/keymap 2>/dev/null || echo us)
     echo "current : $cur"
     echo "console : $(avail)"
-    echo "          (naya layout chahiye to builder par 'kbd' package install karke make iso karo)"
+    echo "          (for another layout: install the 'kbd' package on the build host and run make iso again)"
     ;;
   --help|-h) sed -n '2,6p' "$0" ;;
   list) avail; echo ;;

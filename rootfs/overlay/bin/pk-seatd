@@ -33,7 +33,7 @@ start() {
   mounted || { say "runtime attach nahi hai (pk-runtime start) - seatd skip"; mark "SEATD-SKIP (no runtime)"; return 64; }
   rbin seatd || { say "runtime me seatd nahi -> pk-get install -y seatd"; mark "SEATD-SKIP (seatd not in runtime)"; return 70; }
   if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null; then
-    say "pehle se chal raha hai (pid $(cat "$PIDF"))"; mark "SEATD-OK (already, pid $(cat "$PIDF"))"; return 0
+    say "already running (pid $(cat "$PIDF"))"$PIDF"))"; mark "SEATD-OK (already, pid $(cat "$PIDF"))"; return 0
   fi
   mkdir -p /run/pk "$RT/run" 2>/dev/null
   rm -f "$SOCK" 2>/dev/null
@@ -62,11 +62,11 @@ start() {
     chgrp seat "$SOCK" 2>/dev/null || true
     # live side se bhi reachable ho (weston root hi hai; 666 se koi risk nahi kyunki
     # node sirf runtime ke andar mount hota hai)
-    say "chalu: socket=$SOCK group=seat pid=$(cat "$PIDF" 2>/dev/null)"
+    say "starting: socket=$SOCK group=seat pid=$(cat "$PIDF" 2>/dev/null)"$PIDF" 2>/dev/null)"
     mark "SEATD-OK (socket=/run/seatd.sock in runtime, pid=$(cat "$PIDF" 2>/dev/null))"
     return 0
   fi
-  say "socket nahi bana; log: $LOGF"
+  say "the socket was never created; log: $LOGF"
   tail -4 "$LOGF" 2>/dev/null | sed 's/^/    /'
   sr=$(tail -c 150 "$LOGF" 2>/dev/null | tr '\n' '|' | tr -s ' ')
   mark "SEATD-FAIL (sock nahi bana: ${sr:-no-log})"
@@ -76,7 +76,7 @@ start() {
 stop() {
   if [ -f "$PIDF" ]; then kill "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null || true; rm -f "$PIDF"; fi
   pk-chroot /bin/sh -c 'pkill -x seatd 2>/dev/null' >/dev/null 2>&1 || true
-  say "band kiya"
+  say "stopped"
 }
 
 status() {

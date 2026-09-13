@@ -117,7 +117,7 @@ if [ "$CREATE" = 1 ]; then
   case "$code" in
     200) say "repository $OWNER/$REPO already exists (private=$(sed -n 's/.*"private":[a-z]*/&/p' /tmp/pk-pub-repo.json | head -1))" ;;
     404) say "creating public repository $OWNER/$REPO"
-         body=$(printf '{"name":"%s","description":"%s","private":false,"has_issues":true,"has_wiki":false,"auto_init":false,"license_template":"mit","gitignore_template":"null"}' \
+         body=$(printf '{"name":"%s","description":"%s","private":false,"has_issues":true,"has_wiki":false,"auto_init":false}' \
                 "$REPO" "pk's OS - a small self-built Linux live/install ISO (docs, sources, releases)")
          res=$(accept "/user/repos" -X POST -H "Content-Type: application/json" -d "$body")
          printf '%s' "$res" | grep -q '"full_name"' || { gh_err "$res" "repo create"; die "could not create the repository (classic PAT with 'repo' scope? org permissions?)"; }

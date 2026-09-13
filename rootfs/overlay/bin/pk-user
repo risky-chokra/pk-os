@@ -132,7 +132,7 @@ cmd_list() {
 
 cmd_info() {
   u=${1:-}; [ -n "$u" ] || die "usage: pk-user info <user>"
-  user_exists "$u" || die "user nahi mila: $u"
+  user_exists "$u" || die "no such user: $u"
   grep "^$u:" /etc/passwd | sed 's/^/  passwd: /'
   grep "^$u:" /etc/shadow 2>/dev/null | sed 's/\$:.*$/<hash hidden>/' | sed 's/^/  shadow: /'
   awk -F: -v U="$u" '$4 ~ ("(^|,)" U "($|,)")' /etc/group | cut -d: -f1 | tr '\n' ' ' | sed 's/^/  groups: /;s/$/\n/'
@@ -145,9 +145,9 @@ cmd_info() {
 cmd_add() {
   u=${1:-}; shift 2>/dev/null || true
   [ -n "$u" ] || die "usage: pk-user add <user> [--password=PW] [--admin] [--uid=N] [--groups=a,b] [--shell=S] [--no-home]"
-  case "$u" in *[!a-zA-Z0-9_-]*|"") die "naam theek nahi (sirf a-z 0-9 _ -): $u" ;; esac
-  [ "$u" = root ] && die "root add nahi kar sakte"
-  user_exists "$u" && die "pehle se maujood: $u (groups me add karna ho: addgroup $u <grp>)"
+  case "$u" in *[!a-zA-Z0-9_-]*|"") die "invalid name (only a-z 0-9 _ -): $u" ;; esac
+  [ "$u" = root ] && die "root cannot be added"
+  user_exists "$u" && die "already exists: $u (to add it to groups, edit /etc/group or re-run pk-user add $u --groups=...)"
   pw=""; newuid=""; shell=/bin/sh; extra=""; admin=0; nohome=0
   for a in "$@"; do
     case "$a" in
@@ -163,8 +163,8 @@ cmd_add() {
   ensure_groups
   home=/home/$u
   uid=${newuid:-$(next_uid)}
-  [ -n "$uid" ] || die "free uid nahi mila (next_uid fail)"
-  awk -F: -v U="$uid" '$3==U {e=1} END{exit e?0:1}' "$PW" 2>/dev/null && die "uid $uid pehle se use ho raha hai"
+  [ -n "$uid" ] || die "no free uid found (next_uid failed)"
+  awk -F: -v U="$uid" '$3==U {e=1} END{exit e?0:1}' "$PW" 2>/dev/null && die "uid $uid is already in use"
   # private group (same name, same gid) - busybox adduser yahi karta hai
   gid=$(group_gid "$u"); [ -n "$gid" ] || { gid=$uid; ensure_group "$u" "$gid"; }
   hsh=$(hash_pw "${pw:-x}" 2>/dev/null || true)
@@ -180,7 +180,7 @@ cmd_add() {
     fi
   fi
   [ -f "$GSH" ] && { printf '%s:!:%s:\n' "$u" "$u" >> "$GSH" 2>/dev/null; awk -v U="$u" 'BEGIN{OFS=":"} $1==U {$2="!"; $3=U} {print}' "$GSH" > "$GSH.pk-tmp" 2>/dev/null && write_back "$GSH.pk-tmp" "$GSH"; }
-  user_exists "$u" || die "passwd me line likhne ke baad bhi user nahi mila (root filesystem read-only?)"
+  user_exists "$u" || die "the user is still missing after writing the passwd line (is the root filesystem read-only?)"
   # groups: base + extra + admin
   glist=$BASE_GROUPS
   [ -n "$extra" ] && glist="$glist,$extra"
@@ -196,7 +196,7 @@ cmd_add() {
   # home + skel + perms
   if [ "$nohome" = 0 ]; then
     uid=$(uid_of "$u"); gid=$(field "$u" 4 "$PW")
-    mkdir -p "$home" 2>/dev/null || say "WARNING: $home create nahi ho paya"
+    mkdir -p "$home" 2>/dev/null || say "WARNING: could not create $home"
     # skel PEHLE copy karo, phir chown -R: warna dotfiles root ke reh jaate hain
     [ -d /etc/skel ] && cp -a /etc/skel/. "$home"/ 2>/dev/null
     chown -R "${uid:-$u}:${gid:-$u}" "$home" 2>&1 | sed 's/^/  chown: /' | sed 's/^/pk-user:/1' || true
@@ -221,13 +221,13 @@ cmd_add() {
   if [ "$admin" = 1 ]; then
     if [ -d /etc/sudoers.d ]; then
       printf '%s ALL=(ALL) ALL\n' "$u" > /etc/sudoers.d/90-$u 2>/dev/null && chmod 440 /etc/sudoers.d/90-$u 2>/dev/null \
-        && say "sudoers.d/90-$u likha (admin)" || say "sudoers.d me likh nahi paye (wheel me hai hi)"
+        && say "wrote sudoers.d/90-$u (admin)" || say "could not write to sudoers.d (it is in the wheel group anyway)"
     else
       say "this image has no sudo - --admin currently only means the 'wheel' group"
     fi
   fi
   say "USER-ADDED $u (uid $(uid_of "$u")) groups:*$added"
-  [ -n "$failed" ] && say "  ye groups add nahi ho paye: $failed"
+  [ -n "$failed" ] && say "  these groups could not be added: $failed"
   printf '### PK: USER-ADD-OK (%s) ###\n' "$u" > /dev/console 2>/dev/null
   if is_live && ! grep -qs 'upperdir=/mnt/persist' /proc/mounts; then
     say "note: on the live ISO /etc is a RAM overlay -> this user disappears at reboot (use persistent=... or install)"
@@ -237,8 +237,8 @@ cmd_add() {
 cmd_del() {
   u=${1:-}; shift 2>/dev/null || true
   [ -n "$u" ] || die "usage: pk-user del <user> [--home] [--force]"
-  [ "$u" = root ] && die "root delete nahi kar sakte"
-  user_exists "$u" || die "user maujood hi nahi: $u"
+  [ "$u" = root ] && die "root cannot be deleted"
+  user_exists "$u" || die "the user does not exist: $u"
   rmhome=0; force=0
   for a in "$@"; do case "$a" in --home) rmhome=1 ;; --force) force=1 ;; *) die "unknown option: $a" ;; esac; done
   uid=$(uid_of "$u")
@@ -251,7 +251,7 @@ cmd_del() {
   for f in "$PW" "$SH" "$GR" "$GSH"; do
     [ -f "$f" ] && cp -p "$f" "$f.pk-bak" 2>/dev/null
   done
-  del_user_lines "$u" || say "WARNING: /etc edit me dikkat (backup /etc/*.pk-bak se restore kar sakte ho)"
+  del_user_lines "$u" || say "WARNING: could not edit /etc (restore it from the backup in /etc/*.pk-bak)"
   [ "$rmhome" = 1 ] && rm -rf "/home/$u" 2>/dev/null
   au=$(sed -n 's/^PK_CONSOLE_AUTOLOGIN=//p' "$CONF" 2>/dev/null | head -1)
   if [ -n "${au:-}" ] && [ "$au" = "$u" ]; then
@@ -264,7 +264,7 @@ cmd_del() {
 cmd_passwd() {
   u=${1:-}; pw=${2:-}
   [ -n "$u" ] || die "usage: pk-user passwd <user> [newpw]"
-  user_exists "$u" || die "user nahi mila: $u"
+  user_exists "$u" || die "no such user: $u"
   if [ -n "$pw" ]; then
     h=$(hash_pw "$pw" 2>/dev/null || true)
     if [ -n "${h:-}" ] && [ -f "$SH" ]; then
@@ -275,7 +275,7 @@ cmd_passwd() {
       die "no way to set a password here (no mkpasswd/openssl/chpasswd)"
     fi
   else
-    [ -t 0 ] || die "non-interactive: pk-user passwd $u <newpw>  (ya 'passwd $u' khud chalao)"
+    [ -t 0 ] || die "non-interactive: pk-user passwd $u <newpw>  (or run 'passwd $u' yourself)"
     passwd "$u"
   fi
 }
@@ -287,8 +287,8 @@ cmd_autologin() {
   if [ "$u" = off ] || [ "$u" = root ]; then
     [ "$u" = off ] && { rm -f "$RUNAUTO" 2>/dev/null; printf 'PK_CONSOLE_AUTOLOGIN=\n' > "$CONF" 2>/dev/null; say "autologin off (login prompt wapas)"; return 0; }
   fi
-  user_exists "$u" || die "user nahi mila: $u"
-  printf 'PK_CONSOLE_AUTOLOGIN=%s\n' "$u" > "$CONF" 2>/dev/null || say "$CONF likhne me dikkat (installed system me root se karo)"
+  user_exists "$u" || die "no such user: $u"
+  printf 'PK_CONSOLE_AUTOLOGIN=%s\n' "$u" > "$CONF" 2>/dev/null || say "could not write $CONF (do it as root on an installed system)"
   printf '%s\n' "$u" > "$RUNAUTO" 2>/dev/null || true
   say "tty1 will now log in as '$u' without a password (next boot / next getty restart)"
   say "  to undo that: pk-user autologin off"

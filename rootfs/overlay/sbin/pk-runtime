@@ -96,7 +96,7 @@ find_sqfs() { # -> "<file-on-mounted-fs-or-plain-path>" (mount karni pade to /mn
 
 attach() {
   [ "$WANT" = off ] && { mark "RUNTIME-SKIP (pk_runtime=off)"; return 0; }
-  mounted "$RT" && { say "pehle se attached: $RT"; return 0; }
+  mounted "$RT" && { say "already attached: $RT"; return 0; }
   src=$(find_sqfs) || true
   if [ -z "${src:-}" ]; then
     mark "RUNTIME-NONE (koi $FILE nahi mila - 'make runtime' se banao ya --setup use karo)"
@@ -228,7 +228,7 @@ setup() {
   [ -n "$dev" ] || { echo "device do (jaise /dev/sdb)"; exit 1; }
   case "$dev" in /dev/*) : ;; *) dev=/dev/$dev ;; esac
   [ -b "$dev" ] || { echo "no such device: $dev"; exit 1; }
-  have parted || { echo "parted chahiye"; exit 1; }
+  have parted || { echo "parted is required"; exit 1; }
   LAST=$(parted -s -m "$dev" unit MiB print 2>/dev/null | awk -F: '/^[0-9]+:/ { if ($3+0>e) e=$3+0 } END { print e+0 }')
   TOTAL=$(( $(cat "/sys/block/${dev#/dev/}/size" 2>/dev/null || echo 0) / 2048 ))
   NEED=$(( $(stat -c %s "$img") / 1048576 + 64 ))
@@ -239,7 +239,7 @@ setup() {
   partprobe "$dev" 2>/dev/null; sleep 1
   d=${dev#/dev/}
   pn=$(ls -1 "/sys/block/$d/" 2>/dev/null | grep -E "^${d}[0-9]+$" | tail -1)
-  [ -n "$pn" ] || { echo "partition node nahi bana; reboot ke baad dobara try karo"; exit 1; }
+  [ -n "$pn" ] || { echo "the partition node was not created; try again after a reboot"; exit 1; }
   mkfs.ext4 -q -F -L $LABEL "/dev/$pn" || { echo "mkfs fail"; exit 1; }
   mkdir -p /mnt/pk-rt-set
   mount "/dev/$pn" /mnt/pk-rt-set || { echo "mount fail"; exit 1; }

@@ -70,14 +70,14 @@ do_install() {
   apk=${1:-}
   [ -n "$apk" ] && [ -f "$apk" ] || { echo "usage: pk-android install <app.apk>"; return 1; }
   d=$APPS/apk
-  mkdir -p "$d" 2>/dev/null || { warn "$APPS writable nahi (runtime lagao)"; return 71; }
+  mkdir -p "$d" 2>/dev/null || { warn "$APPS is not writable (attach the runtime)"; return 71; }
   if have unzip; then
     unzip -q -o "$apk" -d "$d/$(basename "$apk" .apk)" >/dev/null 2>&1 || warn "unzip fail"
   else
     warn "no unzip (not in the base image) - only recording the file"
   fi
   name=$(basename "$apk" .apk)
-  say "apk extract: $d/$name  (AndroidManifest binary XML hai; isliye package/activity khud nahi padh sakte)"
+  say "apk extracted: $d/$name  (AndroidManifest is binary XML, so we cannot read package/activity ourselves)"
   BR=no; WD=no
   has_binder && BR=yes
   { [ -x "$RT/usr/bin/waydroid" ] || [ -e "$RT/usr/bin/waydroid" ]; } && WD=yes

@@ -17,7 +17,7 @@ rbin() { [ -x "$RT/usr/bin/$1" ] || [ -x "$RT/bin/$1" ]; }
 
 start() {
   want=${1:-auto}
-  mounted "$RT" || { say "runtime attach nahi hai -> pk-runtime start"; exit 64; }
+  mounted "$RT" || { say "no runtime attached -> pk-runtime start"; exit 64; }
   # idempotent: pk-boot aur pk-check --gui dono se do baar call ho sakta hai - dusre
   # instance par weston "unable to lock wayland-1.lock" de kar Xvfb par gir jaata tha.
   if [ -S "$RT/run/pk-x/wayland-1" ] && pidof weston >/dev/null 2>&1; then
@@ -81,9 +81,9 @@ start() {
         if [ -x "$RT/usr/bin/weston-terminal" ] || [ -x "$RT/usr/bin/xterm" ]; then
           ( pk-chroot /bin/sh -c 'export XDG_RUNTIME_DIR=/run/pk-x WAYLAND_DISPLAY=wayland-1; cd; [ -x /usr/bin/weston-terminal ] && exec /usr/bin/weston-terminal; [ -x /usr/bin/xterm ] && exec env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR=/run/pk-x DISPLAY= /usr/bin/xterm' >>/run/pk/x-weston.log 2>&1 ) &
           : > /run/pk/x-term 2>/dev/null
-          say "terminal uthaya (weston-terminal/xterm) - screen par desktop dikhega"
+          say "launched a terminal (weston-terminal/xterm) - the desktop should be visible on screen"
         fi
-        [ "${hasdrm:-1}" = 1 ] || warn "weston HEADLESS par: koi physical screen nahi -> 'pk-desktop vnc 5900' ya VM ka graphics device badlo (docs/VM-TEST.md #2b)"
+        [ "${hasdrm:-1}" = 1 ] || warn "weston is HEADLESS: no physical screen -> use 'pk-desktop vnc 5900' or change the VM graphics device (docs/VM-TEST.md #2b)"
       else
         warn "weston's socket never appeared - reason: $(tail -3 /run/pk/x-weston.log 2>/dev/null | tr '\n' '|' | head -c 200)"
         kill "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null || true

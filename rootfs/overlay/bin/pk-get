@@ -14,7 +14,7 @@ if ! grep -q " $rt " /proc/mounts 2>/dev/null; then
   exit 64
 fi
 ip=$(ip -4 addr show 2>/dev/null | awk '/inet /{if($2!~/^127\./){print $2; exit}}')
-[ -n "${ip:-}" ] || echo "pk-get: warning - koi IP nahi hai (DHCP ke liye: pk-net dhcp)" >&2
+[ -n "${ip:-}" ] || echo "pk-get: warning - no IP address (for DHCP: pk-net dhcp)" >&2
 
 if [ $# = 0 ]; then
   set -- update

@@ -62,7 +62,7 @@ status() {
   done
   say "registered handlers: $n"
   mark "BINFMT-STATUS-OK ($n)"
-  [ "$n" = 0 ] && say "  (kuch nahi -> pk-binfmt register)"
+  [ "$n" = 0 ] && say "  (nothing registered -> pk-binfmt register)"
   return 0
 }
 register() {

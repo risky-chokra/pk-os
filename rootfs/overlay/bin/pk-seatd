@@ -30,8 +30,8 @@ start() {
     i=$((i + 1)); [ $i -gt 15 ] && break
     sleep 1
   done
-  mounted || { say "runtime attach nahi hai (pk-runtime start) - seatd skip"; mark "SEATD-SKIP (no runtime)"; return 64; }
-  rbin seatd || { say "runtime me seatd nahi -> pk-get install -y seatd"; mark "SEATD-SKIP (seatd not in runtime)"; return 70; }
+  mounted || { say "no runtime attached (pk-runtime start) - skipping seatd"; mark "SEATD-SKIP (no runtime)"; return 64; }
+  rbin seatd || { say "seatd is not in the runtime -> pk-get install -y seatd"; mark "SEATD-SKIP (seatd not in runtime)"; return 70; }
   if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null; then
     say "already running (pid $(cat "$PIDF"))"$PIDF"))"; mark "SEATD-OK (already, pid $(cat "$PIDF"))"; return 0
   fi
@@ -85,7 +85,7 @@ status() {
   else
     echo "pk-seatd: stopped"
   fi
-  if [ -S "$SOCK" ]; then ls -l "$SOCK" | sed 's/^/  /'; else echo "  socket: $SOCK nahi"; fi
+  if [ -S "$SOCK" ]; then ls -l "$SOCK" | sed 's/^/  /'; else echo "  no socket at $SOCK"; fi
   grep -qs '^seat:' /etc/group && echo "  live group seat: yes" || echo "  live group seat: NO"
   echo "  weston ke liye env: LIBSEAT_BACKEND=seatd XDG_SEAT=seat0 XDG_VTNR=<active vt>"
   [ -s "$LOGF" ] && { echo "  log (last 5):"; tail -5 "$LOGF" | sed 's/^/    /'; }

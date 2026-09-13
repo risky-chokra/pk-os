@@ -34,7 +34,7 @@ case "${1:-status}" in
         sleep 1; tries=$((tries + 1))
       done
     fi
-    IF=$(first_if) || { say "koi NIC nahi mili (/sys/class/net khali)";
+    IF=$(first_if) || { say "no NIC found (/sys/class/net is empty)";
                         [ -n "$MODERR" ] && say "modprobe:$MODERR"
                         exit 2; }
     say "NIC: $IF"
@@ -42,7 +42,7 @@ case "${1:-status}" in
     for cand in /usr/share/udhcpc/default.script /etc/udhcpc/default.script; do
       [ -f "$cand" ] && { SCRIPT=$cand; break; }
     done
-    [ -n "$SCRIPT" ] && say "script: $SCRIPT" || say "WARNING: koi udhcpc script nahi mila (IP apply nahi hoga)"
+    [ -n "$SCRIPT" ] && say "script: $SCRIPT" || say "WARNING: no udhcpc script found (the IP would not be applied)"
     ip link set "$IF" up 2>/dev/null || ifconfig "$IF" up 2>/dev/null
     wait=0
     while [ "$wait" -lt 8 ]; do
@@ -50,7 +50,7 @@ case "${1:-status}" in
       sleep 1; wait=$((wait + 1))
     done
     say "carrier=$(cat "/sys/class/net/$IF/carrier" 2>/dev/null) after ${wait}s"
-    command -v udhcpc >/dev/null 2>&1 || { say "udhcpc applet nahi hai"; exit 3; }
+    command -v udhcpc >/dev/null 2>&1 || { say "the udhcpc applet is not available"; exit 3; }
     # -q: lease ke baad exit, -n: na milne par exit (hang na ho), -p: pidfile
     if [ -n "$SCRIPT" ]; then
       udhcpc -i "$IF" -s "$SCRIPT" -p /run/udhcpc."$IF".pid -t 10 -T 2 -n -q >/tmp/udhcpc.out 2>&1
@@ -64,7 +64,7 @@ case "${1:-status}" in
       say "IP mil gaya: $(ip addr show dev "$IF" 2>/dev/null | awk '/inet /{print $2; exit}')"
       exit 0
     else
-      say "IP nahi mila -- ip addr show:"
+      say "no IP obtained -- ip addr show:"
       ip addr show "$IF" 2>&1 | sed 's/^/    /'
       exit 1
     fi

@@ -33,7 +33,7 @@ echo
 [ -f /etc/issue ] && sed -e "s|@PK_VER@|$(cut -d= -f2 /etc/pk-build 2>/dev/null || echo 1.0)|" -e 's|\\l|'"$TTY"'|' /etc/issue
 if [ -n "$AUTO" ] && [ "$AUTO" != root ]; then
   H=$(awk -F: -v U="$AUTO" '$1==U{print $6; exit}' /etc/passwd 2>/dev/null)
-  [ -n "$H" ] && [ -d "$H" ] || { echo "pk-console: home '$H' nahi hai (pk-user doctor chalao)"; H=/tmp; }
+  [ -n "$H" ] && [ -d "$H" ] || { echo "pk-console: home '$H' does not exist (run pk-user doctor)"; H=/tmp; }
   echo "  logged in as: $AUTO  (uid $(id -u "$AUTO" 2>/dev/null || echo ?); pk-user info $AUTO)"
   # su root se password nahi mangta; -m se env (PATH etc.) barkarar
   # 'su -' (login) isliye: HOME + cwd target user ke milte hain; 'su -m' parent ka

@@ -93,7 +93,7 @@ fi
 # keymap (console + GUI) - pk_keymap=in
 KMAP=$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^pk_keymap=//p' | head -1)
 if [ -n "${KMAP:-}" ] && (command -v pk-keymap >/dev/null 2>&1); then
-  pk-keymap "$KMAP" >/dev/null 2>&1 && say "keymap: $KMAP" || say "keymap '$KMAP' poora set nahi hua"
+  pk-keymap "$KMAP" >/dev/null 2>&1 && say "keymap: $KMAP" || say "keymap '$KMAP' was only partly applied"
 fi
 # pendrive hardware check (real PC test ke liye) - pk_check=1
 if has pk_check=1 || has pk_check=on || has pk_check=gui; then
@@ -143,7 +143,7 @@ fi
 if ! has pk_seatd=off; then
   if [ ! -S /opt/pk/run/seatd.sock ]; then
     note "pk-seatd start (weston session ke liye)"
-    pk-seatd start >/run/pk/seatd-boot.log 2>&1 || note "  seatd fail (detail: /run/pk/seatd-boot.log) - weston bina seatd try karega"
+    pk-seatd start >/run/pk/seatd-boot.log 2>&1 || note "  seatd failed (detail: /run/pk/seatd-boot.log) - weston will try without seatd"
   fi
 fi
 
@@ -265,7 +265,7 @@ if has 'pk_selftest'; then
     command -v modprobe >/dev/null 2>&1 && lsmod 2>/dev/null | sed -n 's/^\([a-z0-9_]*\).*/  mod: \1/p' | grep -iE "virtio_net|e1000|r8169|tg3|usb_lan" | head -3
   fi
   if pidof dropbear >/dev/null 2>&1; then echo "### PK: SSH-OK (dropbear :22) ###"
-  elif [ "${PK_SSH:-no}" = yes ]; then echo "### PK: SSH-FAIL (dropbear nahi chala) ###"
+  elif [ "${PK_SSH:-no}" = yes ]; then echo "### PK: SSH-FAIL (dropbear did not start) ###"
     tail -5 /var/log/pk-ssh.log 2>/dev/null | sed 's/^/  ssh-log: /'; fi
   APPSGET=$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^pk_apps_get=//p')
   if [ -n "${APPSGET:-}" ]; then

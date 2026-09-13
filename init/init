@@ -300,7 +300,7 @@ mount_live_base() {
   found=""
   while [ "$tries" -lt "$maxtries" ]; do
     found=$(find_live_image) && break
-    [ "$tries" = 0 ] && say "media dhoondh raha hoon (rootdelay ${maxtries}s)..."
+    [ "$tries" = 0 ] && say "looking for the media (rootdelay ${maxtries}s)..."
     sleep 1
     tries=$((tries + 1))
   done

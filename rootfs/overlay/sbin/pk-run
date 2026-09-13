@@ -55,7 +55,7 @@ stage_for_chroot() { # <file>
 
 detect() { # <file> -> type
   f=$1
-  [ -f "$f" ] || { warn "file nahi mila: $f"; return 1; }
+  [ -f "$f" ] || { warn "file not found: $f"; return 1; }
   m=$(magic "$f")
   case "$m" in
     7f454c46*)
@@ -152,23 +152,23 @@ binfmt_has() { # <arch>
 run_foreign() { # <arch> <file> [args...]
   a=$1; f=$2; shift 2
   if binfmt_has "$a"; then
-    say "arch: $a (binfmt handler se -> kernel khud qemu use karega)"
+    say "arch: $a (via the binfmt handler -> the kernel itself uses qemu)"
     "$f" "$@"
     return $?
   fi
-  runtime_ok || { warn "$a binary hai par App Runtime attached nahi (qemu-user wahi me hota hai)"; warn "  pk-runtime start  ;  phir: pk-get install -y qemu-user-static"; mark "APP-ARCH-DIAG (no runtime)"; return 66; }
+  runtime_ok || { warn "$a binary, but the App Runtime is not attached (qemu-user lives inside it)"; warn "  run pk-runtime start, then: pk-get install -y qemu-user-static"; mark "APP-ARCH-DIAG (no runtime)"; return 66; }
   emu=''
   for c in "qemu-$a" "qemu-$a-static"; do
     if [ -x "$RT/usr/bin/$c" ] || [ -e "$RT/usr/bin/$c" ] || [ -L "$RT/usr/bin/$c" ]; then emu=$c; break; fi
   done
   if [ -z "$emu" ]; then
-    warn "ye $a (foreign arch) Linux binary hai - chalane ke liye qemu-user chahiye:"
+    warn "this is a $a (foreign arch) Linux binary - running it needs qemu-user:"
     warn "  pk-get install -y qemu-user-static   &&   pk-binfmt register"
     warn "  (tab tak: pk-run $f --self-check wala rasta bhi hai)"
     mark "APP-ARCH-DIAG ($a, no qemu-user)"
     return 69
   fi
-  say "arch: $a -> $emu (App Runtime ke andar) se chal raha hai"
+  say "arch: $a -> running via $emu (inside the App Runtime)"
   ip=$(stage_for_chroot "$f") || { warn "runtime me copy fail"; return 66; }
   pk-chroot "/usr/bin/$emu" "$ip" "$@"
   rc=$?
@@ -183,8 +183,8 @@ sandboxable() {
 run_sandboxed() { # <file> [args...]  -- user/pid/mount/net namespaces + user dirs hide
   f=$1; shift
   if ! sandboxable; then
-    warn "sandbox available nahi (kernel me user namespaces / busybox unshare chahiye)"
-    warn "  bina sandbox ke chala rahe hain - 'pk-check' me dekho"
+    warn "no sandbox available (needs user namespaces in the kernel / busybox unshare)"
+    warn "  running without a sandbox - see 'pk-check'"
     mark "APP-SANDBOX-UNAVAIL"
     "$f" "$@"; return $?
   fi
@@ -204,7 +204,7 @@ run_elf() { # <file> [args...]
   a=$(elf_machine "$f")
   case "$a" in
     x86_64|i386) : ;;
-    other*) say "ELF machine: $a (unknown - direct try karenge)" ;;
+    other*) say "ELF machine: $a (unknown - trying it directly)" ;;
     *) run_foreign "$a" "$f" "$@"; return $? ;;
   esac
   if [ "${SANDBOX:-0}" = 1 ]; then run_sandboxed "$f" "$@"; return $?; fi
@@ -214,8 +214,8 @@ run_elf() { # <file> [args...]
     [ -s /tmp/pk-run.err ] && cat /tmp/pk-run.err >&2
     return $rc
   fi
-  warn "shared libs nahi mili -> runtime ke andar try karta hoon"
-  runtime_ok || { warn "runtime attached nahi. 'pk-runtime start' chalao (ya WITH_RUNTIME=1 wali ISO)."; return 66; }
+  warn "no shared libraries found -> trying inside the runtime"
+  runtime_ok || { warn "no runtime attached. Run 'pk-runtime start' (or use the WITH_RUNTIME=1 ISO)."; return 66; }
   ip=$(stage_for_chroot "$f") || { warn "runtime me copy fail"; return 66; }
   pk-chroot "$ip" "$@"
 }
@@ -229,7 +229,7 @@ run_script() {
     ''|sh|dash|busybox) /bin/sh "$f" "$@"; return $? ;;
   esac
   if have "$base" && [ -x "$interp" ]; then "$f" "$@"; return $?; fi
-  runtime_ok || { warn "interpreter '$base' live me nahi hai (runtime attach karo: pk-runtime start)"; return 69; }
+  runtime_ok || { warn "interpreter '$base' is not in the live system (attach the runtime: pk-runtime start)"; return 69; }
   ip=$(stage_for_chroot "$f") || return 69
   pk-chroot "/usr/bin/$base" "$ip" "$@"
 }
@@ -239,7 +239,7 @@ run_deb_extract() { # .deb bina dpkg ke: ar + tar se extract, launcher banao
   name=$(basename "$f" .deb)
   case "$name" in *_*) name=${name%%_*} ;; esac     # pkg_ver_arch.deb -> pkg (upgrade par same dir reuse ho)
   dest=$APPS/$name
-  have ar || { warn "'.deb' ke liye busybox 'ar' applet chahiye"; return 70; }
+  have ar || { warn "'.deb' needs the busybox 'ar' applet"; return 70; }
   tmp=/tmp/pk-deb.$$
   mkdir -p "$tmp/x" "$dest"
   if ! unpack_ar "$f" "$tmp/x"; then
@@ -253,9 +253,9 @@ run_deb_extract() { # .deb bina dpkg ke: ar + tar se extract, launcher banao
   done
   say "members: $(ls "$tmp/x" 2>/dev/null | tr '\n' ' ')"
   [ -f "$tmp/x/data.tar.gz" ] || [ -f "$tmp/x/data.tar.xz" ] || [ -f "$tmp/x/data.tar.zst" ] || [ -f "$tmp/x/data.tar" ] || \
-    { warn ".deb me data.tar.* nahi mila"; rm -rf "$tmp"; return 70; }
+    { warn "no data.tar.* inside the .deb"; rm -rf "$tmp"; return 70; }
   data=$(ls "$tmp"/x/data.tar.* 2>/dev/null | head -1)
-  [ -n "$data" ] || { warn "data.tar.* nahi mila"; rm -rf "$tmp"; return 70; }
+  [ -n "$data" ] || { warn "no data.tar.* found"; rm -rf "$tmp"; return 70; }
   # data.tar.{gz,xz,zst,bz2} ko pipe se tar me daalte hain: kai .deb me end-of-archive
   # padding nahi hoti (busybox tar likhta hai) to `tar -xf file` "short read" de deta
   # hai, jabki pipe se wahi archive padha ja sakta hai.
@@ -269,7 +269,7 @@ run_deb_extract() { # .deb bina dpkg ke: ar + tar se extract, launcher banao
     esac | tar -C "$dest" -xf - 2>&1
   )
   if [ -z "$(ls -A "$dest" 2>/dev/null)" ]; then
-    warn "tar extract fail: ${tout:-koi output nahi}  (dest=$dest, data=$data)"
+    warn "tar extraction failed: ${tout:-no output}  (dest=$dest, data=$data)"
     rm -rf "$tmp"; return 70
   fi
   rm -rf "$tmp"
@@ -280,10 +280,10 @@ run_deb_extract() { # .deb bina dpkg ke: ar + tar se extract, launcher banao
     b=$(find "$d" -maxdepth 1 ! -type d 2>/dev/null | head -1)
     [ -n "$b" ] && { bin=$b; break; }
   done
-  [ -n "$bin" ] || { say "installed: $dest (koi /usr/bin binary nahi mili - manually chalao)"; return 0; }
+  [ -n "$bin" ] || { say "installed: $dest (no /usr/bin binary found - run it manually)"; return 0; }
   ln -sf "$bin" "$APPS/bin/${bin##*/}" 2>/dev/null || true
   ln -sf "$APPS/bin/${bin##*/}" "/usr/local/bin/${bin##*/}" 2>/dev/null || true
-  say "installed: $name -> command '${bin##*/}'  (pk-run ${bin##*/} se bhi chalega)"
+  say "installed: $name -> command '${bin##*/}'  (pk-run ${bin##*/} works too)"
 }
 
 install_app() { # <file>
@@ -299,7 +299,7 @@ install_app() { # <file>
         run_deb_extract "$f"
       fi ;;
     rpm)
-      runtime_ok || { warn "rpm ke liye runtime chahiye (pk-runtime start)"; return 71; }
+      runtime_ok || { warn "rpm needs the runtime (pk-runtime start)"; return 71; }
       if [ -x "$RT/usr/bin/alien" ]; then
         ip=$(stage_for_chroot "$f") || return 1
         pk-chroot /usr/bin/alien -i "$ip"
@@ -313,8 +313,8 @@ install_app() { # <file>
       chmod 755 "$APPS/bin/$(basename "$f")" 2>/dev/null
       ln -sf "$APPS/bin/$(basename "$f")" "/usr/local/bin/$(basename "$f")" 2>/dev/null || true
       say "installed: $(basename "$f")  (launcher: /usr/local/bin/$(basename "$f"))" ;;
-    ipa) warn ".ipa install nahi hota (iOS runtime chahiye) - dekho:  pk-ios info $f"; return 1 ;;
-    *) warn "ye type install nahi hota ($t) - direct chalao: pk-run $f"; return 1 ;;
+    ipa) warn ".ipa cannot be installed here (needs an iOS runtime) - see:  pk-ios info $f"; return 1 ;;
+    *) warn "this file type is not installable ($t) - run it directly: pk-run $f"; return 1 ;;
   esac
 }
 
@@ -326,8 +326,8 @@ run_win() { # .exe/.msi -> Wine
   done
   [ -n "$wine" ] || { have wine && wine=$(command -v wine); }
   if [ -z "${wine:-}" ]; then
-    warn "Windows app (.exe/.msi) ke liye Wine chahiye:"
-    warn "  pk-get install -y wine            # runtime ke andar (lean runtime chalega)"
+    warn "a Windows app (.exe/.msi) needs Wine:"
+    warn "  pk-get install -y wine            # inside the runtime (works on the lean runtime too)"
     warn "  scripts/make-runtime --variant=full   # wine+wine64+mesa ke saath runtime"
     mark "APP-EXE-NO-WINE"
     return 72
@@ -354,14 +354,14 @@ run_apk() { # Android package
     [ -e "$d" ] && { binder=$d; break; }
   done
   if runtime_ok && [ -x "$RT/usr/bin/waydroid" ] && [ -n "$binder" ]; then
-    say "  waydroid + $binder mila - install kar raha hoon"
+    say "  found waydroid + $binder - installing"
     ip=$(stage_for_chroot "$f") || return 73
     pk-chroot /usr/bin/waydroid app install "$ip"
     mark "APP-APK-OK"
     return $?
   fi
-  warn "Android app chalane ke liye 3 cheezein chahiye (abhi status):"
-  if [ -n "$binder" ]; then say "  [ok] binder ($binder)"; else warn "  [ ] kernel: CONFIG_ANDROID_BINDERFS=y  -> 'make kernel' (scripts/build-kernel me add kar do) phir mount -t binder binder /dev/binderfs"; fi
+  warn "running an Android app needs 3 things (current status):"
+  if [ -n "$binder" ]; then say "  [ok] binder ($binder)"; else warn "  [ ] kernel: CONFIG_ANDROID_BINDERFS=y  -> 'make kernel' (add it in scripts/build-kernel do) phir mount -t binder binder /dev/binderfs"; fi
   if [ -x "$RT/usr/bin/waydroid" ]; then say "  [ok] waydroid (runtime me)"; else warn "  [ ] runtime: pk-get install -y waydroid lxc"; fi
   if [ -n "${WAYLAND_DISPLAY:-}" ] || [ -e /run/pk/x-wayland ]; then say "  [ok] GUI session (pk-x)"; else warn "  [ ] GUI: pk-x  (Waydroid ek Wayland client hai)"; fi
   warn "  Simple fallback (bina kernel change): Android-x86 ISO ko VM me -  pk-vm run --cdrom=<android-iso>"
@@ -371,9 +371,9 @@ run_apk() { # Android package
 
 run_ipa() { # .ipa -> iOS app: native nahi chal sakta; routes dikhate hain
   f=$1; shift
-  warn "ye iOS/iPadOS app (.ipa) hai - Linux par native nahi chal sakta:"
-  warn "  (1) binary Mach-O/arm64 hai  -> Linux kernel load nahi karta (XNU chahiye)"
-  warn "  (2) frameworks (UIKit/SwiftUI/CoreAnimation) closed-source hain, koi Linux port nahi"
+  warn "this is an iOS/iPadOS app (.ipa) - it cannot run natively on Linux:"
+  warn "  (1) the binary is Mach-O/arm64  -> the Linux kernel cannot load it (needs XNU)"
+  warn "  (2) the frameworks (UIKit/SwiftUI/CoreAnimation) are closed-source, there is no Linux port"
   warn "  (3) codesign + entitlements Apple ke signing chain se bandhe hain"
   if [ -x /sbin/pk-ios ]; then
     say "app ka content (bundle id, arch, min iOS):"
@@ -407,11 +407,11 @@ uninstall_app() { # <name>
 
 run_macho() {
   f=$1; shift
-  warn "ye Mach-O (macOS/iOS) binary hai. Linux kernel Mach-O load nahi kar sakta - koi translation layer nahi hai (Apple ka Rosetta bhi Darwin par hi chalta hai)."
+  warn "this is a Mach-O (macOS/iOS) binary. The Linux kernel cannot load Mach-O and there is no translation layer (Apple's Rosetta also only runs on Darwin)."
   warn "options:"
   warn "  1) us app ka Linux build le lo (zyadatar popular Mac apps cross-platform hain)"
-  warn "  2) macOS guest VM me:  pk-vm new mac --size=64G && pk-vm run mac --cdrom=<recover|img>   (Apple EULA: sirf Apple hardware par authorized)"
-  warn "  3) .dmg/.pkg ke andar Linux payload ho to woh nikal ke chalao (pk-vm --mount <dmg> se image mount karke dekho)"
+  warn "  2) in a macOS guest VM:  pk-vm new mac --size=64G && pk-vm run mac --cdrom=<recover|img>   (Apple EULA: only authorized on Apple hardware)"
+  warn "  3) if the .dmg/.pkg contains a Linux payload, extract and run that (mount the image with pk-vm --mount <dmg>)"
   mark "APP-MACHO-DIAG"
   return 74
 }
@@ -424,13 +424,13 @@ run_jar() {
     return $?
   fi
   if have java; then java -jar "$f" "$@"; return $?; fi
-  warn "JAR ke liye Java chahiye:  pk-get install -y default-jre-headless"
+  warn "a JAR needs Java:  pk-get install -y default-jre-headless"
   return 75
 }
 
 run_appimage() {
   f=$1; shift
-  have unsquashfs || { warn "AppImage ke liye 'unsquashfs' chahiye (live image me build-time add hota hai)"; return 76; }
+  have unsquashfs || { warn "an AppImage needs 'unsquashfs' (added to the live image at build time)"; return 76; }
   d=/tmp/pk-appimage.$$
   rm -rf "$d"; mkdir -p "$d"
   ( cd "$d" && unsquashfs -d root -f "$f" >/dev/null 2>&1 ) || { warn "unsquashfs fail (AppImage corrupted?)"; rm -rf "$d"; return 76; }
@@ -445,15 +445,15 @@ run_appimage() {
   done
   bin=$(find "$d/root/usr/bin" -maxdepth 1 -type f 2>/dev/null | head -1)
   if [ -n "$bin" ]; then
-    say "AppRun nahi tha, usr/bin se chalate hain: ${bin##*/}"
+    say "there was no AppRun, starting from usr/bin: ${bin##*/}"
     "$bin" "$@"; rc=$?; rm -rf "$d"; return $rc
   fi
-  warn "AppImage me AppRun nahi mila"; rm -rf "$d"; return 76
+  warn "no AppRun in the AppImage"; rm -rf "$d"; return 76
 }
 
 run_vm_image() {
   f=$1; shift
-  say "disk/ISO image - guest OS ke roop me chalao:"
+  say "disk/ISO image - run it as a guest OS:"
   say "  pk-vm run --cdrom=$f        (ya  pk-vm new <name> --size=40G  pehle)"
   [ -x /sbin/pk-vm ] && { pk-vm run --image="$f" "$@"; return $?; }
   return 77
@@ -629,7 +629,7 @@ case "${1:-}" in
         in_runtime_bin "$c" && echo "  $c: haan" || true
       done
     else
-      echo "runtime  : nahi laga (pk-runtime start  /  make iso WITH_RUNTIME=1)"
+      echo "runtime  : not attached (pk-runtime start  /  make iso WITH_RUNTIME=1)"
     fi
     exit 0 ;;
   --selftest) shift; selftest "${1:-}"; exit $? ;;
@@ -640,7 +640,7 @@ case "${1:-}" in
       { [ -e "$x" ] || [ -L "$x" ]; } && { printf '%s\n' "$x"; exit 0; }
     done
     if have "$w"; then printf '%s\n' "$(command -v "$w")"; exit 0; fi
-    warn "kahin nahi mila: $w"; exit 1 ;;
+    warn "not found anywhere: $w"; exit 1 ;;
   --help|-h)  sed -n '2,18p' "$0"; exit 0 ;;
 esac
 GUI=0
@@ -684,5 +684,5 @@ case "$t" in
   appimage) run_appimage "$app" "$@" ;;
   iso|qcow) run_vm_image "$app" "$@" ;;
   zip)      d=${app%.zip}; mkdir -p "$d" && unzip -q -o "$app" -d "$d" && say "extracted -> $d" ;;
-  *)        warn "type pehchana nahi gaya ($t). chmod +x ke saath direct try karo: $app"; exit 1 ;;
+  *)        warn "unrecognized file type ($t). Try it directly with chmod +x: $app"; exit 1 ;;
 esac

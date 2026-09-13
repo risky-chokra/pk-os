@@ -11,7 +11,7 @@ GRP() { awk -F: -v G="$1" '$1==G{print $3; exit}' /etc/group 2>/dev/null; }
 say() { printf 'pk-devperms: %s\n' "$*"; }
 fix() { # <glob> <group> <mode>
   pat=$1; g=$2; m=$3; gid=$(GRP "$g")
-  [ -n "${gid:-}" ] || { say "group '$g' /etc/group me nahi -> $pat skip"; return 0; }
+  [ -n "${gid:-}" ] || { say "group '$g' is not in /etc/group -> skipping $pat"; return 0; }
   n=0
   for f in $pat; do
     [ -e "$f" ] || continue

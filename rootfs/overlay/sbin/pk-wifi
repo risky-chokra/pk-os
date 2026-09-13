@@ -40,7 +40,7 @@ run_tool() { # <name> [args...]
   case "$t" in
     host)   "$what" "$@" ;;
     chroot) pk-chroot "$what" "$@" ;;
-    *)      warn "$what nahi mila (host ya runtime me) ->  pk-get install -y wpasupplicant iw"; return 127 ;;
+    *)      warn "$what not found (on the host or in the runtime) ->  pk-get install -y wpasupplicant iw"; return 127 ;;
   esac
 }
 
@@ -81,9 +81,9 @@ do_status() {
 }
 
 do_scan() {
-  pick_iface || { warn "wireless iface nahi mila"; return 1; }
+  pick_iface || { warn "no wireless interface found"; return 1; }
   [ -n "${1:-}" ] && IFACE=$1
-  tool iw >/dev/null 2>&1 || { warn "iw nahi (pk-get install -y iw)"; return 70; }
+  tool iw >/dev/null 2>&1 || { warn "iw is missing (pk-get install -y iw)"; return 70; }
   say "scan ($IFACE)..."
   run_tool iw dev "$IFACE" scan 2>/dev/null | awk '/^BSS /{bss=$2} /ssid /{s=$0; sub(/.*ssid: /,"",s)} /signal/{printf "  %s  %s\n", $0, s}' | head -25
 }
@@ -91,18 +91,18 @@ do_scan() {
 do_connect() {
   ssid=${1:-}; pw=${2:-}
   [ -n "$ssid" ] || { echo "usage: pk-wifi connect <ssid> [password]"; return 1; }
-  pick_iface || { warn "wireless iface nahi mila"; mark "WIFI-FAIL (no iface)"; return 1; }
+  pick_iface || { warn "no wireless interface found"; mark "WIFI-FAIL (no iface)"; return 1; }
   tool wpa_supplicant >/dev/null 2>&1 || {
-    warn "wpa_supplicant nahi mila"
+    warn "wpa_supplicant not found"
     warn "  runtime ke andar:  pk-get install -y wpasupplicant iw"
-    warn "  (base image me jaan-boojh ke nahi hai - size ke liye)"
+    warn "  (deliberately not in the base image - for size)"
     mark "WIFI-FAIL (no wpa_supplicant)"; return 70; }
   mkdir -p /run/pk 2>/dev/null
   {
     printf 'ctrl_interface=/run/pk/wpad\nupdate_config=1\ncountry=IN\n\nnetwork={\n  ssid="%s"\n' "$ssid"
     if [ -n "$pw" ]; then printf '  psk="%s"\n' "$pw"; else printf '  key_mgmt=NONE\n'; fi
     printf '}\n'
-  } > "$CONF" 2>/dev/null || { warn "$CONF likha nahi gaya"; return 1; }
+  } > "$CONF" 2>/dev/null || { warn "$CONF could not be written"; return 1; }
   mkdir -p /run/pk/wpad 2>/dev/null
   [ -f "$PIDF" ] && kill "$(cat "$PIDF")" 2>/dev/null
   say "wpa_supplicant start ($IFACE, ssid=$ssid)"
@@ -115,13 +115,13 @@ do_connect() {
     sleep 1; j=$((j + 1))
   done
   if [ "$(cat "/sys/class/net/$IFACE/operstate" 2>/dev/null)" = up ]; then
-    say "link up ($IFACE, ${j}s) -> DHCP le rahe hain"
+    say "link is up ($IFACE, ${j}s) -> asking for DHCP"
     if [ -x /sbin/pk-net ]; then pk-net dhcp; else udhcpc -i "$IFACE" -R -q 2>/dev/null; fi
     ip=$(ip -4 addr show "$IFACE" 2>/dev/null | awk '/inet /{print $2; exit}')
     if [ -n "$ip" ]; then say "IP: $ip ✓"; mark "WIFI-OK ($ssid, $ip)"; return 0; fi
-    warn "link up par IP nahi mila (pk-net dhcp dobara)"; mark "WIFI-LINK-NO-IP ($ssid)"; return 1
+    warn "the link is up but there is no IP (run pk-net dhcp again)"; mark "WIFI-LINK-NO-IP ($ssid)"; return 1
   fi
-  warn "associate nahi hua (${j}s) - password/SSID check karo; log: $LOGF"
+  warn "association failed (${j}s) - check the password/SSID; log: $LOGF"
   tail -4 "$LOGF" 2>/dev/null | sed 's/^/  /'
   mark "WIFI-FAIL (associate: $ssid)"
   return 1

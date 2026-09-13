@@ -179,7 +179,7 @@ desktop() {
       w "/sys/devices/system/cpu/cpu$n/cpufreq/energy_performance_preference" normal || true
     n=$((n + 1))
   done
-  [ $n = 0 ] && warn "cpufreq sysfs nahi mila (governor skip)"
+  [ $n = 0 ] && warn "no cpufreq sysfs (skipping the governor)"
   rb=$(rootblk)
   if [ -n "$rb" ]; then
     for q in mq-deadline bfq kyber none; do
@@ -229,8 +229,8 @@ hybrid() {
   fi
   bigl=$(printf '%s\n' "$hi" | sed -n '3p'); litl=$(printf '%s\n' "$hi" | sed -n '4p')
   lb=$(cpulist "$bigl"); ll=$(cpulist "$litl")
-  w "$W/apps/cpuset.cpus" "$lb" || warn "apps cpuset set nahi hua"
-  w "$W/bg/cpuset.cpus" "$ll" || warn "bg cpuset set nahi hua"
+  w "$W/apps/cpuset.cpus" "$lb" || warn "the apps cpuset was not set"
+  w "$W/bg/cpuset.cpus" "$ll" || warn "the bg cpuset was not set"
   w "$W/sandbox/cpuset.cpus" "$ll" || true
   moved=0
   for d in dropbear udhcpc crond acpid; do
@@ -249,7 +249,7 @@ fg() {
     cg_move apps "$p" && n=$((n + 1))
     renice -n -5 -p "$p" 2>/dev/null || true
   done
-  if [ "$n" = 0 ]; then warn "koi pid nahi mila: $t"; return 1; fi
+  if [ "$n" = 0 ]; then warn "no pid found: $t"; return 1; fi
   say "$n pid(s) foreground slice (cpu.weight 200, nice -5)"
   mark "TUNE-FG-OK ($t, $n)"
 }
@@ -261,7 +261,7 @@ bg() {
     cg_move bg "$p" && n=$((n + 1))
     renice -n 10 -p "$p" 2>/dev/null || true
   done
-  [ "$n" = 0 ] && { warn "koi pid nahi mila: $t"; return 1; }
+  [ "$n" = 0 ] && { warn "no pid found: $t"; return 1; }
   say "$n pid(s) background slice (cpu.weight 20, nice 10, io weight low)"
   w "$W/bg/io.bfq.weight" 10 2>/dev/null || true
   mark "TUNE-BG-OK ($t, $n)"
@@ -270,7 +270,7 @@ bg() {
 io_tune() {
   q=${1:-}
   b=$(rootblk)
-  [ -n "$b" ] || { warn "root block dev nahi mila"; return 1; }
+  [ -n "$b" ] || { warn "no root block device found"; return 1; }
   if [ -z "$q" ]; then rd "/sys/block/$b/queue/scheduler"; return 0; fi
   if w "/sys/block/$b/queue/scheduler" "$q"; then
     w "/sys/block/$b/queue/read_ahead_kb" 256 || true
@@ -321,14 +321,14 @@ swap_tune() {
   if [ "${mb:-0}" = 0 ]; then swapoff -a 2>/dev/null; say "swap off"; mark "TUNE-SWAP-OFF"; return 0; fi
   case "$mb" in ''|*[!0-9]*) mb=1024 ;; esac
   [ "$mb" -gt 65536 ] && mb=65536
-  if [ "${cur:-0}" -gt 0 ]; then say "pehle se swap hai ($((${cur}/1024)) MB)"; return 0; fi
+  if [ "${cur:-0}" -gt 0 ]; then say "swap is already on ($((${cur}/1024)) MB)"; return 0; fi
   for d in /persistence /mnt/persist /var/tmp /var /root; do
     [ -d "$d" ] || continue
     f=$d/pk-swapfile
     fs=$(fstype_of "$d")
     case "$fs" in
       ext2|ext3|ext4|xfs|btrfs|f2fs) : ;;
-      *) say "skip $d (fs=${fs:-?}: yahan swapfile supported nahi - live ka / tmpfs/overlay hai, swap ka matlab RAM khana hota)"; continue ;;
+      *) say "skip $d (fs=${fs:-?}: swapfiles are not supported here - the live / is tmpfs/overlay, so swap would just eat RAM)"; continue ;;
     esac
     free=$(avail_mb "$d")
     [ -n "${free:-}" ] || free=0
@@ -362,7 +362,7 @@ ipc_tune() {
   mkdir -p /mnt/mqueue 2>/dev/null
   mounted_mq=$(awk '$3=="mqueue"{print $2; exit}' /proc/mounts 2>/dev/null)
   if [ -z "$mounted_mq" ]; then mount -t mqueue none /mnt/mqueue 2>/dev/null && mounted_mq=/mnt/mqueue; fi
-  [ -n "$mounted_mq" ] && say "mqueue mounted: $mounted_mq" || warn "mqueue mount nahi hua (POSIX queues skip)"
+  [ -n "$mounted_mq" ] && say "mqueue mounted: $mounted_mq" || warn "mqueue was not mounted (skipping POSIX message queues)"
   [ -d /proc/sys/fs/mqueue ] && say "mqueue msgmax=$(rd /proc/sys/fs/mqueue/msg_max)"
   if [ -f /proc/sys/kernel/io_uring_disabled ]; then
     say "io_uring: disabled=$(rd /proc/sys/kernel/io_uring_disabled)"

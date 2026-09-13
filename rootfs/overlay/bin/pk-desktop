@@ -30,7 +30,7 @@ ini_set() { # <section> <key> <value>
   ini_path
   sec=$1; k=$2; v=$3
   mkdir -p "$(dirname "$INI")" 2>/dev/null
-  touch "$INI" 2>/dev/null || { warn "$INI likhne layak nahi"; return 1; }
+  touch "$INI" 2>/dev/null || { warn "$INI is not writable"; return 1; }
   awk -v sec="$sec" -v k="$k" -v v="$v" '
     BEGIN { hdr="[" sec "]"; insec=0; seen=0; exists=0 }
     /^\[/ {
@@ -161,7 +161,7 @@ vnc() {
   if ! have pk-x; then
     warn "pk-x not found"; return 70
   fi
-  if ! rtbin Xvfb; then warn "Xvfb nahi -> pk-get install -y xvfb x11-xserver-utils"; return 70; fi
+  if ! rtbin Xvfb; then warn "no Xvfb -> pk-get install -y xvfb x11-xserver-utils"; return 70; fi
   pk-x start xvfb >/dev/null 2>&1
   if rtbin x11vnc; then
     say "x11vnc :$port started (from another machine: ssh -L $port:localhost:$port root@<ip>, then a vnc viewer)"
@@ -179,7 +179,7 @@ vnc() {
 # "desktop aaya ya nahi" ka jawab screenshot se milta hai, markers se nahi.
 do_shot() {
   out=${1:-/run/pk/desktop-shot.png}
-  runtime_ok || { warn "runtime attach nahi -> pk-desktop start pehle"; return 66; }
+  runtime_ok || { warn "no runtime attached -> run pk-desktop start first"; return 66; }
   if ! grep -qs 'WAYLAND_DISPLAY' /run/pk/x-env 2>/dev/null; then
     warn "no Wayland session running (this does not work under an Xvfb/X11 session)"
     warn "  X11 ke liye: pk-chroot /bin/sh -c 'DISPLAY=:0 xwd -root -out /root/s.xwd' (x11-utils)"
@@ -189,7 +189,7 @@ do_shot() {
   to=""; have timeout && to="timeout 25"   # screenshooter compositor ka wait karta hai ->
   $to pk-chroot /bin/sh -c "export XDG_RUNTIME_DIR=/run/pk-x WAYLAND_DISPLAY=wayland-1; cd /root; weston-screenshooter $tmp" >/run/pk/shot.log 2>&1
   rc=$?
-  [ "$rc" = 124 ] && warn "screenshot 25s me nahi aaya (compositor busy/debug off?) - log: /run/pk/shot.log"
+  [ "$rc" = 124 ] && warn "no screenshot within 25s (compositor busy / debug off?) - log: /run/pk/shot.log"
   if [ -s "$RT/root/.pk-shot.$$.png" ] || [ -s "/root/.pk-shot.$$.png" ]; then
     src="$RT/root/.pk-shot.$$.png"; [ -s "$src" ] || src=$tmp
     mkdir -p "$(dirname "$out")" 2>/dev/null
@@ -236,7 +236,7 @@ case "${1:-start}" in
       x=$((x + 1920))
     done
     say "layout written (left-to-right: $*); restart the session"; mark "DESKTOP-ARRANGE-OK" ;;
-  ini)    ini_path; [ -f "$INI" ] && cat "$INI" || echo "(ini nahi bani abhi)"; ;;
+  ini)    ini_path; [ -f "$INI" ] && cat "$INI" || echo "(no ini file yet)"; ;;
   restart)
     pk-x stop >/dev/null 2>&1
     start ;;

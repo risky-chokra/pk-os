@@ -96,14 +96,14 @@ macho_arch() { # <file>
 
 do_info() { # <ipa|app>
   src=$1
-  [ -f "$src" ] || [ -d "$src" ] || { warn "file nahi mila: $src"; return 1; }
+  [ -f "$src" ] || [ -d "$src" ] || { warn "file not found: $src"; return 1; }
   work=/tmp/pk-ios.$$
   mkdir -p "$work"
   app=""
   case "$src" in
     *.ipa|*.zip|*.app.zip)
-      have unzip || { warn "'.ipa' kholne ke liye 'unzip' chahiye"; rm -rf "$work"; return 70; }
-      say "ipa (zip) khol raha hoon: $src"
+      have unzip || { warn "opening an '.ipa' needs 'unzip'"; rm -rf "$work"; return 70; }
+      say "opening the ipa (zip): $src"
       unzip -q -o "$src" -d "$work" >/dev/null 2>&1
       app=$(find "$work" -maxdepth 3 -type d -name '*.app' 2>/dev/null | head -1)
       ;;
@@ -111,13 +111,13 @@ do_info() { # <ipa|app>
       app=$src
       ;;
     *)
-      say "extension se pata nahi; payload dhoondh raha hoon"
+      say "the extension is not conclusive; looking for the payload"
       if have unzip; then unzip -q -o "$src" -d "$work" >/dev/null 2>&1 || true; fi
       app=$(find "$work" -maxdepth 3 -type d -name '*.app' 2>/dev/null | head -1)
       ;;
   esac
   if [ -z "$app" ]; then
-    warn "Payload/*.app nahi mila (encrypted App Store .ipa ho sakta hai - FairPlay-encrypted IPA kisi bhi OS par khul nahi sakti)"
+    warn "no Payload/*.app (this may be an App Store .ipa - a FairPlay-encrypted IPA cannot be opened on any OS)"
     mark "IOS-INFO-SKIP (no payload)"
     rm -rf "$work"; return 1
   fi
@@ -146,7 +146,7 @@ do_info() { # <ipa|app>
 
 do_extract() {
   src=$1; d=${2:-${HOME}/pk-ios-apps}
-  have unzip || { warn "unzip chahiye"; return 70; }
+  have unzip || { warn "unzip is required"; return 70; }
   mkdir -p "$d"
   unzip -q -o "$src" -d "$d" && say "extracted -> $d/Payload" || { warn "unzip fail"; return 70; }
 }
@@ -181,7 +181,7 @@ TXT
     cat > "$d/$name" <<TXT
 #!/bin/sh
 # pk-ios web launcher: $url  (browser abhi nahi hai)
-echo "$name: koi browser nahi mila.  Install:  pk-get install -y firefox-esr" >&2
+echo "$name: no browser found.  Install:  pk-get install -y firefox-esr" >&2
 echo "  GUI ke liye pehle:  pk-x start      phir:  pk-run $name" >&2
 exit 73
 TXT
@@ -196,7 +196,7 @@ Exec=$name
 Comment=pk-ios web wrapper for $url
 TXT
   say "launcher bana: $d/$name   (chalane ke liye:  pk-run $name   ya   pk-run --gui $name)"
-  [ -n "$b" ] || warn "abhi koi browser nahi (pk-get install -y firefox-esr)"
+  [ -n "$b" ] || warn "no browser installed yet (pk-get install -y firefox-esr)"
   mark "IOS-WEB-OK ($name -> $url)"
   return 0
 }
@@ -227,7 +227,7 @@ set -eu
 IMG=${1:-}
 NAME=macos
 if ! command -v pk-vm >/dev/null 2>&1; then
-  echo "pk-vm nahi mila (runtime ke andar:  pk-get install -y qemu-system-x86 ovmf)" >&2
+  echo "pk-vm not found (inside the runtime:  pk-get install -y qemu-system-x86 ovmf)" >&2
   exit 70
 fi
 pk-vm new "$NAME" --size=80G
@@ -235,18 +235,18 @@ echo
 echo "ab image attach karke install karo:"
 echo "  pk-vm run $NAME --cdrom=<macOS.iso> --ram=8192 --cpus=4 --uefi --vnc=:1"
 echo "  (guest me: Xcode install -> Xcode > Settings > Platforms -> iOS Simulator)"
-echo "  phir simulator me .ipa drag/pakad ke daalo - wahi asli iOS app runtime hai"
+echo "  then drag the .ipa into the simulator - that is the only real iOS app runtime"
 echo
 if [ -n "$IMG" ]; then
   echo "ISO: $IMG"
   pk-vm run "$NAME" --cdrom="$IMG" --ram=8192 --cpus=4 --uefi --vnc=:1
 else
-  echo "ISO nahi diya; upar wala command khud chalana."
+  echo "no ISO was given; run the command above yourself."
 fi
 TXT
   chmod 755 "$out"
-  say "guest script likha: $out"
-  say "chalane ke liye:  sh $out [macOS.iso]   (runtime me qemu + ovmf chahiye)"
+  say "wrote the guest script: $out"
+  say "to run it:  sh $out [macOS.iso]   (needs qemu + ovmf in the runtime)"
   [ "${1:-}" = "--run" ] && sh "$out" ${2:-}
   return 0
 }
@@ -267,7 +267,7 @@ Setup (aapke PC par, ~15-30 min):
   ./darling shell            # ek macOS-like shell; wahan ./hello.chalega
 TXT
   if [ "${1:-}" = "--setup" ]; then
-    say "--setup: dependencies runtime ke andar install karta hoon (network chahiye)"
+    say "--setup: installing the dependencies inside the runtime (needs network)"
     if pk-get install -y git cmake build-essential libcap-dev zlib1g-dev libicu-dev \
         libxml2-dev libssl-dev libsdl2-dev libvulkan-dev pkg-config uuid-dev \
         libevent-dev libunwind-dev 2>&1 | tail -3; then

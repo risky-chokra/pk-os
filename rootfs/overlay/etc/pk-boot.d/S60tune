@@ -12,7 +12,7 @@ mode=$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^pk_tune=//p' | head 
 [ -n "$mode" ] || mode=$(sed -n 's/^PK_TUNE=//p' "$DEF" 2>/dev/null | head -1)
 case "$mode" in yes|on|1) mode=desktop ;; esac
 
-command -v pk-tune >/dev/null 2>&1 || { say "pk-tune nahi mila (image purani?)"; exit 0; }
+command -v pk-tune >/dev/null 2>&1 || { say "pk-tune not found (older image?)"; exit 0; }
 
 # --- swap: pk_swap=<MB>|auto|off (pk_tune mode se independent; PK_SWAP= se default) ---
 sw=$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^pk_swap=//p' | head -1)
@@ -27,10 +27,10 @@ case "${sw:-}" in
 esac
 if [ -n "${sw:-}" ] && [ "$sw" != off ] && [ "$sw" != 0 ]; then
   say "swap: $sw MB maanga (pk_swap=$sw)"
-  pk-tune swap "$sw" 2>&1 | sed 's/^/  /' || say "swap on nahi ho paya (fs ya jagah ka reason upar)"
+  pk-tune swap "$sw" 2>&1 | sed 's/^/  /' || say "swap could not be enabled (the reason is above: filesystem or free space)"
 fi
 
-[ -n "$mode" ] || { say "mode nahi diya (sirf pk_swap ke liye hook chala); tuning skip"; exit 0; }
+[ -n "$mode" ] || { say "no mode given (this hook only runs for pk_swap); skipping tuning"; exit 0; }
 say "mode=$mode"
 case "$mode" in
   report)  pk-tune report ;;

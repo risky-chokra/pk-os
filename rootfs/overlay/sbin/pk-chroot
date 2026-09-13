@@ -13,7 +13,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 if [ "$(id -u)" != 0 ]; then
   echo "pk-chroot: isse root hi chala sakta hai (chroot + /opt/pk/etc write)."
   echo "           live system me desktop root session hai; user ke liye device access"
-  echo "           (audio/input/video/render/seat groups) already mila hua hai - 'id' se dekho."
+  echo "           (audio/input/video/render/seat groups) is already granted - check with 'id'."
   exit 65
 fi
 mounted() { grep -q " $1 " /proc/mounts 2>/dev/null; }
@@ -24,8 +24,8 @@ bind() { # <src> <dst>
 }
 
 enter() {
-  [ -d "$RT" ] || { say "runtime attached nahi hai. 'pk-runtime start' chalao (ya 'make iso WITH_RUNTIME=1')."; return 64; }
-  mounted "$RT" || { say "$RT mount nahi hai (runtime image nahi mila?)"; return 64; }
+  [ -d "$RT" ] || { say "no runtime attached. Run 'pk-runtime start' (or build with 'make iso WITH_RUNTIME=1')."; return 64; }
+  mounted "$RT" || { say "$RT is not mounted (no runtime image found?)"; return 64; }
   # pseudofs + host state
   mkdir -p "$RT/proc" "$RT/sys" "$RT/dev" "$RT/tmp" "$RT/run" 2>/dev/null
   mounted "$RT/proc" || mount -t proc proc "$RT/proc" 2>/dev/null || true

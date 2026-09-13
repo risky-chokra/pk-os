@@ -13,7 +13,7 @@ been folded into this document (the original wording stays in the git history).
 | App runtime | `build/pk-runtime.sqfs` — 550703104 bytes (525.2 MiB), zstd, Debian bookworm `desktop` variant |
 | Essential commands verified in the runtime | `count=55 missing=0` (`/etc/pk-essentials.txt`, published as a release asset) |
 | Documentation | English only — README, all 13 `docs/*.md`, this file, the in-image cheat sheet, `pk-help`, `/etc/motd`, `/etc/issue`; guarded by `tools/publish.sh --docs-only` |
-| On-screen text | English too — the 13 GRUB menu titles, initramfs handoff lines, `pk-boot`/`pk-install`/`pk-runtime` progress, `pk-help`, `pk-console` menus, and all 53 `pk-check` rows. Only in-code developer comments and the QA script's own labels are still Hinglish |
+| On-screen text | English everywhere - the 13 GRUB menu titles, the initramfs handoff lines, `pk-boot`/`pk-install`/`pk-runtime` progress and every error they raise, all 53 `pk-check` rows, and the printed messages of every shipped tool (`pk-run`, `pk-x`, `pk-desktop`, `pk-user`, `pk-net`, `pk-wifi`, `pk-tune`, `pk-ios`, `pk-android`, ...). Only in-code developer comments and the QA script's own pass/fail labels are Hinglish |
 | Automated QA | `make test` = **QA PASS (78 checks ok)**, `make gui-test` = **QA PASS (24 checks ok)** on this exact tree |
 | License | MIT (our code); bundled components keep their own licences |
 

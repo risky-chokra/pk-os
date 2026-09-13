@@ -53,8 +53,10 @@ Prefer a normal account: boot with `pk_user=bob pk_userpw=bob` added to the GRUB
 * **Hardware self-test**: `pk-check [--save --gui --apps --users --speed --all]` prints one
   row per subsystem, with the reason; boot leaves `### PK: … ###` markers in `dmesg`.
 * **Documentation in English**, 13 files in `docs/` plus a cheat sheet inside the image. The text on
-  the screen is English as well: GRUB menu titles, boot/installer progress lines and every `pk-check`
-  self-test row (developer comments inside the scripts and the QA script's labels are still Hinglish).
+  the screen is English as well: GRUB menu titles, every boot/installer/self-test line, every
+  `pk-check` row, and the printed output of every shipped tool including `pk-run`, `pk-net`,
+  `pk-wifi` and `pk-ios` (developer comments inside the scripts and the QA script's own labels
+  are still Hinglish).
 * Reproducible builds + payload manifests: `REPRODUCIBLE=1 make kit`, `make verify`.
 
 ## QA

@@ -121,7 +121,7 @@ report() {
   printf '  sched      : migration_cost=%s ns  min_granularity=%s us\n' \
     "$(rd /sys/kernel/debug/sched/migration_cost_ns || rd /proc/sys/kernel/sched_migration_cost_ns)" \
     "$(rd /sys/kernel/debug/sched/min_granularity_ns || echo '-')"
-  printf '  preempt    : %s\n' "$(rd /sys/kernel/debug/sched/preempt || echo '(debugfs nahi - kernel default)')"
+  printf '  preempt    : %s\n' "$(rd /sys/kernel/debug/sched/preempt || echo '(no debugfs - kernel default)')"
   rootdev=$(awk '$2=="/"{print $1; exit}' /proc/mounts 2>/dev/null); rootdev=${rootdev:-/dev/unknown}
   base=$(printf '%s' "$rootdev" | sed 's/[0-9]*$//;s/p$//')
   bname=${base##*/}
@@ -144,7 +144,7 @@ report() {
     "$(grep -l 'Vulnerable' /sys/devices/system/cpu/vulnerabilities/* 2>/dev/null | wc -l)/$(ls /sys/devices/system/cpu/vulnerabilities 2>/dev/null | wc -l) vulnerable"
   tp=''
   for t in /dev/tpm0 /dev/tpmrm0; do [ -e "$t" ] && tp="$tp $t"; done
-  printf '  tpm         : %s\n' "${tp:- '(no TPM device - measured boot/VBS ke liye chahiye)'}"
+  printf '  tpm         : %s\n' "${tp:- '(no TPM device - needed for measured boot/VBS)'}"
   hl=$(rd /proc/sys/kernel/hotplug)
   lst=0
   for d in /proc/[0-9]*; do

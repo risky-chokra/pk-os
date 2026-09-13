@@ -110,3 +110,25 @@ pk-desktop app ./gimp    # = pk-run --gui, but with the session env set
   through `pk-run`, which is designed for that;
 * iOS apps: not possible (see [IOS-ANDROID.md](IOS-ANDROID.md)); Android apps need a
   Waydroid image and binder support.
+
+## Standard command names (`pk-std`)
+
+You should not have to learn a new vocabulary to use this system. `/usr/local/bin/pk-std`
+is symlinked from the ordinary names, so what you type is what you get:
+
+```
+nano vim htop tmux git make gcc python3 pip3 curl wget jq zip unzip 7z
+ncdu strace lsof iperf3 socat dialog tree file pv bc ssh scp sftp
+mutool mpg123 xpdf sxiv dillo xterm weston-terminal firefox-esr
+apt apt-get dpkg sudo ifconfig route useradd adduser userdel deluser startx weston
+```
+
+For each name `pk-std` tries, in order: the **live system's own binary** (so nothing is
+shadowed), a **mapping to the pk-tool** that implements it (`apt` runs the real apt inside
+the App Runtime via `pk-chroot`; `ifconfig` is `ip addr`; `useradd` is `pk-user add`;
+`startx`/`weston` is `pk-x start`), then the **App Runtime**, and otherwise it says exactly
+what is missing instead of failing silently. `systemctl` exists too, and tells you the truth:
+there is no systemd here, boot work lives in `/etc/pk-boot.d`.
+
+`pk-*` commands are unchanged - this layer only adds the standard aliases.
+

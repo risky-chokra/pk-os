@@ -61,7 +61,7 @@ case "${1:-status}" in
     say "udhcpc rc=$RC"
     [ -s /tmp/udhcpc.out ] && sed 's/^/  udhcpc: /' /tmp/udhcpc.out
     if iface_has_ip "$IF"; then
-      say "IP mil gaya: $(ip addr show dev "$IF" 2>/dev/null | awk '/inet /{print $2; exit}')"
+      say "got an IP: $(ip addr show dev "$IF" 2>/dev/null | awk '/inet /{print $2; exit}')"
       exit 0
     else
       say "no IP obtained -- ip addr show:"

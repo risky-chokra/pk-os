@@ -99,7 +99,7 @@ attach() {
   mounted "$RT" && { say "already attached: $RT"; return 0; }
   src=$(find_sqfs) || true
   if [ -z "${src:-}" ]; then
-    mark "RUNTIME-NONE (koi $FILE nahi mila - 'make runtime' se banao ya --setup use karo)"
+    mark "RUNTIME-NONE (no $FILE found - build one with 'make runtime' or use --setup)"
     return 1
   fi
   say "runtime image: $src"
@@ -234,7 +234,7 @@ setup() {
   NEED=$(( $(stat -c %s "$img") / 1048576 + 64 ))
   FREE=$(( TOTAL - LAST ))
   echo "device=$dev used=${LAST}MiB total=${TOTAL}MiB free=${FREE}MiB needed=${NEED}MiB"
-  [ "$FREE" -gt "$NEED" ] || { echo "free space kam hai - ISO chhoti karo ya runtime alag disk pe rakho"; exit 1; }
+  [ "$FREE" -gt "$NEED" ] || { echo "not enough free space - use a smaller ISO or keep the runtime on its own disk"; exit 1; }
   parted -s "$dev" mkpart runtime ext4 "${LAST}MiB" 100% || { echo "mkpart fail"; exit 1; }
   partprobe "$dev" 2>/dev/null; sleep 1
   d=${dev#/dev/}

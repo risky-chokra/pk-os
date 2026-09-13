@@ -69,7 +69,7 @@ start() {
   say "the socket was never created; log: $LOGF"
   tail -4 "$LOGF" 2>/dev/null | sed 's/^/    /'
   sr=$(tail -c 150 "$LOGF" 2>/dev/null | tr '\n' '|' | tr -s ' ')
-  mark "SEATD-FAIL (sock nahi bana: ${sr:-no-log})"
+  mark "SEATD-FAIL (no socket was created: ${sr:-no-log})"
   return 1
 }
 

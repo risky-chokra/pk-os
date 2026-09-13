@@ -255,7 +255,7 @@ cmd_del() {
   [ "$rmhome" = 1 ] && rm -rf "/home/$u" 2>/dev/null
   au=$(sed -n 's/^PK_CONSOLE_AUTOLOGIN=//p' "$CONF" 2>/dev/null | head -1)
   if [ -n "${au:-}" ] && [ "$au" = "$u" ]; then
-    rm -f "$RUNAUTO" "$CONF" 2>/dev/null; say "autologin hata diya (deleted user hi target tha)"
+    rm -f "$RUNAUTO" "$CONF" 2>/dev/null; say "autologin removed (the deleted user was its target)"
   fi
   say "USER-DELETED $u"
   printf '### PK: USER-DEL-OK (%s) ###\n' "$u" > /dev/console 2>/dev/null
@@ -308,7 +308,7 @@ cmd_doctor() {
   done
   # mdev ka ek coldplug: naye nodes ko turant sahi group/mode do
   if have mdev || [ -x /bin/mdev ]; then
-    busybox mdev -s >/dev/null 2>&1 && say "mdev -s chala (perms apply kiye)"
+    busybox mdev -s >/dev/null 2>&1 && say "ran mdev -s (permissions applied)"
   fi
   # missing homes
   while IFS=: read -r u _ uid gid _ home shell; do

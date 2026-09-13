@@ -304,7 +304,7 @@ install_app() { # <file>
         ip=$(stage_for_chroot "$f") || return 1
         pk-chroot /usr/bin/alien -i "$ip"
       else
-        say "rpm: 'pk-get install -y rpm' karo, phir:  pk-chroot rpm -Uvh <file>"
+        say "rpm: install it with 'pk-get install -y rpm', then:  pk-chroot rpm -Uvh <file>"
         return 71
       fi ;;
     elf|script|appimage)
@@ -409,7 +409,7 @@ run_macho() {
   f=$1; shift
   warn "this is a Mach-O (macOS/iOS) binary. The Linux kernel cannot load Mach-O and there is no translation layer (Apple's Rosetta also only runs on Darwin)."
   warn "options:"
-  warn "  1) us app ka Linux build le lo (zyadatar popular Mac apps cross-platform hain)"
+  warn "  1) get the Linux build of that app (most popular Mac apps are cross-platform)"
   warn "  2) in a macOS guest VM:  pk-vm new mac --size=64G && pk-vm run mac --cdrom=<recover|img>   (Apple EULA: only authorized on Apple hardware)"
   warn "  3) if the .dmg/.pkg contains a Linux payload, extract and run that (mount the image with pk-vm --mount <dmg>)"
   mark "APP-MACHO-DIAG"
@@ -506,7 +506,7 @@ selftest() {
   # 4) Windows PE dispatch
   printf 'MZ\220\000 pk-st fake PE' > "$tmp/st.exe"
   if in_runtime_bin wine || have wine; then
-    wv=$(pk-chroot /usr/bin/wine --version 2>/dev/null || wine --version 2>/dev/null || echo '(version nahi mila)')
+    wv=$(pk-chroot /usr/bin/wine --version 2>/dev/null || wine --version 2>/dev/null || echo '(no version found)')
     pk-run "$tmp/st.exe" >/dev/null 2>&1
     rc=$?
     case "$wv" in
@@ -568,7 +568,7 @@ selftest() {
   out=$(pk-run "$tmp/st.jar" 2>&1 | tr '\n' '|' | cut -c1-120 || true)
   case "$out" in
     *JAVA-STUB-RAN*|*"-jar"*) mark "APP-JAR-OK" ;;
-    *"Java chahiye"*|*default-jre*) mark "APP-JAR-DIAG-OK (jre nahi - message aaya)" ;;
+    *"Java is required"*|*default-jre*) mark "APP-JAR-DIAG-OK (jre nahi - message aaya)" ;;
     *) mark "APP-JAR-PARTIAL ${out:-<khaali>}" ;;
   esac
   # 8) .rpm -> alien/rpm ho to install, warna exact command
@@ -593,11 +593,11 @@ selftest() {
   if sandboxable; then
     out=$(pk-run --sandbox /bin/sh -c 'ls /root 2>/dev/null; echo RC=$?' 2>&1 | tr '\n' '|' | cut -c1-120)
     case "$out" in
-      *pk-sb-secret*) mark "APP-SANDBOX-FAIL (user dir dikh gaya: $out)"; fails=$((fails + 1)) ;;
+      *pk-sb-secret*) mark "APP-SANDBOX-FAIL (a user directory was visible: $out)"; fails=$((fails + 1)) ;;
       *) mark "APP-SANDBOX-OK (/root hidden, net+pid ns on)" ;;
     esac
   else
-    mark "APP-SANDBOX-SKIP (unshare/user-ns nahi chala: $out)"
+    mark "APP-SANDBOX-SKIP (unshare/user-ns did not work: $out)"
   fi
   rm -f "$secret" 2>/dev/null
   # 9) runtime ke andar exec

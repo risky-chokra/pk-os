@@ -66,6 +66,15 @@ a working console, and `qxl` also works.
 | NVIDIA (pre-Turing, no NVK firmware) | `nouveau` | yes |
 | AMD `amdgpu`, Intel `xe` | not shipped (firmware size) | text console + `pk-desktop vnc 5900` |
 | QEMU `-vga vmware` | rejected by the kernel | text console only |
+
+**If the desktop does not show up in VirtualBox**, the usual cause is *3D acceleration
+being off*: weston starts, opens `wayland-1`, then dies inside GL init. `pk-x` now detects
+exactly that (it re-checks that weston is still alive 3 s after the socket appears), retries
+once with the software renderer - which prints `### PK: DESKTOP-PIXMAN-OK (software renderer, Ns) ###`
+- and only if that also fails falls back to Xvfb with `### PK: DESKTOP-NORENDER ###` plus the
+`pk-desktop vnc 5900` hint. So the marker you see tells you which case you are in; enabling
+"Acceleration API" under Settings > Display is the other way to fix it.
+
 | headless (`-display none`) | any | session runs; capture with `pk-desktop shot` |
 
 `pk_desktop=1` (or GRUB entry `g`, "live: desktop + apps GUI") starts the graphical

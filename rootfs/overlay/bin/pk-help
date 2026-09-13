@@ -18,6 +18,7 @@ apps  (the "App Runtime": a Debian userland shipped inside the ISO as pk-runtime
                  pk-run --gui <app>       start it with a display
   pk-shell       shell inside the runtime (Debian userland)      [pk-shell -c "cmd"]
   pk-get         apt-get inside the runtime:  pk-get install -y vlc
+  nano, git, apt :  standard names work too (pk-std maps them; docs/APPS.md)
                  (already installed, no download needed: git, python3, vim, nano, htop,
                   tmux, rsync, jq, zip/unzip/7z, ncdu, strace, lsof, iperf3, dig,
                   man, pciutils, usbutils, poppler-utils, dillo, sxiv, xpdf, mpg123,

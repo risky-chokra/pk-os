@@ -40,13 +40,21 @@ Never write to `/dev/sda` on your own machine — `dd` does not ask twice.
 1. Power on, enter the firmware menu (usually `F12`, `F2`, `Esc`, `Del`), choose USB.
 2. If it does not boot: disable Secure Boot, and if the machine is old-UEFI, try
    "Legacy/CSM" instead of "UEFI".
-3. At the GRUB menu you get:
-   * `1` live (default, console)
-   * `2` live + serial console (for log capture; add `pk_check=1` for a self-test)
-   * `3` live safe (no display handling, `vga=ask`)
-   * `4` live: desktop + apps (GUI)  — same as `pk_desktop=1 pk_tune=desktop`
-   * `5` install to disk (asks for the target)
-   Press `e` on any entry to add boot options (see README for the full list).
+3. At the GRUB menu (English, single digit-free - press the letter in brackets):
+   * `l` live (default, console)
+   * `t` live: toram - copy image to RAM
+   * `p` live: persistent - save changes on the stick
+   * `n` live: network + SSH on
+   * `g` live: desktop + apps GUI
+   * `k` live: pendrive hardware self-test
+   * `i` install to internal disk (asks before touching anything)
+   * `a` install: headless, auto disk, then reboot
+   * `d` debug: kernel log + init shell
+   * `v` live: safe graphics - nomodeset   (use this if the screen stays black)
+   * `b` live: safe graphics + serial 115200
+   * `c` live, serial console 115200
+   * `s` single user
+Press `e` on any entry to add boot options (see README for the full list).
 4. It boots into a root console. Optional: create your own user so you are not root:
    at the boot prompt add `pk_user=bob pk_userpw=bob`, or later run
    `pk-user add bob --admin --password=bob`.

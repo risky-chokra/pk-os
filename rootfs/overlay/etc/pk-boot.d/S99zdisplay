@@ -87,6 +87,6 @@ else
   if grep -q 'pk_desktop=1\|pk_desktop=on' /proc/cmdline 2>/dev/null; then
     say "pk_desktop=1 but no KMS device -> the desktop will run on Xvfb, not on the panel; view it with 'pk-desktop vnc 5900'"
   fi
-  mark "DISPLAY-TEXTONLY (fb=$fbn drm=0; text console theek, weston/KMS ke liye driver nahi)"
+  mark "DISPLAY-TEXTONLY (fb=$fbn drm=0; the text console is fine, but there is no driver for weston/KMS)"
 fi
 exit 0

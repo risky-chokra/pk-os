@@ -32,6 +32,7 @@ build on your PC  ->  test in QEMU/VirtualBox  ->  write to a USB stick  ->  ins
 | Automated QA | `make test` (full suite, 8 stages) and `make gui-test` — counts in [STATUS.md](STATUS.md) |
 | Basic software in the image | 55 commands pre-installed in the apps image and verified at build time (`docs/APPS.md` §2) |
 | Language of everything you read | English - documentation, every tool's help and its printed messages, the login banner, the GRUB boot menu, and everything shown while booting, installing, launching apps and self-testing (guarded by `tools/publish.sh --docs-only`) |
+| Standard command names | `nano`, `git`, `apt`, `python3`, `ssh`, `ifconfig`, `useradd`, `startx` ... work in the live system - `pk-std` runs the live binary if there is one, otherwise maps the name to the tool that does the job or dispatches it into the App Runtime |
 
 ## Requirements
 

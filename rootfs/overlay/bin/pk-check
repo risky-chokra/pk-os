@@ -59,14 +59,14 @@ if [ -n "$mode" ]; then
 else
   row warn boot "/run/pk/mode missing (did pk-boot run? init: $(cat /proc/1/comm 2>/dev/null))"
 fi
-if [ -r /run/pk/boot.env ]; then row ok bootenv "$(tr '\n' ' ' < /run/pk/boot.env | cut -c1-120)"; else row warn bootenv "/run/pk/boot.env nahi mila (pk-boot chala?)"; fi
+if [ -r /run/pk/boot.env ]; then row ok bootenv "$(tr '\n' ' ' < /run/pk/boot.env | cut -c1-120)"; else row warn bootenv "/run/pk/boot.env not found (did pk-boot run?)"; fi
 
 # root writable? (overlay upper)
 if touch /run/pk/.wtest 2>/dev/null; then rm -f /run/pk/.wtest; row ok writable "/ writable hai"; else row fail writable "/ read-only hai"; fi
 up=$(awk '$2=="/"{print $4}' /proc/mounts 2>/dev/null | head -1)
 case "$up" in
   *upperdir=/mnt/persist*) row ok persist "upper=/mnt/persist (USB pe save hota hai)" ;;
-  *upperdir=*)             row info persist "upper=RAM (reboot pe reset) - 'persistent' boot option use karo" ;;
+  *upperdir=*)             row info persist "upper=RAM (reset on reboot) - use the 'persistent' boot option" ;;
   ext4|ext2)               row ok persist "installed ext4 root (changes save)" ;;
   *)                       row info persist "root fs: ${up:-?}" ;;
 esac
@@ -125,7 +125,7 @@ if [ -e /dev/fb0 ]; then row ok fb "/dev/fb0 (framebuffer)"; else row info fb "/
 drm=''
 for c in /dev/dri/card*; do [ -e "$c" ] && drm="$drm $c"; done
 for c in /dev/dri/renderD128*; do [ -e "$c" ] && drm="$drm $c"; done
-if [ -n "$drm" ]; then row ok drm "KMS devices:$drm (weston KMS backend chalega)"; else row info drm "/dev/dri nahi (weston ko headless/Xvfb chahiye)"; fi
+if [ -n "$drm" ]; then row ok drm "KMS devices:$drm (weston KMS backend chalega)"; else row info drm "no /dev/dri (weston needs headless or Xvfb)"; fi
 # ---- I/O devices + session manager (audio/input/serial/seatd) --------------------
 if [ -S "$RT/run/seatd.sock" ]; then
   row ok seatd "seatd is running ($RT/run/seatd.sock) - weston gets VT+DRM+input from it"
@@ -219,7 +219,7 @@ if [ "$DOGUI" = 1 ]; then
     [ -r /run/pk/x-env ] && . /run/pk/x-env
     if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
       ( printf '### PK: GUI-X-OK (%s) ###\n' "${DISPLAY:-${WAYLAND_DISPLAY:-wayland}}" > /dev/console ) 2>/dev/null
-      row ok display "DISPLAY=${DISPLAY:-none} WAYLAND=${WAYLAND_DISPLAY:-none} (rc=$rc${sess_prev:+, session pehle se tha})"
+      row ok display "DISPLAY=${DISPLAY:-none} WAYLAND=${WAYLAND_DISPLAY:-none} (rc=$rc${sess_prev:+, session was already running})"
       # desktop ka *pixel* evidence: weston se apni screen capture karwaao
       # (pk-x weston ko --debug ke saath chalata hai -> screenshooter chalta hai)
       # weston ke andar XWayland ho to :0 pe X clients chal sakte hain
@@ -237,7 +237,7 @@ if [ "$DOGUI" = 1 ]; then
       # ek asli GUI client: xterm (X11) ya weston-terminal (Wayland)
       if [ -n "$xd" ] && rt_has xterm; then
         if DISPLAY="$xd" pk-run --gui xterm -e /bin/sh -c "echo PK-GUI-APP-RAN" >/dev/null 2>&1; then
-          row ok guiapp "xterm -e (X11 client) chala ✓"
+          row ok guiapp "xterm -e (X11 client) ran ✓"
           ( printf '### PK: GUI-APP-OK (xterm) ###\n' > /dev/console ) 2>/dev/null
         else
           row fail guiapp "xterm rc!=0 (detail: /run/pk/x.log)"
@@ -273,7 +273,7 @@ if [ "$DOGUI" = 1 ]; then
           sz=$(wc -c < /run/pk/desktop-shot.png 2>/dev/null); sz_shot=$sz
           row ok guishot "desktop PNG /run/pk/desktop-shot.png (${sz:-?} B) - isme asli desktop render hai"
         else
-          row warn guishot "screenshot nahi bana: $(tail -2 /run/pk/shot.log 2>/dev/null | tr '\n' '|' | cut -c1-90)"
+          row warn guishot "no screenshot was written: $(tail -2 /run/pk/shot.log 2>/dev/null | tr '\n' '|' | cut -c1-90)"
         fi
       fi
       [ "$VERB" = 1 ] && { echo '  -- pk-x log --'; tail -6 /run/pk/x.log 2>/dev/null | sed 's/^/  /'; }
@@ -353,7 +353,7 @@ if [ "$DOAPPS" = 1 ] && [ -x /sbin/pk-run ]; then
   if [ "$arc" = 0 ]; then
     row ok appbattery "pk-run --selftest passed: ${out:-(markers on console/kmsg)}"
   else
-    row fail appbattery "pk-run --selftest rc=$arc: ${out:-(<khaali>)}"
+    row fail appbattery "pk-run --selftest rc=$arc: ${out:-(empty)})"
   fi
 fi
 

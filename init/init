@@ -332,7 +332,7 @@ mount_live_base() {
         printf '### PK: VERIFY-FAIL (%s got=%s want=%s) ###\n' "$(basename "$IMG")" "${got:-?}" "${want:-?}" > /dev/console 2>/dev/null
         echo "pk-init: VERIFY-FAIL $IMG got=${got:-?} want=${want:-?}" > /dev/kmsg 2>/dev/null
         if [ "$VERIFY" = require ] || [ "$VERIFY" = 2 ]; then
-          bail "live payload ka hash match nahi hua - ISO corrupt ya tampered (pk_verify=1 se warn-only boot karo)"
+          bail "the live payload hash did not match - the ISO is corrupt or has been tampered with (boot with pk_verify=1 for warn-only)"
         fi
         say "WARNING: payload hash mismatch - booting anyway (pk_verify=require would stop)"
       fi
@@ -488,5 +488,5 @@ dmesg > /newroot/run/pk/dmesg-boot.log 2>/dev/null
 
 say "handoff -> /sbin/init ($MODE mode)"
 exec run-init -c /dev/console /newroot /sbin/init
-bail "run-init return ho gaya (!)"
+bail "run-init returned (!)"
 exec sh

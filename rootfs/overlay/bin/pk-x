@@ -26,7 +26,7 @@ start() {
     return 0
   fi
   # KMS device ke bina weston sirf 'headless' backend par chadhta hai -> session ready
-  # dikhega par SCREEN PAR KUCH NAHI (log isi ko "desktop nahi aaya" kehte hain).
+  # dikhega par SCREEN PAR KUCH NAHI (log isi ko "no desktop appeared" kehte hain).
   # Isliye auto mode me /dev/dri/card* dekho: na ho to Xvfb (VNC-able) prefer karo.
   hasdrm=0
   for c in /dev/dri/card*; do [ -e "$c" ] && { hasdrm=1; break; }; done
@@ -78,6 +78,34 @@ start() {
         # session ke baad ek client chahiye, warna weston ki screen plain black dikhti
         # hai ("desktop aaya ya nahi" ka fark hi nahi pata chalta). weston ka apna
         # terminal (X nahi) - isliye Xwayland ke bhi bhi chalta hai.
+        # A weston that opens its socket and then dies (GL init failure - typical for a
+        # VM with 3D acceleration switched off, or a KMS driver weston cannot render on)
+        # used to leave DESKTOP-OK on the console while the user stared at text. So check
+        # liveness, then try the software renderer, then fall back to Xvfb.
+        sleep 3
+        if ! kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null; then
+          warn "weston opened the socket but died right after - retrying with the software renderer (no GL)"
+          tail -4 /run/pk/x-weston.log 2>/dev/null | sed 's/^/    /'
+          pk-chroot /bin/sh -c "mkdir -p /run/pk-x; chmod 700 /run/pk-x; export XDG_RUNTIME_DIR=/run/pk-x XKB_DEFAULT_LAYOUT=us XDG_VTNR=$VT LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe; test -S /run/seatd.sock && LIBSEAT_BACKEND=seatd || LIBSEAT_BACKEND=builtin; exec weston --debug --backend=drm-backend.so --renderer=pixman --socket=wayland-1" >>/run/pk/x-weston.log 2>&1 &
+          echo $! > "$PIDF"
+          k=0
+          while [ $k -lt 25 ]; do
+            [ -S "$RT/run/pk-x/wayland-1" ] && kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null && break
+            sleep 1; k=$((k + 1))
+          done
+          if [ -S "$RT/run/pk-x/wayland-1" ] && kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null; then
+            printf '### PK: DESKTOP-PIXMAN-OK (software renderer, %ss) ###\n' "$k" > /dev/console 2>/dev/null
+            say "desktop is up using the software renderer (expected on a VM without 3D acceleration)"
+          else
+            kill "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null || true
+            rm -f "$PIDF" /run/pk/x-env
+            printf '### PK: DESKTOP-NORENDER (weston died twice; log /run/pk/x-weston.log) ###\n' > /dev/console 2>/dev/null
+            warn "weston does not render on this GPU/driver - falling back to Xvfb; view it with 'pk-desktop vnc 5900'"
+            if rbin Xvfb; then start Xvfb; return $?; fi
+            warn "Xvfb is not in the runtime either, so there is no GUI here (docs/VM-TEST.md #2b)"
+            return 1
+          fi
+        fi
         if [ -x "$RT/usr/bin/weston-terminal" ] || [ -x "$RT/usr/bin/xterm" ]; then
           ( pk-chroot /bin/sh -c 'export XDG_RUNTIME_DIR=/run/pk-x WAYLAND_DISPLAY=wayland-1; cd; [ -x /usr/bin/weston-terminal ] && exec /usr/bin/weston-terminal; [ -x /usr/bin/xterm ] && exec env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR=/run/pk-x DISPLAY= /usr/bin/xterm' >>/run/pk/x-weston.log 2>&1 ) &
           : > /run/pk/x-term 2>/dev/null

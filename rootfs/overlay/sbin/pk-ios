@@ -204,12 +204,12 @@ TXT
 do_doctor() {
   printf 'pk-ios doctor\n'
   printf '  runtime (/opt/pk) : '
-  if runtime_ok; then printf 'attached (%s)\n' "$(cat "$RT/etc/pk-runtime-release" 2>/dev/null | head -1 | cut -c1-50)"; else printf 'nahi laga\n'; fi
-  printf '  unzip             : '; have unzip && printf 'haan\n' || printf 'NAHI (.ipa kholne ke liye chahiye)\n'
+  if runtime_ok; then printf 'attached (%s)\n' "$(cat "$RT/etc/pk-runtime-release" 2>/dev/null | head -1 | cut -c1-50)"; else printf 'no laga\n'; fi
+  printf '  unzip             : '; have unzip && printf 'yes\n' || printf 'NAHI (.ipa kholne ke liye chahiye)\n'
   printf '  browser (web wrap): '; for c in firefox-esr firefox epiphany chromium surf; do if runtime_ok && [ -x "$RT/usr/bin/$c" ]; then printf '%s (runtime)\n' "$c"; break; fi; if have "$c"; then printf '%s (base)\n' "$c"; break; fi; printf 'koi nahi -> pk-get install -y firefox-esr\n'; break; done
-  printf '  qemu (mac guest)  : '; if [ -x "$RT/usr/bin/qemu-system-x86_64" ] || have qemu-system-x86_64; then printf 'haan\n'; else printf 'nahi -> pk-get install -y qemu-system-x86\n'; fi
-  printf '  /dev/kvm          : '; [ -e /dev/kvm ] && printf 'haan (tezos)\n' || printf 'nahi (TCG se 5-10x dheema)\n'
-  printf '  darling           : '; if runtime_ok && { [ -x "$RT/usr/bin/darling" ] || [ -x "$RT/usr/bin/darling-shell" ]; }; then printf 'installed\n'; else printf 'nahi (macOS binaries ke liye; pk-ios darling)\n'; fi
+  printf '  qemu (mac guest)  : '; if [ -x "$RT/usr/bin/qemu-system-x86_64" ] || have qemu-system-x86_64; then printf 'yes\n'; else printf 'no -> pk-get install -y qemu-system-x86\n'; fi
+  printf '  /dev/kvm          : '; [ -e /dev/kvm ] && printf 'yes (tezos)\n' || printf 'no (TCG se 5-10x dheema)\n'
+  printf '  darling           : '; if runtime_ok && { [ -x "$RT/usr/bin/darling" ] || [ -x "$RT/usr/bin/darling-shell" ]; }; then printf 'installed\n'; else printf 'no (macOS binaries ke liye; pk-ios darling)\n'; fi
   printf '\n  yaad: iOS/.ipa kabhi native nahi chalega; upar wale raaste hi real hain.\n'
   mark "IOS-DOCTOR-OK"
 }
@@ -232,7 +232,7 @@ if ! command -v pk-vm >/dev/null 2>&1; then
 fi
 pk-vm new "$NAME" --size=80G
 echo
-echo "ab image attach karke install karo:"
+echo "now attach the image and install:"
 echo "  pk-vm run $NAME --cdrom=<macOS.iso> --ram=8192 --cpus=4 --uefi --vnc=:1"
 echo "  (guest me: Xcode install -> Xcode > Settings > Platforms -> iOS Simulator)"
 echo "  then drag the .ipa into the simulator - that is the only real iOS app runtime"

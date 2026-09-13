@@ -1,0 +1,70 @@
+#!/bin/sh
+# pk's OS :: compatibility layer, so the usual Linux command names just work.
+#
+# /usr/local/bin/pk-std is symlinked from the standard names (nano, git, curl,
+# ssh, apt, python3, ifconfig, systemctl, useradd, startx, ...). Resolution:
+#   1. the name exists natively in the live system -> run it unchanged
+#   2. special cases are mapped to the pk-* tool that really does the job
+#   3. it lives in the App Runtime (the Debian layer) -> run it there
+#   4. otherwise say what is missing and how to get it - no silent failure
+# The pk-* commands stay as they are; this layer only removes the
+# "I have to learn new names for everything" problem. Nothing here shadows a
+# binary the live image already provides, so normal behaviour never changes.
+set -u
+name=$(basename "$0")
+RT=${PK_RUNTIME_ROOT:-/opt/pk}
+[ "$name" = pk-std ] && { echo "pk-std: call me through a symlink, e.g. /usr/local/bin/nano" >&2; exit 2; }
+
+have() { command -v "$1" >/dev/null 2>&1; }
+mounted() { grep -q " $1 " /proc/mounts 2>/dev/null; }
+rt_ok() { [ -d "$RT" ] && mounted "$RT"; }
+rt_has() { [ -x "$RT/usr/bin/$1" ] || [ -x "$RT/bin/$1" ] || [ -x "$RT/usr/sbin/$1" ] || [ -x "$RT/sbin/$1" ]; }
+
+# 1. native command, ignoring our own symlink farm
+for d in /bin /sbin /usr/bin /usr/sbin /usr/local/sbin; do
+  [ -x "$d/$name" ] || continue
+  if [ -L "$d/$name" ]; then
+    case "$(readlink "$d/$name" 2>/dev/null)" in *pk-std) continue ;; esac
+  fi
+  exec "$d/$name" "$@"
+done
+
+# 2. the names whose real implementation here is a pk-* tool
+case $name in
+  sudo)  exec "$@" ;;
+  apt|apt-get|dpkg|dpkg-query|dpkg-reconfigure)
+         rt_ok || { echo "pk-std: $name lives in the App Runtime - attach it first:  pk-runtime start" >&2; exit 66; }
+         exec pk-chroot "$name" "$@" ;;
+  systemctl|service|systemctl-status)
+         printf 'pk-std: this system has no systemd.\n'
+         printf '  boot work is done by the hooks in /etc/pk-boot.d:\n'; ls /etc/pk-boot.d 2>/dev/null | sed 's/^/    /'
+         printf '  status of everything:  pk-info\n  hardware self-test:      pk-check --save  (writes /run/pk/check.txt)\n'
+         exit 0 ;;
+  ifconfig) exec ip addr "$@" ;;
+  route)    exec ip route "$@" ;;
+  useradd|adduser)
+        [ -n "${1:-}" ] || { echo "usage: useradd <name>" >&2; exit 2; }
+        exec pk-user add "$@" ;;
+  userdel|deluser)
+        [ -n "${1:-}" ] || { echo "usage: userdel <name>" >&2; exit 2; }
+        exec pk-user del "$@" ;;
+  groupadd|groupdel|addgroup|delgroup)
+        printf 'pk-std: groups are handled while creating the user:  pk-user add <name> --groups=video,audio,input\n'
+        printf '        (the live system has no shadow-utils; as root you can edit /etc/group directly)\n'
+        exit 0 ;;
+  startx|xinit|weston|wayland-session)
+        exec pk-x start ;;
+esac
+
+# 3. run it inside the App Runtime
+if rt_ok && rt_has "$name"; then
+  exec pk-chroot "$name" "$@"
+fi
+
+# 4. honest failure, with the way out
+if rt_ok; then
+  printf 'pk-std: "%s" is not in the live system and not in the App Runtime.\n  install it into the runtime:  pk-get install -y %s\n' "$name" "$name" >&2
+  exit 127
+fi
+printf 'pk-std: "%s" needs the App Runtime, which is not attached.\n  attach it:  pk-runtime start   (or boot the "apps" image, which carries it)\n' "$name" >&2
+exit 127

@@ -392,7 +392,7 @@ sed -i 's/^PK_DHCP=.*/PK_DHCP=yes/' "$TGT/etc/default/pk" 2>/dev/null || true
 
 # ---------------------------------------------------------------- bootloader
 if [ "$NOBOOT" != 1 ]; then
-  have grub-install || die "grub-install missing in live image (build host pe grub-pc-bin/grub-efi-amd64-bin install karo)"
+  have grub-install || die "grub-install missing in live image (install grub-pc-bin/grub-efi-amd64-bin on the build host)"
   mkdir -p "$TGT/boot/grub"
   cat > "$TGT/boot/grub/grub.cfg" <<CFG
 set timeout=3

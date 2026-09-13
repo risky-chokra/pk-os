@@ -8,11 +8,12 @@ been folded into this document (the original wording stays in the git history).
 | Item | Value |
 |---|---|
 | Version | 1.1 (tag `v1.1`) |
-| Base live ISO | `build/pkos.iso` — 97824768 bytes (93.3 MiB) |
-| Apps ISO (recommended) | `build/pkos-apps.iso` — 648564736 bytes (618.5 MiB) |
+| Base live ISO | `build/pkos.iso` — 97820672 bytes (93.3 MiB) |
+| Apps ISO (recommended) | `build/pkos-apps.iso` — 648560640 bytes (618.5 MiB) |
 | App runtime | `build/pk-runtime.sqfs` — 550703104 bytes (525.2 MiB), zstd, Debian bookworm `desktop` variant |
-| Essential commands verified in the runtime | `count=54 missing=0` (`/etc/pk-essentials.txt`, published as a release asset) |
+| Essential commands verified in the runtime | `count=55 missing=0` (`/etc/pk-essentials.txt`, published as a release asset) |
 | Documentation | English only — README, all 13 `docs/*.md`, this file, the in-image cheat sheet, `pk-help`, `/etc/motd`, `/etc/issue`; guarded by `tools/publish.sh --docs-only` |
+| On-screen text | English too — the 13 GRUB menu titles, initramfs handoff lines, `pk-boot`/`pk-install`/`pk-runtime` progress, `pk-help`, `pk-console` menus, and all 53 `pk-check` rows. Only in-code developer comments and the QA script's own labels are still Hinglish |
 | Automated QA | `make test` = **QA PASS (78 checks ok)**, `make gui-test` = **QA PASS (24 checks ok)** on this exact tree |
 | License | MIT (our code); bundled components keep their own licences |
 
@@ -74,7 +75,7 @@ path). Run with `PK_TEST_REAL_RUNTIME=1` to also assert the guest marker
 ### PK: SEATD-OK (socket=/run/seatd.sock in runtime, pid=…) ###
 ### PK: DESKTOP-VT (want=tty1 active=tty1 seatd=1) ###             (no VTMISMATCH on this tree)
 ### PK: DESKTOP-OK (wayland-1) ###  ### PK: GUI-APP-OK (weston-terminal) ###
-### PK: USERS-OK / MDEV-OK / NET-OK (10.0.2.15) / RUNTIME-OK / ESSENTIALS-OK (count=54 missing=0) ###
+### PK: USERS-OK / MDEV-OK / NET-OK (10.0.2.15) / RUNTIME-OK / ESSENTIALS-OK (count=55 missing=0) ###
 pk-user add bob --password=…  -> USER-ADD-OK (bob); su -m bob -c id -> 44(video) 63(audio) 108(input) 160(render) 990(seat)
 pk-devperms -> /dev/input/event*→input 0660, /dev/dri/card*→video 0660, /dev/snd/*→audio 0660, /dev/ttyS*→dialout
 ```

@@ -5,7 +5,7 @@
 | Image | Size | Use it when |
 |---|---|---|
 | `build/pkos.iso` | ≈ 95 MB | you only need the live system, console, installer, network, users |
-| `build/pkos-apps.iso` | ≈ 620 MB | you want the whole thing: Debian app runtime, Wine, weston desktop, essential tools |
+| `build/pkos-apps.iso` | ≈ 648 MB | you want the whole thing: Debian app runtime, Wine, weston desktop, essential tools |
 
 Both are hybrid images: the same file works written to a stick, burnt to a CD, or
 attached as a virtual DVD. BIOS and UEFI are both supported.

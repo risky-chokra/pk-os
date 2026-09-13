@@ -30,8 +30,8 @@ build on your PC  ->  test in QEMU/VirtualBox  ->  write to a USB stick  ->  ins
 | Users (`pk-user add/del/…`, autologin, device-group access) | working |
 | Device support (GPU KMS, audio, input, webcam, sensors, battery, USB, Bluetooth modules shipped) | working; per-hardware validation is your test |
 | Automated QA | `make test` (full suite, 8 stages) and `make gui-test` — counts in [STATUS.md](STATUS.md) |
-| Basic software in the image | 54 commands pre-installed in the apps image and verified at build time (`docs/APPS.md` §2) |
-| Documentation language | English only (guarded by `tools/publish.sh --docs-only`) |
+| Basic software in the image | 55 commands pre-installed in the apps image and verified at build time (`docs/APPS.md` §2) |
+| Language of everything you read | English - documentation, every tool's help, the login banner, the GRUB boot menu, and the text printed while booting, installing and self-testing (guarded by `tools/publish.sh --docs-only`) |
 
 ## Requirements
 
@@ -40,7 +40,7 @@ build on your PC  ->  test in QEMU/VirtualBox  ->  write to a USB stick  ->  ins
   * live base image: 768 MB RAM is enough (QA runs the whole suite at 640 MB)
   * live image with the app runtime + desktop: 2 GB RAM recommended
   * disk for install: 8 GB minimum, 20 GB comfortable
-* ISO sizes: base live ≈ 95 MB, live + app runtime ≈ 620 MB (the runtime itself is 525 MB compressed). Exact byte counts and SHA-256 for every published build are in the release assets (`manifest*.txt`).
+* ISO sizes: base live ≈ 93 MiB (98 MB), live + app runtime ≈ 619 MiB (649 MB) (the runtime itself is 525 MB compressed). Exact byte counts and SHA-256 for every published build are in the release assets (`manifest*.txt`).
 
 ## Quick start
 

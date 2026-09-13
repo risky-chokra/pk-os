@@ -56,7 +56,7 @@ ncdu which strace lsof python3 make man` + network tools (`ip`, `dig`, `iperf3`,
 + Wi-Fi/BT (`wpasupplicant iw rfkill wireless-tools bluez`) + GUI stack (`weston
 xterm Xvfb mesa xwayland alsa-utils xkb-data fonts icons`) + `dillo sxiv xpdf mpg123`
 + `wine`. Verify on any boot: `dmesg | grep ESSENTIALS` ->
-`### PK: ESSENTIALS-OK (count=54 missing=0) ###`.
+`### PK: ESSENTIALS-OK (count=55 missing=0) ###`.
 
 ## Files to read when something is wrong
 

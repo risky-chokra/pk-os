@@ -8,8 +8,8 @@ user management. Built entirely from source on your machine.
 
 | File | Size | Use |
 |---|---|---|
-| `pkos-1.1-apps.iso` | 648564736 bytes (618.5 MiB) | **this one.** Base live system + Debian app runtime + desktop + Wine + essentials |
-| `pkos-1.1.iso` | 97824768 bytes (93.3 MiB) | console-only live system + installer + device modules (add a runtime later) |
+| `pkos-1.1-apps.iso` | 648560640 bytes (618.5 MiB) | **this one.** Base live system + Debian app runtime + desktop + Wine + essentials |
+| `pkos-1.1.iso` | 97820672 bytes (93.3 MiB) | console-only live system + installer + device modules (add a runtime later) |
 
 Write it to a stick (destroys the stick's data):
 
@@ -23,9 +23,9 @@ Prefer a normal account: boot with `pk_user=bob pk_userpw=bob` added to the GRUB
 
 ## What is in this release
 
-* **Basic software is pre-installed** in the apps image - 54 commands verified present at
+* **Basic software is pre-installed** in the apps image - 55 commands verified present at
   build time (`pkos-1.1-essentials.txt`, and a boot marker:
-  `### PK: ESSENTIALS-OK (count=54 missing=0) ###`):
+  `### PK: ESSENTIALS-OK (count=55 missing=0) ###`):
   editors (`vim`, `nano`), `htop tmux rsync git make python3 man bc jq file tree pv ncdu
   strace lsof`, archives (`zip unzip 7z xz`), network (`ip ping dig nslookup iperf3
   ethtool socat ssh curl wget`), hardware (`lspci lsusb dmidecode`), PDF/images/audio
@@ -52,7 +52,9 @@ Prefer a normal account: boot with `pk_user=bob pk_userpw=bob` added to the GRUB
   sensors, batteries, backlight, Thunderbolt/USB-C PHY.
 * **Hardware self-test**: `pk-check [--save --gui --apps --users --speed --all]` prints one
   row per subsystem, with the reason; boot leaves `### PK: … ###` markers in `dmesg`.
-* **Documentation in English**, 13 files in `docs/` plus a cheat sheet inside the image.
+* **Documentation in English**, 13 files in `docs/` plus a cheat sheet inside the image. The text on
+  the screen is English as well: GRUB menu titles, boot/installer progress lines and every `pk-check`
+  self-test row (developer comments inside the scripts and the QA script's labels are still Hinglish).
 * Reproducible builds + payload manifests: `REPRODUCIBLE=1 make kit`, `make verify`.
 
 ## QA

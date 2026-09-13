@@ -211,7 +211,7 @@ fin=$(accept "/repos/$OWNER/$REPO/releases/$RELID")
 while IFS='|' read -r path name; do
   [ -n "$path" ] || continue
   want=$(wc -c < "$path" | tr -d ' ')
-  got=$(printf '%s' "$fin" | tr '{' '\n' | grep "\"name\":\"$name\"" | sed -n 's/.*"size":[ ]*\([0-9]*\).*/\1/p' | head -1)
+  got=$(printf '%s' "$fin" | tr '{' '\n' | grep "\"name\": *\"$name\"" | sed -n 's/.*"size": *\([0-9]*\).*/\1/p' | head -1)
   dl=$(printf '%s' "$fin" | tr '{' '\n' | grep "\"name\":\"$name\"" | sed -n 's|.*"browser_download_url":"\([^"]*\)".*|\1|p' | head -1)
   if [ -n "$got" ] && [ "$got" = "$want" ]; then
     printf '  OK   %-34s %s bytes  %s\n' "$name" "$got" "${dl:-}"

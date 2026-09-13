@@ -101,7 +101,7 @@ add_asset "$BUILD/manifest.txt"                    "pkos-$VERSION-manifest.txt"
 add_asset "$BUILD/manifest-apps.txt"               "pkos-$VERSION-apps-manifest.txt"
 add_asset "$BUILD/pkos-src.tar.gz"                 "pkos-$VERSION-src.tar.gz"
 add_asset "$BUILD/pkos-main.bundle"                "pkos-main.bundle"
-add_asset "$BUILD/work/runtime/etc/pk-essentials.txt" "pkos-$VERSION-essentials.txt"
+add_asset "$BUILD/pkos-$VERSION-essentials.txt" "pkos-$VERSION-essentials.txt"
 nassets=$(printf '%s' "$assets" | grep -c '|' || true)
 [ "$nassets" -ge 1 ] || die "no assets to upload (run 'make kit' first)"
 say "$nassets asset(s) ready; version=$VERSION tag=$TAG repo=$OWNER/$REPO"

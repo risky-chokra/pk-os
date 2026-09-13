@@ -164,8 +164,7 @@ run env GIT_TERMINAL_PROMPT=0 git -C "$PK_ROOT" push -f origin "refs/tags/$TAG" 
 
 # ------------------------------------------------------------------ 4. tag + release
 notes=$( [ -f "$NOTES" ] && head -c 120000 "$NOTES" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{printf "%s\\n", $0}' || echo "")
-rel=$(accept -X POST -H "Content-Type: application/json" \
-      "/repos/$OWNER/$REPO/releases" -X POST -H "Content-Type: application/json" \
+rel=$(accept "/repos/$OWNER/$REPO/releases" -X POST -H "Content-Type: application/json" \
       -d "{\"tag_name\":\"$TAG\",\"name\":\"pk's OS $VERSION\",\"body\":\"$notes\",\"draft\":false,\"prerelease\":false,\"target_commitish\":\"$BR\"}")
 RELID=$(printf '%s' "$rel" | grep -o '"id":[ ]*[0-9]*' | head -1 | tr -dc 0-9)
 if [ -z "$RELID" ]; then

@@ -23,7 +23,7 @@ DEB_MIRROR=${RUNTIME_MIRROR:-http://deb.debian.org/debian}
 DEB_DIST=${RUNTIME_DIST:-bookworm}
 
 # args: --opt=val aur --opt val dono chalte hain
-need_val() { [ -n "${2:-}" ] || die "$1 ke saath value do"; }
+need_val() { [ -n "${2:-}" ] || die "$1 ke saath value pass it"; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --tiny)    TINY=1; shift ;;
@@ -128,11 +128,11 @@ APP
   printf '%s\n' "APT::Get::Assume-Yes \"true\";" > "$SUIT/etc/apt.conf" 2>/dev/null || true
 else
   # ------------------------------------------------------------ real Debian runtime
-  have debootstrap || die "debootstrap chahiye -> sudo apt-get install -y debootstrap"
+  have debootstrap || die "debootstrap required -> sudo apt-get install -y debootstrap"
   [ "$(id -u)" = 0 ] || SUDO_OK=1   # debootstrap ke liye
   have sudo >/dev/null 2>&1 || SUDO_OK=0
   case " ${PATH} " in *" /usr/sbin "*|*" /sbin "*) : ;; *) export PATH="$PATH:/usr/sbin:/sbin" ;; esac
-  log "debootstrap $DEB_DIST ($VARIANT) -> $SUIT  (kuch minute lagenge)"
+  log "debootstrap $DEB_DIST ($VARIANT) -> $SUIT (anything minute lagenge)"
   # "basic essential software" - ISO release karne se pehle hi image me, taaki live
   # stick utarte hi system usable ho (editor, files, network, diagnostics, archives,
   # python, man pages) aur Wi-Fi/Bluetooth bina pk-get ke chale. desktop variant me
@@ -163,7 +163,7 @@ else
   # RUNTIME_KEEP_LISTS=0 do to image chhoti (par pehla update guest me khud chalega).
   if [ "${RUNTIME_KEEP_LISTS:-1}" = 1 ]; then
     run_as sh -c "rm -rf '$SUIT'/var/cache/apt/archives/*.deb '$SUIT'/usr/share/man '$SUIT'/usr/share/doc/* '$SUIT'/var/lib/apt/lists/partial 2>/dev/null; true"
-    [ -d "$SUIT/var/lib/apt/lists" ] && log "  apt lists: $(du -sh "$SUIT/var/lib/apt/lists" 2>/dev/null | cut -f1) (image me rahengi)" || warn "  apt lists nahi mili (guest me pehla install update karega)"
+    [ -d "$SUIT/var/lib/apt/lists" ] && log "  apt lists: $(du -sh "$SUIT/var/lib/apt/lists" 2>/dev/null | cut -f1) (image in will remain)" || warn " apt lists not mili (guest in pehla install update karega)"
   else
     run_as sh -c "rm -rf '$SUIT'/var/cache/apt/archives/*.deb '$SUIT'/usr/share/man '$SUIT'/usr/share/doc/* '$SUIT'/var/lib/apt/lists/* 2>/dev/null; true"
   fi
@@ -175,12 +175,12 @@ else
     ess_pkgs="$ess_pkgs $(printf '%s' "$PK_GUI_ESSENTIALS" | tr ',' ' ')"
   fi
   if [ -n "${PKGS:-}" ]; then
-    log "  essentials: --pkgs diya hua hai, apni list par kuch add nahi kiya"
+    log " essentials: --pkgs given hua is, apni list but anything add not done"
   else
     log "  essentials install: $(printf '%s' "$ess_pkgs" | tr ' ' ',' )"
     run_as chroot "$SUIT" /bin/sh -c \
       "apt-get update -qq >/dev/null 2>&1; DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $ess_pkgs" >/dev/null 2>&1 \
-      || { warn "poora transaction lag nahi gaya -> ek-ek package try kar rahe hain"; \
+      || { warn "poora transaction lag not gaya -> ek-ek package try run rahe are"; \
            for ep in $ess_pkgs; do
              run_as chroot "$SUIT" /bin/sh -c \
                "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $ep" >/dev/null 2>&1 \
@@ -192,7 +192,7 @@ else
     log "$VARIANT variant: GUI stack (weston + xterm + Xvfb + mesa) + wine install (lamba chalega)"
     run_as chroot "$SUIT" /bin/sh -c \
       "apt-get update -qq && apt-get install -y --no-install-recommends wine mesa-utils weston xterm xvfb x11-utils x11-xkb-utils xkb-data" >/dev/null 2>&1 || \
-      warn "wine/weston install fail (baad me runtime ke andar 'pk-get install -y wine' se kar lena)"
+      warn "wine/weston install fail (later runtime ke andar 'pk-get install -y wine' instead lena)"
   fi
   # --- trim (install ke BAAD): doc/man/info, apt ki .deb cache, non-English locales.
   # Pehle yeh step sirf debootstrap ke turant baad chalta tha, to essentials + wine ke
@@ -206,7 +206,7 @@ else
   run_as sh -c "rm -rf '$SUIT'/usr/share/vim/*/doc 2>/dev/null; true"
   # locales: C/en rakhte hain, baaki hata dete hain (~90 MB) - messages English hi aayenge
   run_as sh -c "cd '$SUIT/usr/share/locale' 2>/dev/null && ls -d */ 2>/dev/null | grep -vE '^(C|en|en_US|en_GB)(\\..*)?$' | xargs -r rm -rf; true"
-  log "  trim ke baad runtime tree: $(du -sh "$SUIT" 2>/dev/null | cut -f1)"
+  log " trim ke after runtime tree: $(du -sh "$SUIT" 2>/dev/null | cut -f1)"
 
   # --- essentials: image me actually kaun-kaun se commands maujood hain -------------
   # /etc/pk-essentials.txt guest boot par 'ESSENTIALS-OK (count=.. missing=0)' marker
@@ -230,7 +230,7 @@ CHK
   { [ "$VARIANT" = desktop ] || [ "$VARIANT" = full ]; } && essbins="$PK_ESSENTIAL_BINS $PK_GUI_ESSENTIAL_BINS"
   run_as cp "$WORK/pk-check-essentials.sh" "$SUIT/tmp/pk-check-essentials.sh" 2>/dev/null || true
   run_as chroot "$SUIT" /bin/sh /tmp/pk-check-essentials.sh "$essbins" >/dev/null 2>&1 \
-    || warn "kuch essential commands runtime me nahi mile (pk-essentials.txt dekho)"
+    || warn "anything essential commands runtime in not mile (pk-essentials.txt check)"
   run_as chmod 644 "$SUIT/etc/pk-essentials.txt" 2>/dev/null || true
   log "  essentials in image: $(run_as tail -1 "$SUIT/etc/pk-essentials.txt" 2>/dev/null || cat "$SUIT/etc/pk-essentials.txt" 2>/dev/null | tail -1 || echo unknown)"
 
@@ -241,13 +241,13 @@ CHK
   # poori tree wapas caller ke haath de dete hain (agle run/tools ke liye).
   ${SUDO:-sudo} cp -f "$WORK/pk-runtime-release.tmp" "$SUIT/etc/pk-runtime-release" 2>/dev/null \
     || cp -f "$WORK/pk-runtime-release.tmp" "$SUIT/etc/pk-runtime-release" 2>/dev/null \
-    || warn "release file nahi likh paye (image phir bhi theek hai)"
+    || warn "release file not likh paye (image then also theek is)"
   run_as chown -R "$(id -u):$(id -g)" "$SUIT" 2>/dev/null || true
 fi
 
 # ---------------------------------------------------------------- squash it
 log "mksquashfs -> $OUT"
-have mksquashfs || die "squashfs-tools chahiye"
+have mksquashfs || die "squashfs-tools required"
 rm -f "$OUT"
 mksquashfs "$SUIT" "$OUT" -comp zstd -b 1048576 -noappend -all-root > "$WORK/make-runtime.log" 2>&1
 log "  runtime: $(du -h "$OUT" | cut -f1) -> $OUT"

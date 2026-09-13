@@ -29,25 +29,25 @@ has_ashmem() {
 
 doctor() {
   printf 'pk-android doctor (kernel %s)\n' "$(uname -r)"
-  if has_binder; then printf '  binder/binderfs : HAAN\n'; else printf '  binder/binderfs : NAHI  <- blocker #1 (kernel rebuild chahiye)\n'; fi
-  if has_ashmem; then printf '  ashmem          : HAAN\n'; else printf '  ashmem          : nahi (memfd use ho sakta hai, waydroid config me)\n'; fi
-  if [ -e /dev/kvm ]; then printf '  /dev/kvm        : haan (emulator/guest tez)\n'; else printf '  /dev/kvm        : nahi\n'; fi
-  if runtime_ok; then printf '  runtime         : attached\n'; else printf '  runtime         : nahi laga (pk-runtime start)\n'; fi
+  if has_binder; then printf '  binder/binderfs : HAAN\n'; else printf ' binder/binderfs : NAHI <- blocker #1 (kernel rebuild required)\n'; fi
+  if has_ashmem; then printf '  ashmem          : HAAN\n'; else printf ' ashmem : not (memfd use may be, waydroid config me)\n'; fi
+  if [ -e /dev/kvm ]; then printf ' /dev/kvm : yes (emulator/guest tez)\n'; else printf ' /dev/kvm : not\n'; fi
+  if runtime_ok; then printf '  runtime         : attached\n'; else printf ' runtime : not laga (pk-runtime start)\n'; fi
   if runtime_ok && { [ -x "$RT/usr/bin/waydroid" ] || [ -e "$RT/usr/bin/waydroid" ]; }; then
     printf '  waydroid        : installed (runtime me)\n'
   else
-    printf '  waydroid        : nahi  ->  pk-get install -y waydroid lxc\n'
+    printf ' waydroid : not -> pk-get install -y waydroid lxc\n'
   fi
   BR=no; WD=no
   has_binder && BR=yes
   { [ -x "$RT/usr/bin/waydroid" ] || [ -e "$RT/usr/bin/waydroid" ]; } && WD=yes
   if [ "$BR" = yes ] && [ "$WD" = yes ]; then
-    mark "ANDROID-READY"; printf '\n  ready:  pk-android init   phir  pk-run --install <apk>\n'
+    mark "ANDROID-READY"; printf '\n ready: pk-android init then pk-run --install <apk>\n'
   else
     mark "ANDROID-BLOCKED (binderfs=${BR:-no} waydroid=${WD:-no})"
-    printf '\n  abhi .apk native nahi chalegi. Do option:\n'
-    printf '    A) apna kernel:  make kernel   (pk-android kernel-frag dekho)  -> phir ye test\n'
-    printf '    B) Android-x86 / Waydroid guest:  pk-vm new droid --size=20G (QEMU, dheema par chalega)\n'
+    printf '\n abhi .apk native not run. Do option:\n'
+    printf ' A) own kernel: make kernel (pk-android kernel-frag dekho) -> then ye test\n'
+    printf ' B) Android-x86 / Waydroid guest: pk-vm new droid --size=20G (QEMU, slow on run)\n'
   fi
   return 0
 }

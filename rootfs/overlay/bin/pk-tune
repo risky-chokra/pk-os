@@ -113,10 +113,10 @@ report() {
   if [ "$kind" = hybrid ]; then
     printf '  topology   : P/E (heterogeneous) -> big:%s  little:%s\n' "$bigl" "$litl"
   else
-    printf '  topology   : uniform (%s cpus; cpu_capacity nahi mila to P/E detect skip)\n' "$ncpu"
+    printf ' topology : uniform (%s cpus; cpu_capacity not found to P/E detect skip)\n' "$ncpu"
   fi
-  g=$(rd /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor); [ -n "$g" ] || g='(cpufreq sysfs nahi)'
-  e=$(rd /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference); [ -n "$e" ] || e='(EPP nahi)'
+  g=$(rd /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor); [ -n "$g" ] || g='(cpufreq sysfs not)'
+  e=$(rd /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference); [ -n "$e" ] || e='(EPP not)'
   printf '  governor   : %s   EPP: %s\n' "$g" "$e"
   printf '  sched      : migration_cost=%s ns  min_granularity=%s us\n' \
     "$(rd /sys/kernel/debug/sched/migration_cost_ns || rd /proc/sys/kernel/sched_migration_cost_ns)" \
@@ -151,9 +151,9 @@ report() {
     c=$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null)
     case "$c" in *"uevent busybox mdev"*) lst=1; break ;; esac
   done
-  if [ "$lst" = 1 ]; then hp="uevent+mdev listener chal raha hai${hl:+ (sysctl: $hl)}"
-  elif [ -n "$hl" ]; then hp="sysctl hotplug=$hl (listener nahi)"
-  else hp="(koi hotplug handler nahi - pk_mdev=off?)"
+  if [ "$lst" = 1 ]; then hp="uevent+mdev listener run running is${hl:+ (sysctl: $hl)}"
+  elif [ -n "$hl" ]; then hp="sysctl hotplug=$hl (listener not)"
+  else hp="(any hotplug handler not - pk_mdev=off?)"
   fi
   printf '  hotplug     : %s\n' "$hp"
   printf '  swap        : %s MB total\n' "$(( $(awk '/^SwapTotal/{print $2}' /proc/meminfo 2>/dev/null || echo 0) / 1024 ))"
@@ -163,7 +163,7 @@ report() {
   if [ -d "$RT/usr" ]; then
     printf '  runtime     : attached (%s)\n' "$RT"
   else
-    printf '  runtime     : nahi laga (GUI/apt tools wahi se aate hain)\n'
+    printf ' runtime : not laga (GUI/apt tools wahi from aate are)\n'
   fi
   mark "TUNE-REPORT-OK"
   return 0
@@ -334,7 +334,7 @@ swap_tune() {
     [ -n "${free:-}" ] || free=0
     if [ "$free" -le "$((mb + 64))" ]; then
       if [ "$free" -ge 320 ]; then
-        mb=$((free - 128)); say "jagah kam thi -> size ${mb} MB kar di (fs=$fs, free=${free} MB)"
+        mb=$((free - 128)); say "jagah less thi -> size ${mb} MB run di (fs=$fs, free=${free} MB)"
       else
         say "skip $d (free ${free} MB < ${mb} MB needed)"; continue
       fi
@@ -355,7 +355,7 @@ swap_tune() {
 
 ipc_tune() {
   if ! mountpoint_ok /dev/shm; then
-    mount -t tmpfs -o size=50%,nosuid,nodev tmpfs /dev/shm 2>/dev/null && say "/dev/shm mount kiya (shared memory)"
+    mount -t tmpfs -o size=50%,nosuid,nodev tmpfs /dev/shm 2>/dev/null && say "/dev/shm mount set (shared memory)"
   else
     say "/dev/shm already mounted ($(awk '$2==\"/dev/shm\"{print $3, $4}' /proc/mounts 2>/dev/null | head -1))"
   fi

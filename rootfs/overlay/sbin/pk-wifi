@@ -63,19 +63,19 @@ do_status() {
     printf '  state     : %s\n' "$(cat "/sys/class/net/$IFACE/operstate" 2>/dev/null || echo '?')"
     drv=$(readlink "/sys/class/net/$IFACE/device/driver" 2>/dev/null); printf '  driver    : %s\n' "${drv##*/}"
   else
-    printf '  iface     : koi wireless interface nahi (ethernet-only machine?)\n'
+    printf ' iface : any wireless interface not (ethernet-only machine?)\n'
   fi
   printf '  rfkill      : '
-  if have rfkill; then rfkill list wifi 2>/dev/null | head -2 | tr '\n' ' '; else printf '(rfkill nahi)\n'; fi
-  printf '\n  wpa_supplicant host : '; have wpa_supplicant && printf 'haan\n' || printf 'nahi\n'
+  if have rfkill; then rfkill list wifi 2>/dev/null | head -2 | tr '\n' ' '; else printf '(rfkill not)\n'; fi
+  printf '\n  wpa_supplicant host : '; have wpa_supplicant && printf 'yes\n' || printf 'not\n'
   if runtime_ok; then
-    printf '  wpa_supplicant runtime : '; tool wpa_supplicant >/dev/null 2>&1 && printf 'haan\n' || printf 'nahi -> pk-get install -y wpasupplicant iw\n'
-    printf '  iw                     : '; tool iw >/dev/null 2>&1 && printf 'haan\n' || printf 'nahi\n'
+    printf '  wpa_supplicant runtime : '; tool wpa_supplicant >/dev/null 2>&1 && printf 'yes\n' || printf 'not -> pk-get install -y wpasupplicant iw\n'
+    printf '  iw                     : '; tool iw >/dev/null 2>&1 && printf 'yes\n' || printf 'not\n'
   else
-    printf '  runtime   : nahi laga (pk-runtime start) - wpa_supplicant usually wahin se aayega\n'
+    printf ' runtime : not laga (pk-runtime start) - wpa_supplicant usually wahin from aayega\n'
   fi
   fw=$(ls /lib/firmware 2>/dev/null | wc -l)
-  printf '  firmware  : /lib/firmware me %s entries (ISO build me PK_FIRMWARE=1 se bhi bhar sakte ho)\n' "${fw:-0}"
+  printf ' firmware : /lib/firmware me %s entries (ISO build in PK_FIRMWARE=1 from also bhar may ho)\n' "${fw:-0}"
   mark "WIFI-STATUS-OK"
   return 0
 }

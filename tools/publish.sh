@@ -61,7 +61,7 @@ docs_guard() {
   fi
   # Latin-transliterated Hindi/Hinglish function words (word-boundary, lowercase-insensitive)
   # only unambiguous Hindi/Latin-transliteration tokens: none of these are English words
-  pat='(^|[^a-z])(hai|hain|nahi|nahin|karo|karke|karna|karne|kyun|kyonki|kaise|apna|apne|hamara|hamare|chahiye|milta|milte|raha|rahi|gaya|gayi|lekin|dono|sirf|pehle|pahle|phir|abhi|thoda|thodi|zyada|jyada|poora|poori|galat|theek|bilkul|chhota|chhoti|chhote|ek[[:space:]]dum|ho[[:space:]]jaata|ho[[:space:]]gaya|kar[[:space:]]lo|kar[[:space:]]do|de[[:space:]]do|le[[:space:]]lo|daalo|daal[[:space:]]do|uthao|nikaalo|padho|chalao|banao|banata|banti|jaanta|mauke|haal|sach[[:space:]])'
+  pat='(^|[^a-z])(is|are|not|not|do it|karke|to do|to do|kyun|kyonki|kaise|own|apne|hamara|hamare|required|milta|milte|running|rahi|gaya|gayi|lekin|dono|sirf|first|pahle|then|abhi|thoda|thodi|too much|jyada|poora|poori|galat|theek|bilkul|chhota|chhoti|chhote|ek[[:space:]]dum|ho[[:space:]]jaata|ho[[:space:]]gaya|run[[:space:]]lo|run[[:space:]]pass it|de[[:space:]]pass it|le[[:space:]]lo|daalo|daal[[:space:]]pass it|uthao|nikaalo|padho|run|banao|banata|banti|jaanta|mauke|haal|sach[[:space:]])'
   hits=$(grep -niE "$pat" $files 2>/dev/null) || hits=""
   if [ -n "$hits" ]; then
     printf '%s\n' "$hits" | head -25 | sed 's/^/  HINGLISH? /'
@@ -78,8 +78,8 @@ docs_guard
 [ "$DOCS_ONLY" = 1 ] && exit 0
 
 # ------------------------------------------------------------------ preconditions
-[ -n "$GITHUB_TOKEN" ] || die "GITHUB_TOKEN set karo (classic PAT, scope 'repo')"
-[ -n "$OWNER" ]        || die "OWNER set karo (GitHub user or org that owns the repo)"
+[ -n "$GITHUB_TOKEN" ] || die "GITHUB_TOKEN set check (classic PAT, scope 'repo')"
+[ -n "$OWNER" ]        || die "OWNER set check (GitHub user or org that owns the repo)"
 have() { command -v "$1" >/dev/null 2>&1; }
 have git   || die "git missing"
 have curl  || die "curl missing -> sudo apt install -y curl"

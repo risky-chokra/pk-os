@@ -22,5 +22,5 @@ elif command -v openssl >/dev/null 2>&1; then
 elif command -v python3 >/dev/null 2>&1; then
   python3 -c 'import crypt,sys; print(crypt.crypt(sys.argv[1], crypt.mksalt(crypt.METHOD_SHA512)))' "$PW"
 else
-  echo "mkpasswd/openssl/python3 koi nahi mila: sudo apt install whois openssl" >&2; exit 1
+  echo "mkpasswd/openssl/python3 any not found: sudo apt install whois openssl" >&2; exit 1
 fi

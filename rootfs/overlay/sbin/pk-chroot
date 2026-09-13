@@ -12,7 +12,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 # pehle hi saaf bata dete hain (warna 'Operation not permitted' ke beech me khona padta).
 if [ "$(id -u)" != 0 ]; then
   echo "pk-chroot: only root can run this (it needs chroot and write access to /opt/pk/etc)."
-  echo "           live system me desktop root session hai; user ke liye device access"
+  echo " live system in desktop root session is; user for device access"
   echo "           (audio/input/video/render/seat groups) is already granted - check with 'id'."
   exit 65
 fi

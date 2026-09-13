@@ -63,13 +63,13 @@ if [ "$text" = 0 ]; then nofb=1; fi
 
 # status line: /run/pk/display.txt me poori detail, motd ke top par ek line
 if [ "$nofb" = 1 ]; then
-  line="!! display: koi screen console nahi (consoles:${con:- none}) - screen par kuch nahi aayega. GRUB me b=nomodeset+serial, ya pkos-1.0-serial.iso"
+  line="!! display: any screen console not (consoles:${con:- none}) - nothing on screen not aayega. GRUB in b=nomodeset+serial, ya pkos-1.0-serial.iso"
 else
   line="display: screen console ok (consoles:$con) fb=$fbn drm=$drm blank=off${bl:+ backlight:$bl}"
 fi
 mkdir -p /run/pk 2>/dev/null || true
 printf '%s\n' "$line" > /run/pk/display.txt 2>/dev/null || true
-printf 'pk-display: %s | blank-off + DPMS-off try kiya\n' "$line"
+printf 'pk-display: %s | blank-off + DPMS-off try set\n' "$line"
 if [ -f /etc/motd ] && ! grep -qs "pk-display-status" /etc/motd; then
   tmp=/run/pk/motd.$$
   if { printf '[ pk-display-status ] %s\n' "$line"; cat /etc/motd 2>/dev/null; } > "$tmp" 2>/dev/null; then
@@ -80,7 +80,7 @@ fi
 
 # early line tty1 par (boot ke 2-3 sec me hi pata chal jaata hai console zinda hai)
 if [ -w /dev/tty1 ]; then
-  printf '\npk'"'"'s OS: console zinda hai (fb=%s drm=%s backlight:%s)\n' "$fbn" "$drm" "${bl:- none}" > /dev/tty1 2>/dev/null || true
+  printf '\npk'"'"'s OS: console zinda is (fb=%s drm=%s backlight:%s)\n' "$fbn" "$drm" "${bl:- none}" > /dev/tty1 2>/dev/null || true
 fi
 
 if [ "$nofb" = 1 ]; then

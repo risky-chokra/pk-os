@@ -15,8 +15,8 @@ SECS=${3:-45}
 shift 3 2>/dev/null || true
 EXTRA="$*"
 have() { command -v "$1" >/dev/null 2>&1; }
-[ -f "$ISO" ] || { echo "ISO nahi mila: $ISO"; exit 1; }
-have qemu-system-x86_64 || { echo "qemu-system-x86_64 chahiye (sudo apt-get install -y qemu-system-x86)"; exit 1; }
+[ -f "$ISO" ] || { echo "ISO not found: $ISO"; exit 1; }
+have qemu-system-x86_64 || { echo "qemu-system-x86_64 required (sudo apt-get install -y qemu-system-x86)"; exit 1; }
 MON=$(mktemp -u /tmp/pkshot-mon.XXXXXX)
 LOG=$(mktemp /tmp/pkshot-serial.XXXXXX)
 SHOTS=""

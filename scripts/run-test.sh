@@ -76,7 +76,7 @@ want() { # <n>
 }
 
 have "$QEMU" || die "qemu missing -> sudo apt install -y qemu-system-x86"
-[ -f "$ISO" ] || die "ISO nahi mila: $ISO  (pehle 'make iso')"
+[ -f "$ISO" ] || die "ISO not found: $ISO (first 'make iso')"
 mkdir -p "$LOGDIR"; rm -f "$LOGDIR"/*.log
 
 QB="-machine q35 -cpu max -smp 2 -m $MEM"
@@ -101,7 +101,7 @@ run_vm() {
     fi
     if ! kill -0 "$pid" 2>/dev/null; then break; fi
     # heartbeat: lambi chuppi se lagta hai hang ho gaya
-    [ $((i % 15)) = 14 ] && printf '  ..  [%ds] abhi b chal raha\n' "$i"
+    [ $((i % 15)) = 14 ] && printf ' .. [%ds] abhi b run running\n' "$i"
     sleep 1; i=$((i + 1))
   done
   if kill -0 "$pid" 2>/dev/null; then
@@ -141,26 +141,26 @@ stage "1/8  live boot from ISO (grub + cdrom)"
   check "$L" 'PK: SELFTEST-OK'        "self test pass (RAM overlay writable)"
   check "$L" 'PK: VERIFY-OK'          "live payload ka sha256 match hua (pk_verify=1)"
   check "$L" 'PK: TUNE-REPORT-OK'     "pk-tune report (sched/io/ipc/security knobs padhe)"
-  check "$L" 'PK: DISPLAY-'            "S08display hook chala (blank off / backlight state)"
-  check "$L" 'PK: DISPLAY-KMS'           "late display probe ne KMS device dikha (GPU driver live me ship hote hain)"
-  check "$L" 'driver=bochs'              "QEMU -vga std ka bochs-drm guest me load hua (weston ko /dev/dri milta hai)" 
+  check "$L" 'PK: DISPLAY-'            "S08display hook ran (blank off / backlight state)"
+  check "$L" 'PK: DISPLAY-KMS'           "late display probe ne KMS device dikha (GPU driver live in ship hote are)"
+  check "$L" 'driver=bochs'              "QEMU -vga std ka bochs-drm guest in load hua (weston ko /dev/dri milta is)" 
   check "$L" 'PK: USERS-OK'             "S12users hook: groups + homes + autologin state"
   check "$L" 'PK: MDEV-OK'              "mdev coldplug: /dev nodes audio/input/video groups ke saath (mdev.conf)"
-  check "$L" 'PK: TUNE-SWAP-SKIP'      "live (tmpfs/overlay) par swap guard ne rok diya (RAM nahi khayega)"
+  check "$L" 'PK: TUNE-SWAP-SKIP'      "live (tmpfs/overlay) but swap guard ne rok given (RAM not khayega)"
   if grep -q "boot/grub/grub.cfg" /dev/null 2>/dev/null; then :; fi
   if [ -f "$WORK/iso/boot/grub/grub.cfg" ] && grep -q "consoleblank=0" "$WORK/iso/boot/grub/grub.cfg" 2>/dev/null; then
-    total=$((total + 1)); pass "GRUB default args me consoleblank=0 (blanking se kaali screen nahi hogi)"
+    total=$((total + 1)); pass "GRUB default args in consoleblank=0 (blanking from black screen not hogi)"
   else
-    bad "GRUB default args me consoleblank=0 nahi (live.conf <-> mk-iso drift)"
+    bad "GRUB default args in consoleblank=0 not (live.conf <-> mk-iso drift)"
   fi
   if [ -f "$WORK/iso/boot/grub/grub.cfg" ] && grep -q "nomodeset" "$WORK/iso/boot/grub/grub.cfg" 2>/dev/null; then
-    total=$((total + 1)); pass "GRUB menu me 'safe graphics (nomodeset)' entry maujood (black-screen fallback)"
+    total=$((total + 1)); pass "GRUB menu me 'safe graphics (nomodeset)' entry present (black-screen fallback)"
   else
-    bad "GRUB menu me nomodeset entry nahi (black-screen fallback missing)"
+    bad "GRUB menu in nomodeset entry not (black-screen fallback missing)"
   fi
-  check "$L" 'base is read-only'         "squashfs base read-only hai"
-  check "$L" 'live medium visible'       "installer ke liye medium mount hai"
-  check "$L" 'PK: DEPS-OK'            "installer ke tools (parted/mke2fs/grub-install...) chal sakte hain"
+  check "$L" 'base is read-only'         "squashfs base read-only is"
+  check "$L" 'live medium visible'       "installer for medium mount is"
+  check "$L" 'PK: DEPS-OK'            "installer tools (parted/mke2fs/grub-install...) are runnable"
   if grep -q 'BOOT FAIL\|Kernel panic' "$L"; then note "--- live log tail ---"; tail -25 "$L" | sed 's/^/    /'; fi
 fi
 
@@ -187,10 +187,10 @@ if want 1 && have mkfs.vfat && have mcopy; then
     run_vm "$LOGDIR/01c-vfatmedia.log" 220 \
       -drive "file=$bd/sqfs.img,if=virtio" -kernel "$RK" -initrd "$RI" \
       -append "console=ttyS0 loglevel=5 pk_selftest pk_poweroff"
-    check "$LOGDIR/01c-vfatmedia.log" 'PK: BOOT-OK mode=live' "FAT32 partition media se live boot (vfat+nls initrd fix)"
-    check "$LOGDIR/01c-vfatmedia.log" 'fs=vfat'               "media vfat se mount hua (nls_cp437/utf8 path)"
+    check "$LOGDIR/01c-vfatmedia.log" 'PK: BOOT-OK mode=live' "live boot from a FAT32 partition (vfat+nls initrd fix)"
+    check "$LOGDIR/01c-vfatmedia.log" 'fs=vfat'               "media mounted via vfat (nls_cp437/utf8 path)"
   else
-    bad "FAT32 media fixture ban hi nahi (mtools/parted check karo)"
+    bad "FAT32 media fixture could not be built (check mtools/parted)"
   fi
   # (ii) frugal: partition me sirf ISO file (Ubuntu casper iso-scan / Ventoy style)
   dd if=/dev/zero of="$bd/frugal.raw" bs=1M count=200 status=none
@@ -200,10 +200,10 @@ if want 1 && have mkfs.vfat && have mcopy; then
     run_vm "$LOGDIR/01d-frugal.log" 220 \
       -drive "file=$bd/frugal.img,if=virtio" -kernel "$RK" -initrd "$RI" \
       -append "console=ttyS0 loglevel=5 pk_selftest pk_poweroff"
-    check "$LOGDIR/01d-frugal.log" 'PK: BOOT-OK mode=live' "frugal: sirf ISO file se live boot (loop+iso9660)"
-    check "$LOGDIR/01d-frugal.log" '/dev/loop'             "frugal ISO loop-mount se mount hui"
+    check "$LOGDIR/01d-frugal.log" 'PK: BOOT-OK mode=live' "frugal: live boot from the ISO file alone (loop+iso9660)"
+    check "$LOGDIR/01d-frugal.log" '/dev/loop'             "frugal ISO mounted via loop"
   else
-    bad "frugal fixture ban hi nahi (mtools check karo)"
+    bad "frugal fixture could not be built (check mtools)"
   fi
   rm -rf "$bd"
 fi
@@ -212,7 +212,7 @@ fi
 if [ "$SKIP_INSTALL" = 1 ]; then
   stage "2/7 + 3/7  skipped (PK_TEST_SKIP_INSTALL=1)"
 elif want 2 || want 3; then
-  [ -f "$RK" ] && [ -f "$RI" ] || die "stage 2/3 ke liye $RK + $RI chahiye (make iso chalao)"
+  [ -f "$RK" ] && [ -f "$RI" ] || die "stage 2/3 needs $RK + $RI (run: make iso)"
   stage "2/8  headless install -> $(basename "$DISK") (${DISKMB}MB virtio disk)"
   wipe_disk
   run_vm "$LOGDIR/02-install.log" "$TMO" \
@@ -269,10 +269,10 @@ elif want 2 || want 3; then
     total=$((total + 1))
     if inst_present etc/pk-installed && inst_present sbin/init && \
        inst_present boot/pk-kernel && inst_present boot/pk-initrd; then
-      [ "$mounted" = yes ] && pass "installed tree sahi (init + kernel + initrd + marker)" \
-        || pass "installed tree sahi (init + kernel + initrd + marker) [debugfs]"
+      [ "$mounted" = yes ] && pass "installed tree looks correct (init + kernel + initrd + marker)" \
+        || pass "installed tree looks correct (init + kernel + initrd + marker) [debugfs]"
     else
-      bad "installed tree adhoori (init/kernel/initrd check karo)"
+      bad "installed tree is incomplete (check init/kernel/initrd)"
     fi
     # root password: shadow ka salt nikaal ke host par dobara hash banao -> match hona chahiye
     sh_line=$(inst_cat etc/shadow | grep '^root:' || true)
@@ -284,33 +284,33 @@ elif want 2 || want 3; then
       5|6)
         if have openssl && [ -n "$salt" ]; then
           want=$(openssl passwd "-$id" -salt "$salt" "$TESTPW" 2>/dev/null)
-          if [ "$want" = "$salth" ]; then pass "root password install ke baad '$TESTPW' se match karta hai (sha-$id)"
-          else bad "root hash mismatch (password set hone ke bawajood login fail hoga)"; fi
+          if [ "$want" = "$salth" ]; then pass "root password matches '$TESTPW' after install (sha-$id)"
+          else bad "root hash mismatch (password set hone ke bawajood login fail will)"; fi
         else
-          note "openssl/salt nahi mila -> hash verify skip"
+          note "openssl/salt not found -> hash verify skip"
         fi ;;
-      *) bad "installed /etc/shadow me root hash nahi mila (id='$id')" ;;
+      *) bad "installed /etc/shadow in root hash not found (id='$id')" ;;
     esac
     total=$((total + 1))
     if inst_cat boot/grub/grub.cfg | grep -q 'root=UUID='; then
-      pass "installed grub.cfg root=UUID use karta hai (device-name pe depend nahi)"
+      pass "installed grub.cfg uses root=UUID (no dependency on device names)"
     else
-      bad "installed grub.cfg me root=UUID nahi hai"
+      bad "installed grub.cfg in root=UUID is missing"
     fi
     if inst_present etc/pk-boot.d/S20net && inst_cat etc/default/pk | grep -q 'PK_DHCP=yes'; then
-      pass "installed system me DHCP on hai (etc/default/pk)"
+      pass "installed system has DHCP on (etc/default/pk)"
     else
-      note "installed DHCP flag check nahi ho paya"
+      note "could not check the installed DHCP flag"
     fi
     [ "$mounted" = yes ] && { as_root umount "$mnt" 2>/dev/null || true; }
     [ -n "${DFS:-}" ] && { as_root losetup -d "$DFS" 2>/dev/null || true; }
   else
-    note "disk image mount bhi debugfs bhi nahi chala (sudo/parted/e2fsprogs chahiye) -> host-side verify skip"
+    note "disk image mount also debugfs also not run (sudo/parted/e2fsprogs required) -> host-side verify skip"
   fi
 
-  stage "3/8  installed disk ka apna GRUB (BIOS) -> installed root"
+  stage "3/8 installed disk own GRUB (BIOS) -> installed root"
   if ! want 3; then
-    note "stage 3 skipped (PK_TEST_STAGES me 3 nahi)"
+    note "stage 3 skipped (PK_TEST_STAGES in 3 not)"
   else
     # installed grub.cfg me serial console + selftest + poweroff inject karo
     # (taaki headless test ko marker dikhe) - sirf test ke liye
@@ -335,13 +335,13 @@ elif want 2 || want 3; then
       L=$LOGDIR/03-installed.log
       check "$L" 'PK: BOOT-OK mode=installed' "installed system boot hua (apne GRUB se)"
       check "$L" 'PK: SELFTEST-OK'           "installed root writable + tools ok"
-      check "$L" 'PK: PASSWD-OK'             "installed /etc/shadow me real sha-crypt hash hai"
-      check "$L" 'PK: LOGIN-REQUIRED'        "installed system password maangta hai (autologin nahi)"
-      check "$L" 'PK: TUNE-SWAP-OK'          "installed ext4 par pk_swap=256 se swapfile bana + chalu"
+      check "$L" 'PK: PASSWD-OK'             "installed /etc/shadow in real sha-crypt hash is"
+      check "$L" 'PK: LOGIN-REQUIRED'        "installed system password maangta is (autologin not)"
+      check "$L" 'PK: TUNE-SWAP-OK'          "installed ext4 but pk_swap=256 from swapfile bana + started"
       grep -q 'BOOT FAIL\|Kernel panic\|Unable to mount\|No bootable device' "$L" && {
         note "--- installed log tail ---"; tail -25 "$L" | sed 's/^/    /'; }
     else
-      note "inject nahi ho paya (sudo/parted chahiye) -> direct kernel boot se check karte hain"
+      note "could not inject (sudo/parted required) -> direct kernel boot from check pass it this"
       run_vm "$LOGDIR/03-installed.log" "$TMO" -drive "file=$DISK,if=virtio" \
         -kernel "$RK" -initrd "$RI" \
         -append "console=ttyS0 loglevel=4 root=/dev/vda3 pk_selftest pk_poweroff"
@@ -358,7 +358,7 @@ stage "4/8  toram (image RAM me copy -> media mount reuse)"
     -append "console=ttyS0 loglevel=4 toram pk_selftest pk_poweroff"
   L=$LOGDIR/04-toram.log
   check "$L" 'toram done'         "image RAM me copy hua"
-  check "$L" 'PK: BOOT-OK'     "toram ke baad bhi system boot hua"
+  check "$L" 'PK: BOOT-OK'     "toram ke after also system boot hua"
   check "$L" 'PK: SELFTEST-OK' "self test (toram) pass"
 fi
 
@@ -368,7 +368,7 @@ stage "5/8  UEFI (OVMF) boot from ISO"
   OVMF=$(ls -1 /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd \
              /usr/share/edk2/ovmf/OVMF_CODE.fd /usr/share/qemu/OVMF.fd 2>/dev/null | head -1)
   if [ -z "${OVMF:-}" ]; then
-    note "OVMF nahi mila -> skip (sudo apt install -y ovmf)"
+    note "OVMF not found -> skip (sudo apt install -y ovmf)"
   else
     VARS=$BUILD/ovmf-test.fd
     [ -f "$VARS" ] || cp "$(ls -1 /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/OVMF/OVMF_VARS.fd 2>/dev/null | head -1)" "$VARS"
@@ -376,7 +376,7 @@ stage "5/8  UEFI (OVMF) boot from ISO"
       -drive "if=pflash,format=raw,readonly=on,file=$OVMF" \
       -drive "if=pflash,format=raw,file=$VARS" \
       -boot d -cdrom "$TISO"
-    check "$LOGDIR/05-uefi.log" 'PK: BOOT-OK' "UEFI (OVMF) se bhi boot hota hai"
+    check "$LOGDIR/05-uefi.log" 'PK: BOOT-OK' "UEFI (OVMF) from also boot hota is"
   fi
 fi
 
@@ -399,41 +399,41 @@ stage "6/8  persistence (PK-PERSIST disk) + DHCP + SSH"
     as_root chmod 755 "$seed/pk-persist" "$seed/pk-persist/upper" "$seed/pk-persist/work"
     as_root sync; as_root umount "$seed" 2>/dev/null || true
   else
-    bad "persist image mount nahi ho payi (sudo/loop chahiye)"
+    bad "persist image could not be mounted (sudo/loop required)"
   fi
 
   PAPPEND="console=ttyS0 loglevel=4 persistent pk_selftest pk_poweroff pk_net=dhcp pk_ssh=on"
-  note "boot A: pehli baar - persistence par marker likhi jaayegi"
+  note "boot A: pehli baar - persistence on marker will be written"
   run_vm "$LOGDIR/06a-persist-write.log" "$TMO" \
     -drive "file=$ISO,if=virtio,readonly=on" -drive "file=$PDISK,if=virtio" \
     -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
     -kernel "$RK" -initrd "$RI" -append "$PAPPEND"
   LA=$LOGDIR/06a-persist-write.log
   check "$LA" 'persistence (/dev/vdb)'   "init ko persistence partition mili"
-  check "$LA" 'pk-persist/upper'      "root overlay ka upperdir persist disk par hai"
-  check "$LA" 'PK: PERSIST-WROTE'     "fresh persist disk par marker file likhi gayi"
-  check "$LA" 'PK: NET-OK'            "DHCP se IP mila (pk_net=dhcp)"
-  check "$LA" 'PK: SSH-OK'            "dropbear SSH chalu (pk_ssh=on)"
+  check "$LA" 'pk-persist/upper'      "root overlay ka upperdir persist disk but is"
+  check "$LA" 'PK: PERSIST-WROTE'     "fresh persist disk on marker file was written"
+  check "$LA" 'PK: NET-OK'            "got a DHCP IP (pk_net=dhcp)"
+  check "$LA" 'PK: SSH-OK'            "dropbear SSH started (pk_ssh=on)"
   check "$LA" 'PK: SELFTEST-OK'       "self test (persistent) pass"
 
   # host side: image file me sach me file aayi?
   total=$((total + 1))
   as_root mount -o loop "$PDISK" "$seed" 2>/dev/null || true
   if as_root test -f "$seed/pk-persist/upper/root/.pk-persist-marker"; then
-    pass "persist image me marker disk par maujood (host se verify)"
+    pass "persist image in marker disk on present (host from verify)"
     as_root cat "$seed/pk-persist/upper/root/.pk-persist-marker" 2>/dev/null | sed 's/^/      ..  /'
   else
-    bad "persist image me marker file nahi mili"
+    bad "persist image in marker file not mili"
   fi
   as_root sync; as_root umount "$seed" 2>/dev/null || true
 
-  note "boot B: same disk - reboot ke baad bhi file bachi rahe"
+  note "boot B: same disk - reboot ke after also file bachi rahe"
   run_vm "$LOGDIR/06b-persist-keep.log" "$TMO" \
     -drive "file=$ISO,if=virtio,readonly=on" -drive "file=$PDISK,if=virtio" \
     -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
     -kernel "$RK" -initrd "$RI" -append "$PAPPEND"
   LB=$LOGDIR/06b-persist-keep.log
-  check "$LB" 'PK: PERSIST-KEPT'  "reboot ke baad bhi changes zinda (persistence kaam karta hai)"
+  check "$LB" 'PK: PERSIST-KEPT'  "reboot ke after also changes zinda (persistence kaam uses)"
   check "$LB" 'PK: SELFTEST-OK'   "doosra persistent boot clean tha"
   if grep -q 'PERSIST-FAIL\|overlay(persistence) fail' "$LA" 2>/dev/null; then
     note "--- 06a log tail ---"; tail -20 "$LA" | sed 's/^/    /'
@@ -453,7 +453,7 @@ stage "7/8  app runtime (Linux/Windows/.deb dispatch) + pk-run selftest"
   if [ "${PK_TEST_REAL_RUNTIME:-0}" = 1 ] && [ -s "$BUILD/pk-runtime.sqfs" ]; then
     REALRT=1; RTMBSZ=1024
     RTQ=$BUILD/pk-runtime.sqfs
-    note "REAL runtime use kar rahi hoon ($(du -h "$RTQ" | cut -f1)) - apt/dpkg path + pk_apps_get=sl (20 KB, runtime me nahi hai -> sach me net se download)"
+    note "REAL runtime use run rahi hoon ($(du -h "$RTQ" | cut -f1)) - apt/dpkg path + pk_apps_get=sl (20 KB, runtime in is missing -> sach in net from download)"
     A7="$A7 pk_apps_get=sl"
     [ "${PK_TEST_WINE:-0}" = 1 ] && A7="$A7 pk_apps_get=wine:--version"
   else
@@ -461,7 +461,7 @@ stage "7/8  app runtime (Linux/Windows/.deb dispatch) + pk-run selftest"
     rm -f "$RTQ"
   fi
   if [ "$REALRT" = 1 ]; then
-    total=$((total + 1)); pass "real runtime image maujood ($RTQ)"
+    total=$((total + 1)); pass "real runtime image present ($RTQ)"
   elif as_root sh "$PK_ROOT/scripts/make-runtime" --tiny --out="$RTQ" --no-rw >> "$MLOGL" 2>&1; then
     total=$((total + 1))
     if [ -s "$RTQ" ]; then pass "runtime squashfs bani ($(du -h "$RTQ" | cut -f1 | tr -d ' '))"; else bad "runtime squashfs khali bani"; fi
@@ -481,10 +481,10 @@ stage "7/8  app runtime (Linux/Windows/.deb dispatch) + pk-run selftest"
     as_root mkfs.ext4 -q -F -L pk-runtime-rw "$seed2/pk-runtime-rw.img" >> "$MLOGL" 2>&1 || bad "rw img mkfs fail"
     as_root sync; as_root umount "$seed2" 2>/dev/null || true
   else
-    bad "runtime disk mount nahi ho payi (sudo/loop chahiye)"
+    bad "runtime disk could not be mounted (sudo/loop required)"
   fi
 
-  note "boot A: runtime dhoondo + attach karo, phir pk-run dispatch battery"
+  note "boot A: runtime dhoondo + attach check, then pk-run dispatch battery"
   run_vm "$LOGDIR/07a-apps.log" "$TMO" \
     -drive "file=$ISO,if=virtio,readonly=on" -drive "file=$RDISK,if=virtio" \
     -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
@@ -520,23 +520,23 @@ stage "7/8  app runtime (Linux/Windows/.deb dispatch) + pk-run selftest"
         unsquashfs -l "$RTQ" 2>/dev/null | grep -qE "/usr/bin/wine$" && rhavewine=1
       fi
     if [ "${PK_TEST_WINE:-0}" = 1 ]; then
-      check "$LA" 'PK: APPS-GET-OK (wine)' "asli Wine install hua (apt) aur 'wine --version' chala"
+      check "$LA" 'PK: APPS-GET-OK (wine)' "asli Wine install hua (apt) and 'wine --version' run"
     elif [ "$rhavewine" = 1 ]; then
       check "$LA" 'PK: APP-EXE-OK'      ".exe dispatched through the runtime's real Wine"
     else
       check "$LA" 'PK: APP-EXE-DIAG'    ".exe: this runtime has no Wine - the honest diagnostic appeared instead"
     fi
   else
-    check "$LA" 'PK: APP-EXE-OK'        "Windows .exe Wine dispatch se chala (fake wine, tiny runtime)"
+    check "$LA" 'PK: APP-EXE-OK'        "Windows .exe Wine dispatch instead (fake wine, tiny runtime)"
   fi
   check "$LA" 'PK: APP-APK-DIAG-OK'   ".apk pehchana + honest diagnostic (binder/waydroid)"
-  check "$LA" 'PK: APP-MACHO-DIAG-OK' "Mach-O (macOS) sahi reason ke saath mana kiya"
+  check "$LA" 'PK: APP-MACHO-DIAG-OK' "Mach-O (macOS) refused with the right reason"
   check "$LA" 'PK: RUNTIME-EXEC-OK'   "runtime ke andar command chali (chroot + binds)"
   check "$LA" 'PK: APPS-OK'           "apps selftest pura pass"
-  check "$LA" 'PK: NET-OK'            "DHCP apps layer ke saath bhi"
+  check "$LA" 'PK: NET-OK'            "DHCP apps layer ke saath also"
   if [ "$REALRT" = 1 ]; then
-    check "$LA" 'APP-DEB-OK (dpkg path)' ".deb runtime ke dpkg se install hua"
-    check "$LA" 'PK: APPS-GET-OK (sl)' "apt se net pe download + run (sl); /usr/games lookup bhi"
+    check "$LA" 'APP-DEB-OK (dpkg path)' ".deb installed via dpkg in the runtime"
+    check "$LA" 'PK: APPS-GET-OK (sl)' "apt from net on download + run (sl); /usr/games lookup also"
     check "$LA" 'APP-EXE-OK\|APP-EXE-NO-WINE' ".exe dispatch (wine installed ho to chale, warna diagnostic)"
   fi
 
@@ -548,25 +548,25 @@ stage "7/8  app runtime (Linux/Windows/.deb dispatch) + pk-run selftest"
     if as_root mount -o loop "$seed2/pk-runtime-rw.img" "$seed2/rw" 2>/dev/null; then
       if as_root sh -c "find '$seed2/rw/pk-runtime/upper' 2>/dev/null | grep -q 'pk-st-app'"; then
         rtok=1
-        pass "installed app runtime ke rw overlay me hai (host se verify: pk-runtime-rw.img ke andar)"
+        pass "installed app runtime ke rw overlay in is (host from verify: pk-runtime-rw.img ke andar)"
       else
-        echo "      ..  overlay me mila: $(as_root find "$seed2/rw/pk-runtime/upper" -maxdepth 3 2>/dev/null | sed -n '2,4p' | tr '\n' ' ')"
+        echo " .. found in overlay: $(as_root find "$seed2/rw/pk-runtime/upper" -maxdepth 3 2>/dev/null | sed -n '2,4p' | tr '\n' ' ')"
       fi
       as_root umount "$seed2/rw" 2>/dev/null || true
     else
-      echo "      ..  (rw img loop mount nahi ho payi host se)"
+      echo " .. (rw img loop could not be mounted host se)"
     fi
     as_root umount "$seed2" 2>/dev/null || true
   fi
-  [ "$rtok" = 1 ] || bad "runtime overlay me installed app nahi dikha"
+  [ "$rtok" = 1 ] || bad "runtime overlay in installed app not dikha"
 
   note "boot B: same runtime disk - dobara attach + selftest"
   run_vm "$LOGDIR/07b-apps2.log" "$TMO" \
     -drive "file=$ISO,if=virtio,readonly=on" -drive "file=$RDISK,if=virtio" \
     -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
     -kernel "$RK" -initrd "$RI" -append "$A7"
-  check "$LOGDIR/07b-apps2.log" 'PK: RUNTIME-OK' "dusri boot par bhi runtime attach hua"
-  check "$LOGDIR/07b-apps2.log" 'PK: APPS-OK'    "dusri boot par bhi apps selftest pass"
+  check "$LOGDIR/07b-apps2.log" 'PK: RUNTIME-OK' "dusri boot but also runtime attach hua"
+  check "$LOGDIR/07b-apps2.log" 'PK: APPS-OK'    "dusri boot but also apps selftest pass"
 fi
 
 # ---------------------------------------------------------------- 8: pendrive kit
@@ -582,7 +582,7 @@ stage "8/8  pendrive kit: pk-check + keymap + install (user + runtime) + install
   if [ -s "$RTSRC" ]; then
     pass "kit ka runtime source: $(basename "$RTSRC") ($(du -h "$RTSRC" | cut -f1))"
   else
-    bad "koi runtime sqfs nahi ($BUILD/pk-runtime.sqfs / testruntime.sqfs) - pehle 'make test-apps'"
+    bad "any runtime sqfs not ($BUILD/pk-runtime.sqfs / testruntime.sqfs) - first 'make test-apps'"
   fi
   note "kit ISO banati hoon (runtime ISO ke andar; selftest+poweroff args)"
   rm -f "$KISO"
@@ -600,7 +600,7 @@ stage "8/8  pendrive kit: pk-check + keymap + install (user + runtime) + install
   if [ "${PK_TEST_GUI:-0}" = 1 ]; then
     A8="$A8 pk_desktop=1 pk_check=gui"
     KTMO=$(( KTMO + 300 ))
-    note "GUI mode: desktop session (weston -> Xvfb fallback) + X client round-trip bhi check"
+    note "GUI mode: desktop session (weston -> Xvfb fallback) + X client round-trip also check"
   fi
   note "boot A: kit ISO -> pk-check, pk-keymap, headless install (--user + runtime copy)"
   run_vm "$LOGDIR/08a-kit.log" "$KTMO" \
@@ -610,18 +610,18 @@ stage "8/8  pendrive kit: pk-check + keymap + install (user + runtime) + install
   L=$LOGDIR/08a-kit.log
   check "$L" 'PK: BOOT-OK mode=live'  "kit ISO ka live boot"
   check "$L" 'PK: RUNTIME-OK'         "runtime ISO ke andar se /opt/pk par attach hua"
-  check "$L" 'PK: CHECK-OK'           "pk-check: koi FAIL nahi (hardware+OS self-test)"
-  check "$L" 'PK: KEYMAP-'            "pk-keymap us chala (console + GUI)"
-  check "$L" 'PK: NET-OK'             "kit ke saath bhi DHCP"
+  check "$L" 'PK: CHECK-OK'           "pk-check: any FAIL not (hardware+OS self-test)"
+  check "$L" 'PK: KEYMAP-'            "pk-keymap us run (console + GUI)"
+  check "$L" 'PK: NET-OK'             "kit ke saath also DHCP"
   check "$L" 'PK: INSTALL-OK'          "install (user + runtime copy ke saath) pura hua"
   check "$L" 'PK: INSTALL-DONE rc=0'   "installer ka rc 0 (autoinstall hook)"
   if [ "${PK_TEST_GUI:-0}" = 1 ]; then
     check "$L" 'PK: DESKTOP-OK'       "pk-desktop: session utha (weston ya Xvfb fallback)"
-    check "$L" 'PK: SEATD-OK'          "seatd session manager chalu (weston ko VT+DRM+input)"
+    check "$L" 'PK: SEATD-OK'          "seatd session manager started (weston ko VT+DRM+input)"
     check "$L" 'PK: DESKTOP-VT'        "weston ne active VT liya -> screen par desktop dikhega"
-    check "$L" 'PK: DESKTOP-WESTON-LOG' "weston ka apna log marker me (debug possible)"
+    check "$L" 'PK: DESKTOP-WESTON-LOG' "weston own log marker me (debug possible)"
     if grep -q 'DESKTOP-VTMISMATCH' "$L" 2>/dev/null; then
-      bad "weston chala par VT switch nahi hua (screen par text hi rahega) - pk-desktop vnc use karo"
+      bad "weston run but VT switch not hua (screen but text rahega) - pk-desktop vnc use check"
     else
       pass "weston ne VT le liya (no VTMISMATCH marker)"
     fi
@@ -630,26 +630,26 @@ stage "8/8  pendrive kit: pk-check + keymap + install (user + runtime) + install
       pass "desktop ki screenshot bani (weston se) - pixel-level proof: /run/pk/desktop-shot.png"
       total=$((total + 1))
     else
-      note "screenshot row warn tha (weston static screen par frame nahi bhejta) - pixel proof guest me: pk-desktop shot /root/d.png"
+      note "screenshot row warn was (weston static screen but frame not bhejta) - pixel proof guest me: pk-desktop shot /root/d.png"
     fi
-    check "$L" 'PK: GUI-APP-OK'       "GUI client (xterm ya weston-terminal) session me chala"
+    check "$L" 'PK: GUI-APP-OK'       "GUI client (xterm ya weston-terminal) session in run"
     if grep -q 'GUI-XCLIENT-OK' "$L" 2>/dev/null; then
-      pass "X client (xdpyinfo) ne bhi display use kiya"
+      pass "X client (xdpyinfo) ne also display use done"
       total=$((total + 1))
     else
-      note "  (xdpyinfo row skip - Wayland-only session; GUI-APP-OK hi asli proof hai)"
+      note " (xdpyinfo row skip - Wayland-only session; GUI-APP-OK hi asli proof is)"
     fi
   fi
   note "stage-9 style checks (pk-tune/pk-binfmt) isi boot me:"
   A9=$(printf 'pk_selftest')
   # (VM me ye commands pk-boot ke S90 hook se chalte hain - markers niche check)
-  check "$L" 'PK: TUNE-REPORT-OK'     "pk-tune report chala (scheduling/io/ipc/security knobs padhe)"
+  check "$L" 'PK: TUNE-REPORT-OK'     "pk-tune report run (scheduling/io/ipc/security knobs padhe)"
   check "$L" 'PK: BINFMT-'            "pk-binfmt status ne handlers ki sthiti batayi"
-  check "$L" 'PK: ARCH-DISPATCH-OK'   "foreign-arch (arm64) ELF -> qemu-user/binfmt dispatch sahi"
+  check "$L" 'PK: ARCH-DISPATCH-OK'   "foreign-arch (arm64) ELF -> qemu-user/binfmt dispatch correct"
   if grep -q 'CHECK-SUMMARY' "$L" 2>/dev/null; then
     note "pk-check: $(grep -o 'CHECK-SUMMARY[^#]*' "$L" | head -1 | tr -d '\r')"
   else
-    note "  (CHECK-SUMMARY nahi mila -> less $L)"
+    note " (CHECK-SUMMARY not found -> less $L)"
   fi
 
   mnt2=$BUILD/test-mnt2; mkdir -p "$mnt2"
@@ -662,31 +662,31 @@ stage "8/8  pendrive kit: pk-check + keymap + install (user + runtime) + install
     if as_root test -s "$mnt2/var/lib/pk/pk-runtime.sqfs"; then
       pass "app runtime installed system me copy hui (/var/lib/pk/pk-runtime.sqfs)"
     else
-      bad "installed system me runtime copy nahi mili"
+      bad "installed system in runtime copy not mili"
     fi
     total=$((total + 1))
     if as_root test -f "$mnt2/var/lib/pk/pk-runtime-rw.img"; then
-      pass "installed rw image bani (apps reboot ke baad bhi rahengi)"
+      pass "installed rw image bani (apps reboot ke after also will remain)"
     else
-      bad "installed rw image nahi bani (mkfs.ext4 live me?)"
+      bad "installed rw image not bani (mkfs.ext4 live me?)"
     fi
     total=$((total + 1))
     if as_root grep -q '^kituser:' "$mnt2/etc/passwd" 2>/dev/null && as_root grep -q '^kituser:' "$mnt2/etc/shadow" 2>/dev/null; then
       uh=$(as_root awk -F: '$1=="kituser"{print $3}' "$mnt2/etc/passwd" 2>/dev/null)
       if as_root awk -F: '$1=="kituser"{exit ($2 ~ /^\$/ ? 0 : 1)}' "$mnt2/etc/shadow" 2>/dev/null; then
-        pass "non-root user 'kituser' bana (uid=${uh:-?}) + shadow me sha-crypt hash"
+        pass "non-root user 'kituser' bana (uid=${uh:-?}) + shadow in sha-crypt hash"
       else
-        bad "kituser ka password hash nahi laga (live image me mkpasswd?)"
+        bad "kituser ka password hash not laga (live image in mkpasswd?)"
       fi
     else
-      bad "--user se account bana hi nahi (passwd/shadow me kituser nahi)"
+      bad "--user from account bana not (passwd/shadow in kituser not)"
     fi
     as_root umount "$mnt2" 2>/dev/null || true
   else
-    bad "kit disk host se mount nahi ho payi (checks skip)"
+    bad "could not mount the kit disk from the host (checks skipped)"
   fi
 
-  note "boot B: installed disk apne GRUB se - runtime /var/lib/pk se attach hona chahiye"
+  note "boot B: installed disk apne GRUB se - runtime /var/lib/pk from attach hona required"
   kitinject() {
     mp=$BUILD/test-mnt2
     mkdir -p "$mp"
@@ -703,18 +703,18 @@ stage "8/8  pendrive kit: pk-check + keymap + install (user + runtime) + install
   if have parted && kitinject; then
     run_vm "$LOGDIR/08b-installed.log" "$KTMO" -drive "file=$KITDISK,if=virtio" -boot c
     check "$LOGDIR/08b-installed.log" 'PK: BOOT-OK mode=installed' "installed kit system boot hua"
-    check "$LOGDIR/08b-installed.log" 'PK: RUNTIME-OK'            "installed system ne /var/lib/pk se runtime attach kiya"
+    check "$LOGDIR/08b-installed.log" 'PK: RUNTIME-OK'            "installed system ne /var/lib/pk from runtime attach set"
     check "$LOGDIR/08b-installed.log" 'rw-image'                  "installed mode me rw image upper (persistence on)"
-    check "$LOGDIR/08b-installed.log" 'PK: LOGIN-REQUIRED'        "installed kit system password maangta hai"
+    check "$LOGDIR/08b-installed.log" 'PK: LOGIN-REQUIRED'        "installed kit system password maangta is"
     if grep -q 'BOOT FAIL\|Kernel panic\|VFS: Unable to mount' "$LOGDIR/08b-installed.log" 2>/dev/null; then
       note "--- installed kit log tail ---"; tail -22 "$LOGDIR/08b-installed.log" | sed 's/^/    /'
     fi
   else
-    note "inject nahi ho paya -> direct kernel boot se installed root"
+    note "could not inject -> checking with direct kernel boot from the installed root"
     run_vm "$LOGDIR/08b-installed.log" "$KTMO" -drive "file=$KITDISK,if=virtio" \
       -kernel "$RK" -initrd "$RI" \
       -append "console=ttyS0 loglevel=4 root=/dev/vda3 pk_selftest pk_poweroff"
-    check "$LOGDIR/08b-installed.log" 'PK: RUNTIME-OK' "installed root se runtime attach (direct kernel boot)"
+    check "$LOGDIR/08b-installed.log" 'PK: RUNTIME-OK' "runtime attached from the installed root (direct kernel boot)"
   fi
   as_root rm -rf "$mnt2" 2>/dev/null || true
 fi
@@ -725,12 +725,12 @@ printf '\n'
 echo "=================================================="
 if [ "$fails" = 0 ]; then
   printf '  \033[32mQA PASS\033[0m  %d checks ok  (logs: %s)\n' "$total" "$LOGDIR"
-  echo "  next: live USB banao  ->  make usb USB=/dev/sdX"
+  echo " next: live USB build it -> make usb USB=/dev/sdX"
   echo "        real PC pe permanent install -> pk-install --target=ask"
   exit 0
 else
   printf '  \033[31mQA FAIL\033[0m  %d/%d checks fail\n' "$fails" "$total"
-  echo "  logs: $LOGDIR   (har stage ka serial output wahin hai)"
+  echo " logs: $LOGDIR (har stage ka serial output wahin is)"
   echo "  ek stage dobara:  PK_TEST_STAGES=2 make test"
   exit 1
 fi

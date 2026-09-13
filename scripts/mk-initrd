@@ -24,15 +24,15 @@ if [ -z "$BUSYBOX" ]; then
     [ -z "$BUSYBOX" ] && BUSYBOX=$c
   done
 fi
-[ -n "$BUSYBOX" ] || die "static busybox nahi mila -> sudo apt install busybox-static"
+[ -n "$BUSYBOX" ] || die "static busybox not found -> sudo apt install busybox-static"
 # initrd me koi libc nahi jaata -> dynamic busybox se /init fail hota hai aur
 # kernel panic milta hai (screen bilkul khali). Isliye ya static chahiye, ya
 # POORI lib closure initrd me copy karna padega (PK_ALLOW_DYNAMIC_BUSYBOX=1).
 if ldd "$BUSYBOX" 2>/dev/null | grep -q '=> /'; then
   if [ "${PK_ALLOW_DYNAMIC_BUSYBOX:-0}" != 1 ]; then
-    die "$BUSYBOX dynamic hai (initrd me libc nahi hoga -> /init panic). Fix: sudo apt-get install -y busybox-static , ya PK_BUSYBOX=<static-path> do, ya samajhdari ke saath PK_ALLOW_DYNAMIC_BUSYBOX=1 (tab lib closure khud copy ho jaayega)"
+    die "$BUSYBOX dynamic is (initrd in libc not will -> /init panic). Fix: sudo apt-get install -y busybox-static , or PK_BUSYBOX=<static-path> pass it, or samajhdari ke saath PK_ALLOW_DYNAMIC_BUSYBOX=1 (then lib closure khud copy ho jaayega)"
   fi
-  warn "dynamic busybox use ho raha hai -> uska lib closure initrd me copy kar rahe hain"
+  warn "dynamic busybox use ho is running -> uska lib closure initrd in copy run rahe are"
   BUSYBOX_DYNAMIC=1
 else
   BUSYBOX_DYNAMIC=0
@@ -102,7 +102,7 @@ if [ -d "$PK_MODULES" ] && [ -f "$PK_ROOT/init/kernel-modules" ]; then
   done
   log "  $(ls "$IR/mods" 2>/dev/null | wc -l) modules in /mods"
 else
-  warn "modules dir nahi mila -> initrd bina /mods (kernel me sab built-in hona chahiye)"
+  warn "modules dir not found -> initrd without /mods (kernel in sab built-in hona required)"
 fi
 
 # ---------------------------------------------------------------- blkid (root= resolve)
@@ -140,7 +140,7 @@ if [ "$icomp" = auto ]; then
   [ -n "$icomp" ] || icomp=gzip
   [ "$icomp" = auto ] && icomp=gzip
 fi
-if ! pick "$icomp"; then warn "$icomp initrd me support nahi -> gzip"; icomp=gzip; fi
+if ! pick "$icomp"; then warn "$icomp initrd in support not -> gzip"; icomp=gzip; fi
 pack() {
   case $icomp in
     xz)   xz -9 --check=crc32 -T0 ;;

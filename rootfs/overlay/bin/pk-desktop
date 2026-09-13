@@ -63,7 +63,7 @@ drm_outputs() {
     [ -n "$allmodes" ] && printf '                 modes: %s\n' "$allmodes"
     n=$((n + 1))
   done
-  [ "$n" = 0 ] && printf '  (koi connected DRM output nahi - VM/headless?)\n'
+  [ "$n" = 0 ] && printf ' (any connected DRM output not - VM/headless?)\n'
   return 0
 }
 outputs() {
@@ -73,7 +73,7 @@ outputs() {
     . /run/pk/x-env
     printf 'session: DISPLAY=%s WAYLAND=%s\n' "${DISPLAY:-none}" "${WAYLAND_DISPLAY:-none}"
   else
-    printf 'session: koi nahi (pk-desktop chalao)\n'
+    printf 'session: any not (pk-desktop run)\n'
   fi
   ini_path
   [ -f "$INI" ] && { printf '\nweston.ini (%s):\n' "$INI"; sed -n '1,40p' "$INI" | sed 's/^/  /'; }
@@ -182,7 +182,7 @@ do_shot() {
   runtime_ok || { warn "no runtime attached -> run pk-desktop start first"; return 66; }
   if ! grep -qs 'WAYLAND_DISPLAY' /run/pk/x-env 2>/dev/null; then
     warn "no Wayland session running (this does not work under an Xvfb/X11 session)"
-    warn "  X11 ke liye: pk-chroot /bin/sh -c 'DISPLAY=:0 xwd -root -out /root/s.xwd' (x11-utils)"
+    warn " X11 for: pk-chroot /bin/sh -c 'DISPLAY=:0 xwd -root -out /root/s.xwd' (x11-utils)"
     return 66
   fi
   tmp=/root/.pk-shot.$$.png

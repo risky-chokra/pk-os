@@ -18,6 +18,6 @@ case "${1:-status}" in
     fi
     dropbear -R -p 22 && echo "sshd (dropbear) chal gaya - port 22"
     ;;
-  stop)  killall dropbear 2>/dev/null && echo "band kiya" ;;
+  stop)  killall dropbear 2>/dev/null && echo "band set" ;;
   status) pidof dropbear >/dev/null 2>&1 && echo "running (pid $(pidof dropbear))" || echo "stopped" ;;
 esac

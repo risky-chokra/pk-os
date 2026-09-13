@@ -26,7 +26,7 @@ as_root() {
   if [ "$(id -u)" = 0 ]; then "$@"
   elif have sudo; then $SUDO "$@"
   elif have doas; then doas "$@"
-  else die "root chahiye: $* (SUDO=... set kar sakte ho)"
+  else die "needs root: $* (you can set SUDO=...)"
   fi
 }
 
@@ -64,8 +64,8 @@ resolve_kernel() {
   if [ -n "${PK_MODULES:-}" ] && [ -n "${PK_KERNEL:-}" ]; then
     KERNEL=$PK_KERNEL
     KVER=$(basename "${PK_MODULES%/}")
-    [ -d "$PK_MODULES" ] || die "PK_MODULES nahi hai: $PK_MODULES"
-    [ -f "$KERNEL" ] || die "PK_KERNEL nahi hai: $KERNEL"
+    [ -d "$PK_MODULES" ] || die "PK_MODULES is missing: $PK_MODULES"
+    [ -f "$KERNEL" ] || die "PK_KERNEL is missing: $KERNEL"
     export KERNEL KVER
     return 0
   fi
@@ -73,17 +73,17 @@ resolve_kernel() {
     KVER=$(basename "${PK_MODULES%/}")
     KERNEL=${PK_KERNEL:-}
     [ -n "$KERNEL" ] || KERNEL=$(ls -1 /boot/vmlinuz-"$KVER" 2>/dev/null | head -1)
-    [ -n "$KERNEL" ] || die "PK_MODULES diya par kernel nahi mila (PK_KERNEL bhi do)"
+    [ -n "$KERNEL" ] || die "PK_MODULES given but kernel not found (PK_KERNEL also pass it)"
     export KERNEL KVER
     return 0
   fi
   k=$(ls -1 /boot/vmlinuz-* 2>/dev/null | sort -V | tail -1)
-  [ -n "$k" ] || die "/boot/vmlinuz-* nahi mila. Custom kernel: make kernel, phir PK_KERNEL=/PK_MODULES= do."
+  [ -n "$k" ] || die "/boot/vmlinuz-* not found. Custom kernel: make kernel, then PK_KERNEL=/PK_MODULES= pass it."
   KVER=${k##*/vmlinuz-}
   for m in "/usr/lib/modules/$KVER" "/lib/modules/$KVER"; do
     [ -d "$m" ] && { PK_MODULES=$m; break; }
   done
-  [ -n "${PK_MODULES:-}" ] || die "$k ke liye /lib/modules/$KVER nahi mila (linux-headers/modules install karo)"
+  [ -n "${PK_MODULES:-}" ] || die "/lib/modules/$KVER not found for $k (install linux-headers / the matching modules package)"
   KERNEL=$k
   export KERNEL KVER PK_MODULES
 }

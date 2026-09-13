@@ -164,7 +164,7 @@ run_foreign() { # <arch> <file> [args...]
   if [ -z "$emu" ]; then
     warn "this is a $a (foreign arch) Linux binary - running it needs qemu-user:"
     warn "  pk-get install -y qemu-user-static   &&   pk-binfmt register"
-    warn "  (tab tak: pk-run $f --self-check wala rasta bhi hai)"
+    warn " (then tak: pk-run $f --self-check wala rasta also is)"
     mark "APP-ARCH-DIAG ($a, no qemu-user)"
     return 69
   fi
@@ -292,7 +292,7 @@ install_app() { # <file>
   case "$t" in
     deb)
       if runtime_ok && [ -x "$RT/usr/bin/dpkg" ]; then
-        say "dpkg se install (runtime ke andar)"
+        say "install via dpkg (inside the runtime)"
         ip=$(stage_for_chroot "$f") || return 1
         pk-chroot /usr/bin/dpkg -i "$ip"
       else
@@ -309,7 +309,7 @@ install_app() { # <file>
       fi ;;
     elf|script|appimage)
       mkdir -p "$APPS/bin" /usr/local/bin 2>/dev/null
-      cp -f "$f" "$APPS/bin/" 2>/dev/null || { warn "copy fail ($APPS writable hai?)"; return 1; }
+      cp -f "$f" "$APPS/bin/" 2>/dev/null || { warn "copy fail ($APPS writable? )"; return 1; }
       chmod 755 "$APPS/bin/$(basename "$f")" 2>/dev/null
       ln -sf "$APPS/bin/$(basename "$f")" "/usr/local/bin/$(basename "$f")" 2>/dev/null || true
       say "installed: $(basename "$f")  (launcher: /usr/local/bin/$(basename "$f"))" ;;
@@ -361,10 +361,10 @@ run_apk() { # Android package
     return $?
   fi
   warn "running an Android app needs 3 things (current status):"
-  if [ -n "$binder" ]; then say "  [ok] binder ($binder)"; else warn "  [ ] kernel: CONFIG_ANDROID_BINDERFS=y  -> 'make kernel' (add it in scripts/build-kernel do) phir mount -t binder binder /dev/binderfs"; fi
+  if [ -n "$binder" ]; then say "  [ok] binder ($binder)"; else warn " [ ] kernel: CONFIG_ANDROID_BINDERFS=y -> 'make kernel' (add it in scripts/build-kernel pass it) then mount -t binder binder /dev/binderfs"; fi
   if [ -x "$RT/usr/bin/waydroid" ]; then say "  [ok] waydroid (runtime me)"; else warn "  [ ] runtime: pk-get install -y waydroid lxc"; fi
-  if [ -n "${WAYLAND_DISPLAY:-}" ] || [ -e /run/pk/x-wayland ]; then say "  [ok] GUI session (pk-x)"; else warn "  [ ] GUI: pk-x  (Waydroid ek Wayland client hai)"; fi
-  warn "  Simple fallback (bina kernel change): Android-x86 ISO ko VM me -  pk-vm run --cdrom=<android-iso>"
+  if [ -n "${WAYLAND_DISPLAY:-}" ] || [ -e /run/pk/x-wayland ]; then say "  [ok] GUI session (pk-x)"; else warn " [ ] GUI: pk-x (Waydroid ek Wayland client is)"; fi
+  warn " Simple fallback (without kernel change): Android-x86 ISO ko VM me - pk-vm run --cdrom=<android-iso>"
   mark "APP-APK-DIAG"
   return 73
 }
@@ -374,7 +374,7 @@ run_ipa() { # .ipa -> iOS app: native nahi chal sakta; routes dikhate hain
   warn "this is an iOS/iPadOS app (.ipa) - it cannot run natively on Linux:"
   warn "  (1) the binary is Mach-O/arm64  -> the Linux kernel cannot load it (needs XNU)"
   warn "  (2) the frameworks (UIKit/SwiftUI/CoreAnimation) are closed-source, there is no Linux port"
-  warn "  (3) codesign + entitlements Apple ke signing chain se bandhe hain"
+  warn " (3) codesign + entitlements Apple ke signing chain from are bound by"
   if [ -x /sbin/pk-ios ]; then
     say "app ka content (bundle id, arch, min iOS):"
     /sbin/pk-ios info "$f" 2>&1 | sed 's/^/  /' | head -14
@@ -393,12 +393,12 @@ uninstall_app() { # <name>
   rm -rf "$APPS/$n" 2>/dev/null || true
   if runtime_ok && [ -x "$RT/usr/bin/dpkg" ]; then
     if pk-chroot /usr/bin/dpkg -l "$n" >/dev/null 2>&1; then
-      say "runtime ke dpkg se remove: $n"
+      say "remove via dpkg in the runtime: $n"
       pk-chroot /usr/bin/apt-get remove -y "$n" >/dev/null 2>&1 || pk-chroot /usr/bin/dpkg -r "$n" >/dev/null 2>&1 || true
     fi
   fi
   if [ -e "$APPS/bin/$n" ] || [ -e "$APPS/$n" ]; then
-    warn "kuch bach gaya: $APPS (permissions? /opt/pk writable hai?)"
+    warn "anything bach gaya: $APPS (permissions? /opt/pk writable? )"
     return 1
   fi
   say "uninstalled: $n"
@@ -454,7 +454,7 @@ run_appimage() {
 run_vm_image() {
   f=$1; shift
   say "disk/ISO image - run it as a guest OS:"
-  say "  pk-vm run --cdrom=$f        (ya  pk-vm new <name> --size=40G  pehle)"
+  say " pk-vm run --cdrom=$f (ya pk-vm new <name> --size=40G first)"
   [ -x /sbin/pk-vm ] && { pk-vm run --image="$f" "$@"; return $?; }
   return 77
 }
@@ -501,7 +501,7 @@ selftest() {
       mark "APP-DEB-FAIL $diag ${dout:-no-output}"; fails=$((fails + 1))
     fi
   else
-    mark "APP-DEB-SKIP (.deb sample nahi ban paya)"
+    mark "APP-DEB-SKIP (.deb sample could not be built)"
   fi
   # 4) Windows PE dispatch
   printf 'MZ\220\000 pk-st fake PE' > "$tmp/st.exe"
@@ -510,17 +510,17 @@ selftest() {
     pk-run "$tmp/st.exe" >/dev/null 2>&1
     rc=$?
     case "$wv" in
-      *stub*|*tiny*|*"(version nahi mila)"*)
+      *stub*|*tiny*|*"(version not found)"*)
         # QA ka fake wine: usme .exe ka rc 0 aana chahiye
         if [ "$rc" = 0 ]; then mark "APP-EXE-OK"; else mark "APP-EXE-FAIL(rc=$rc)"; fails=$((fails + 1)); fi ;;
       *)
         # asli Wine: 15-byte nakli PE ko wine khud reject karega - wo hamari
         # galti nahi. Yahan prove karna hai ki dispatch wine tak pahuncha.
-        mark "APP-EXE-OK (wine: $wv; dispatch rc=$rc - sample PE fake hai)" ;;
+        mark "APP-EXE-OK (wine: $wv; dispatch rc=$rc - sample PE fake is)" ;;
     esac
   else
     pk-run "$tmp/st.exe" >/dev/null 2>&1 || true
-    mark "APP-EXE-DIAG (wine nahi - diagnostic path chala)"
+    mark "APP-EXE-DIAG (wine not - diagnostic path run)"
   fi
   # 5) APK + Mach-O honest diagnostics
   apk=$tmp/st.apk
@@ -561,14 +561,14 @@ selftest() {
       esac
     fi
   else
-    mark "APP-APPIMAGE-SKIP (mksquashfs/unsquashfs image me nahi)"
+    mark "APP-APPIMAGE-SKIP (mksquashfs/unsquashfs image in not)"
   fi
   # 7) .jar -> java ho to chale, na ho to exact command
   printf 'PK\005\006 jar-stub' > "$tmp/st.jar"
   out=$(pk-run "$tmp/st.jar" 2>&1 | tr '\n' '|' | cut -c1-120 || true)
   case "$out" in
     *JAVA-STUB-RAN*|*"-jar"*) mark "APP-JAR-OK" ;;
-    *"Java is required"*|*default-jre*) mark "APP-JAR-DIAG-OK (jre nahi - message aaya)" ;;
+    *"Java is required"*|*default-jre*) mark "APP-JAR-DIAG-OK (jre not - message came)" ;;
     *) mark "APP-JAR-PARTIAL ${out:-<khaali>}" ;;
   esac
   # 8) .rpm -> alien/rpm ho to install, warna exact command
@@ -608,7 +608,7 @@ selftest() {
       if pk-chroot /bin/sh -c 'echo x' >/dev/null 2>&1; then mark "RUNTIME-EXEC-OK"; else mark "RUNTIME-EXEC-FAIL"; fails=$((fails + 1)); fi
     fi
   else
-    mark "RUNTIME-EXEC-SKIP (runtime attached nahi)"
+    mark "RUNTIME-EXEC-SKIP (runtime attached not)"
   fi
   if [ "$fails" = 0 ]; then mark "APPS-OK"; else mark "APPS-FAIL($fails)"; fi
   return "$fails"
@@ -616,8 +616,8 @@ selftest() {
 
 # ------------------------------------------------------------------ main
 case "${1:-}" in
-  --info) shift; detect "${1:?file do}" ; exit 0 ;;
-  --install) shift; install_app "${1:?file do}"; exit $? ;;
+  --info) shift; detect "${1:?file pass it}" ; exit 0 ;;
+  --install) shift; install_app "${1:?file pass it}"; exit $? ;;
   --list)
     echo "apps dir : $APPS"
     ls -1 "$APPS/bin" 2>/dev/null | sed 's/^/  launcher: /'
@@ -626,14 +626,14 @@ case "${1:-}" in
       echo "  release: $(cat "$RT/etc/pk-runtime-release" 2>/dev/null)"
       echo "  pkgs   : $(ls "$RT/var/lib/dpkg/info" 2>/dev/null | grep -c '\.list$')"
       for c in wine java weston waydroid; do
-        in_runtime_bin "$c" && echo "  $c: haan" || true
+        in_runtime_bin "$c" && echo " $c: yes" || true
       done
     else
       echo "runtime  : not attached (pk-runtime start  /  make iso WITH_RUNTIME=1)"
     fi
     exit 0 ;;
   --selftest) shift; selftest "${1:-}"; exit $? ;;
-  --uninstall|--remove) shift; uninstall_app "${1:?app ka naam do}"; exit $? ;;
+  --uninstall|--remove) shift; uninstall_app "${1:?app name pass it}"; exit $? ;;
   --which)
     shift; w=${1:?naam do}
     for x in "$APPS/bin/$w" "/usr/local/bin/$w" "$RT/usr/local/bin/$w" "$RT/usr/bin/$w" "$RT/usr/games/$w" "$RT/bin/$w"; do

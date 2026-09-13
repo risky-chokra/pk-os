@@ -87,7 +87,7 @@ status() {
   fi
   if [ -S "$SOCK" ]; then ls -l "$SOCK" | sed 's/^/  /'; else echo "  no socket at $SOCK"; fi
   grep -qs '^seat:' /etc/group && echo "  live group seat: yes" || echo "  live group seat: NO"
-  echo "  weston ke liye env: LIBSEAT_BACKEND=seatd XDG_SEAT=seat0 XDG_VTNR=<active vt>"
+  echo " weston for env: LIBSEAT_BACKEND=seatd XDG_SEAT=seat0 XDG_VTNR=<active vt>"
   [ -s "$LOGF" ] && { echo "  log (last 5):"; tail -5 "$LOGF" | sed 's/^/    /'; }
 }
 

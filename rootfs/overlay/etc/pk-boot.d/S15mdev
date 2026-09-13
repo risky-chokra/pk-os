@@ -35,7 +35,7 @@ case "${ACTION:-add}" in
     if [ -n "${INTERFACE:-}" ]; then
       cnt=$(ip -4 addr show "$INTERFACE" 2>/dev/null | grep -c 'inet ')
       if [ "${cnt:-0}" = 0 ]; then
-        printf 'pk-boot(mdev): NIC %s add hua par IP nahi - `pk-net dhcp` chalao\n' "$INTERFACE" > /dev/kmsg 2>/dev/null
+        printf 'pk-boot(mdev): NIC %s add hua on IP not - `pk-net dhcp` run\n' "$INTERFACE" > /dev/kmsg 2>/dev/null
       fi
     fi
     ;;

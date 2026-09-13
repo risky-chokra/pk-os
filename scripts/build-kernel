@@ -22,10 +22,10 @@ JOBS=${JOBS:-$( (nproc 2>/dev/null || echo 2) )}
 OUTDIR=$BUILD/kernel-$KV
 TARBALL=https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$KV.tar.xz
 
-have gcc || die "gcc chahiye (build-essential)"
-have make || die "make chahiye"
-have flex || die "flex chahiye: sudo apt install flex bison libelf-dev libssl-dev bc rsync"
-have bison || die "bison chahiye: sudo apt install flex bison libelf-dev libssl-dev bc rsync"
+have gcc || die "gcc required (build-essential)"
+have make || die "make required"
+have flex || die "flex required: sudo apt install flex bison libelf-dev libssl-dev bc rsync"
+have bison || die "bison required: sudo apt install flex bison libelf-dev libssl-dev bc rsync"
 
 mkdir -p "$DL" "$OUTDIR"
 
@@ -40,7 +40,7 @@ if [ ! -d "$SRC" ]; then
   mkdir -p "$BUILD"
   rm -rf "$SRC"
   tar -xf "$DL/linux-$KV.tar.xz" -C "$BUILD"
-  [ -d "$SRC" ] || die "extract fail: $SRC nahi bana"
+  [ -d "$SRC" ] || die "extract fail: $SRC not bana"
 fi
 cd "$SRC"
 
@@ -73,7 +73,7 @@ genconfig() {
   # boot-critical cheezein module ke roop me na rahein
   for o in BLK_DEV_LOOP SQUASHFS OVERLAY_FS EXT4_FS ISO9660_FS VFAT_FS; do
     if grep -qE "^CONFIG_$o=m$" .config; then
-      warn "  CONFIG_$o abhi bhi =m -> =y kar raha hoon (boot ke liye must)"
+      warn " CONFIG_$o still also =m -> =y run hoon (boot for must)"
       scripts/config --enable "$o"
     fi
   done
@@ -87,12 +87,12 @@ genconfig() {
 [ -f .config ] || genconfig
 
 if [ -f "$OUTDIR/bzImage" ] && [ -z "${PK_FORCE_BUILD:-}" ]; then
-  log "pehle se bana hua hai: $OUTDIR/bzImage  (dobara build ke liye PK_FORCE_BUILD=1)"
+  log "first from bana hua is: $OUTDIR/bzImage (dobara build for PK_FORCE_BUILD=1)"
   exit 0
 fi
 
 # ---------------------------------------------------------------- build
-log "kernel build: make -j$JOBS (is machine pe 20-90 min lag sakte hain)"
+log "kernel build: make -j$JOBS (is machine on 20-90 min lag can be run)"
 log "  output: $OUTDIR/bzImage + $OUTDIR/modules"
 KLOG=$BUILD/kernel-build.log
 if ! make -j"$JOBS" bzImage modules > "$KLOG" 2>&1; then

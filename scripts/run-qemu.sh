@@ -18,7 +18,7 @@ PK_ROOT=$(cd "$(dirname "$0")/.." && pwd); export PK_ROOT
 . "$PK_ROOT/scripts/pk.sh"
 
 QEMU=${QEMU:-qemu-system-x86_64}
-have "$QEMU" || die "$QEMU nahi mila -> sudo apt install qemu-system-x86"
+have "$QEMU" || die "$QEMU not found -> sudo apt install qemu-system-x86"
 
 ISO=$BUILD/pkos.iso
 HDD=""; UEFI=0; TTY=0; MEM=${PK_QEMU_MEM:-2048}; NOACCEL=${PK_QEMU_NOACCEL:-0}; AUTO=0
@@ -29,7 +29,7 @@ if [ "${avail:-0}" -gt 0 ]; then
   cap=$(( avail - 256 ))
   if [ "$cap" -lt 128 ]; then cap=128; fi
   if [ "$MEM" -gt "$cap" ]; then
-    echo "[pk warn] MEM $MEM MB > host available (${avail} MB) -> $cap MB use kar raha hoon" >&2
+    echo "[pk warn] MEM $MEM MB > host available (${avail} MB) -> using $cap MB" >&2
     MEM=$cap
   fi
 fi
@@ -49,7 +49,7 @@ while [ $# -gt 0 ]; do
     -timeout)  TMO=$2; shift 2 ;;
     -noaccel)  NOACCEL=1; shift ;;
     -auto)     AUTO=1; shift ;;
-    *)         die "unknown arg: $1 (--help style args upar hain)" ;;
+    *)         die "unknown arg: $1 (--help style args upar are)" ;;
   esac
 done
 
@@ -59,13 +59,13 @@ if [ "$AUTO" = 1 ] && [ -z "${DISPLAY:-}" ] && [ -z "$SERIAL" ]; then
   if [ -f "$ak" ] && [ -f "$ai" ]; then
     KER=$ak; IRD=$ai
     APPEND="${APPEND:-quiet loglevel=3 pk_net= console=tty0 console=ttyS0,115200n8}"
-    log "headless: direct kernel boot (GRUB skip). Pure ISO test ke liye: make run-iso" >&2
+    log "headless: direct kernel boot (GRUB skip). Pure ISO test for: make run-iso" >&2
   fi
 fi
 
 if [ "$NOISO" != 1 ]; then
   case "$ISO" in /*) : ;; *) ISO=$PWD/$ISO ;; esac
-  [ -f "$ISO" ] || die "ISO nahi mila: $ISO (make iso chalao)"
+  [ -f "$ISO" ] || die "ISO not found: $ISO (run: make iso)"
 fi
 
 # base args (POSIX: positional params ko hi option list ki tarah use karte hain)
@@ -98,7 +98,7 @@ if [ "$UEFI" = 1 ]; then
   for v in /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/OVMF/OVMF_VARS.fd; do
     [ -r "$v" ] && { vars=$v; break; }
   done
-  [ -n "$code" ] && [ -n "$vars" ] || die "OVMF nahi mila -> sudo apt install ovmf"
+  [ -n "$code" ] && [ -n "$vars" ] || die "OVMF not found -> sudo apt install ovmf"
   nv=$BUILD/ovmf-vars.fd
   [ -f "$nv" ] || cp "$vars" "$nv"
   set -- "$@" -drive "file=$code,if=pflash,format=raw,unit=0,readonly=on" \

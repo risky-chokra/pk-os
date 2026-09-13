@@ -129,7 +129,7 @@ mkdir -p "$UP/upper" "$UP/work"
     done
     if [ "$live_ram" = 1 ]; then
       say "live mode (persistence off): not creating the rw image in RAM -> apps are ephemeral"
-      say "  bachane ke liye: 'persistent' boot option, PK-RUNTIME partition, ya permanent install"
+      say " to keep for: 'persistent' boot option, PK-RUNTIME partition, ya permanent install"
     fi
     if [ -n "$rwimg" ]; then
       say "creating the rw image: $rwimg"
@@ -161,7 +161,7 @@ mkdir -p "$UP/upper" "$UP/work"
   if [ -z "$oerr" ]; then
     :
   elif mount --bind "$RO" "$RT" 2>/dev/null; then
-    mark "RUNTIME-WARN overlay mount fail ($oerr) -> read-only bind (apps chalengi, install nahi hoga)"
+    mark "RUNTIME-WARN overlay mount fail ($oerr) -> read-only bind (apps run, install not will)"
     mode="read-only bind"
   else
     mark "RUNTIME-FAIL (overlay mount: $RT)"
@@ -225,7 +225,7 @@ setup() {
   img=${1:-}; shift || true
   dev=${1:-$(sed -n '1p' /run/pk/live-media 2>/dev/null)}
   [ -n "$img" ] && [ -f "$img" ] || { echo "usage: pk-runtime --setup <pk-runtime.sqfs> [/dev/sdX]"; exit 1; }
-  [ -n "$dev" ] || { echo "device do (jaise /dev/sdb)"; exit 1; }
+  [ -n "$dev" ] || { echo "device pass it (jaise /dev/sdb)"; exit 1; }
   case "$dev" in /dev/*) : ;; *) dev=/dev/$dev ;; esac
   [ -b "$dev" ] || { echo "no such device: $dev"; exit 1; }
   have parted || { echo "parted is required"; exit 1; }

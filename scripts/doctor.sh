@@ -10,7 +10,7 @@ need()  { command -v "$1" >/dev/null 2>&1 && ok "$1 -> $(command -v "$1")" || ba
 needf() { [ -e "$1" ] && ok "$1" || bad "$1"; }
 
 echo "== pk's OS build doctor =="
-echo "-- ISO banane ke liye --"
+echo "-- ISO banane for --"
 need gcc
 need make
 need mksquashfs
@@ -28,8 +28,8 @@ needf /usr/lib/grub/x86_64-efi/modinfo.sh
 echo "-- live image ka content --"
 needf /bin/busybox
   bbk=$(for c in /bin/busybox /usr/bin/busybox /bin/busybox.static; do [ -x "$c" ] || continue; ldd "$c" 2>/dev/null | grep -q '=> /' || { echo "$c"; break; }; done)
-  [ -n "${bbk:-}" ] && ok "static busybox: $bbk" || bad "busybox STATIC nahi mila (initrd ke liye zaroori) -> sudo apt-get install -y busybox-static"
-if ldd /bin/busybox >/dev/null 2>&1; then warn "/bin/busybox dynamically linked hai (chal jayega, par static better: busybox-static)"; else ok "/bin/busybox static"; fi
+  [ -n "${bbk:-}" ] && ok "static busybox: $bbk" || bad "busybox STATIC not found (initrd for required) -> sudo apt-get install -y busybox-static"
+if ldd /bin/busybox >/dev/null 2>&1; then warn "/bin/busybox is dynamically linked (it will work, but static is better: busybox-static)"; else ok "/bin/busybox static"; fi
 need blkid
 need parted
 needf /sbin/mkfs.ext4
@@ -37,19 +37,19 @@ needf /usr/sbin/grub-install
 echo "-- kernel + modules --"
 found=0
 for v in /boot/vmlinuz-*; do [ -e "$v" ] || continue; k=${v##*/vmlinuz-}; found=1
-  if [ -d "/usr/lib/modules/$k" ] || [ -d "/lib/modules/$k" ]; then ok "$v (+modules $k)"; else bad "$v ke saath /lib/modules/$k nahi"; fi
+  if [ -d "/usr/lib/modules/$k" ] || [ -d "/lib/modules/$k" ]; then ok "$v (+modules $k)"; else bad "$v ke saath /lib/modules/$k not"; fi
 done
-[ "$found" = 1 ] || bad "/boot/vmlinuz-* nahi mila - linux-image package install karo (ya make kernel se apna banao)"
-echo "-- test karne ke liye (optional) --"
+[ "$found" = 1 ] || bad "/boot/vmlinuz-* not found - install the linux-image package (or build one with: make kernel)"
+echo "-- for running the tests (optional) --"
 need qemu-system-x86_64 || true
-[ -e /usr/share/OVMF/OVMF_CODE_4M.fd ] || [ -e /usr/share/OVMF/OVMF_CODE.fd ] && ok "OVMF (UEFI test)" || warn "OVMF nahi -> 'make run-efi' skip hoga"
-echo "-- root powers (build ke kuch steps ke liye) --"
-if [ "$(id -u)" = 0 ]; then ok "you are root"; elif command -v sudo >/dev/null 2>&1; then ok "sudo available"; else warn "sudo nahi - kuch steps (depmod/losetup tests) manual karne padenge"; fi
+[ -e /usr/share/OVMF/OVMF_CODE_4M.fd ] || [ -e /usr/share/OVMF/OVMF_CODE.fd ] && ok "OVMF (UEFI test)" || warn "OVMF not -> 'make run-efi' skip will"
+echo "-- root powers (build ke anything steps for) --"
+if [ "$(id -u)" = 0 ]; then ok "you are root"; elif command -v sudo >/dev/null 2>&1; then ok "sudo available"; else warn "no sudo - some steps (depmod/losetup tests) must be run manually"; fi
 echo
 if [ "$miss" = 0 ]; then
-  echo "sab ready ->  make iso   (phir: make run / make test)"
+  echo "sab ready -> make iso (then: make run / make test)"
 else
-  echo "$miss cheezein missing hain. Install (Debian/Ubuntu):"
+  echo "$miss cheezein missing are. Install (Debian/Ubuntu):"
   cat <<'PKG'
   sudo apt-get update
   sudo apt-get install -y build-essential make squashfs-tools xorriso grub-common \

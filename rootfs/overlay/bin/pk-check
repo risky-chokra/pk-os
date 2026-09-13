@@ -62,10 +62,10 @@ fi
 if [ -r /run/pk/boot.env ]; then row ok bootenv "$(tr '\n' ' ' < /run/pk/boot.env | cut -c1-120)"; else row warn bootenv "/run/pk/boot.env not found (did pk-boot run?)"; fi
 
 # root writable? (overlay upper)
-if touch /run/pk/.wtest 2>/dev/null; then rm -f /run/pk/.wtest; row ok writable "/ writable hai"; else row fail writable "/ read-only hai"; fi
+if touch /run/pk/.wtest 2>/dev/null; then rm -f /run/pk/.wtest; row ok writable "/ writable is"; else row fail writable "/ read-only is"; fi
 up=$(awk '$2=="/"{print $4}' /proc/mounts 2>/dev/null | head -1)
 case "$up" in
-  *upperdir=/mnt/persist*) row ok persist "upper=/mnt/persist (USB pe save hota hai)" ;;
+  *upperdir=/mnt/persist*) row ok persist "upper=/mnt/persist (USB on save hota is)" ;;
   *upperdir=*)             row info persist "upper=RAM (reset on reboot) - use the 'persistent' boot option" ;;
   ext4|ext2)               row ok persist "installed ext4 root (changes save)" ;;
   *)                       row info persist "root fs: ${up:-?}" ;;
@@ -77,7 +77,7 @@ row info cpu "${cpu:-x86_64} ($(grep -c ^processor /proc/cpuinfo 2>/dev/null || 
 memtot=$(awk '/MemTotal/{printf "%d", $2/1024}' /proc/meminfo 2>/dev/null)
 memavl=$(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo 2>/dev/null)
 row info mem "${memtot:-?} MB total / ${memavl:-?} MB free"
-if [ -e /dev/kvm ]; then row ok kvm "/dev/kvm (QEMU hardware accel chalega)"; else row info kvm "/dev/kvm nahi (pk-vm TCG se chalega, dheema)"; fi
+if [ -e /dev/kvm ]; then row ok kvm "/dev/kvm (QEMU hardware accel chalega)"; else row info kvm "/dev/kvm absent (pk-vm will run on TCG, slow)"; fi
 
 # USB speed of the boot device (pendrive test ka main point)
 spd=''
@@ -121,7 +121,7 @@ if [ "$DOSPEED" = 1 ]; then
 fi
 
 # ------------------------------------------------------------------ display
-if [ -e /dev/fb0 ]; then row ok fb "/dev/fb0 (framebuffer)"; else row info fb "/dev/fb0 nahi (GUI ke liye DRM/Xvfb use hoga)"; fi
+if [ -e /dev/fb0 ]; then row ok fb "/dev/fb0 (framebuffer)"; else row info fb "/dev/fb0 not (GUI for DRM/Xvfb use will)"; fi
 drm=''
 for c in /dev/dri/card*; do [ -e "$c" ] && drm="$drm $c"; done
 for c in /dev/dri/renderD128*; do [ -e "$c" ] && drm="$drm $c"; done
@@ -193,14 +193,14 @@ for b in /sys/class/backlight/*; do
 done
 if [ -n "$bl" ]; then
   case "$bl" in
-    *power=1*) row warn backlight "backlight OFF ($bl) - kaali screen ka asli karan ho sakta hai; S08display boot par ise on karta hai" ;;
+    *power=1*) row warn backlight "backlight OFF ($bl) - black screen real cause may be; S08display boot on ise on uses" ;;
     *) row ok backlight "on ($bl)" ;;
   esac
 else
   row info backlight "no /sys/class/backlight (desktop/VM: panel brightness is owned by the BIOS/host)"
 fi
 case "$fbb" in
-  *="1"*|*" 1"*) row warn fb-blank "framebuffer blanked:$fbb - fix: echo 0 > /sys/class/graphics/fb*/blank (boot par S08display karta hai), consoleblank=0 default set hai";;
+  *="1"*|*" 1"*) row warn fb-blank "framebuffer blanked:$fbb - fix: echo 0 > /sys/class/graphics/fb*/blank (boot on S08display uses), consoleblank=0 default set is";;
   *) row info fb-blank "blank flags:${fbb:- (no fb)} | screen console: $(awk '{print $1}' /proc/consoles 2>/dev/null | tr '\n' ' ') | GRUB: v=nomodeset, b=nomodeset+serial";;
 esac
 if [ -f /run/pk/display.txt ]; then row info display-status "$(cat /run/pk/display.txt 2>/dev/null)"; fi
@@ -224,7 +224,7 @@ if [ "$DOGUI" = 1 ]; then
       # (pk-x weston ko --debug ke saath chalata hai -> screenshooter chalta hai)
       # weston ke andar XWayland ho to :0 pe X clients chal sakte hain
       xd=${DISPLAY:-}
-      if [ -z "$xd" ] && [ -e "$RT/tmp/.X11-unix/X0" ]; then xd=":0"; row info xwayland "XWayland socket mila ($RT/tmp/.X11-unix/X0)"; fi
+      if [ -z "$xd" ] && [ -e "$RT/tmp/.X11-unix/X0" ]; then xd=":0"; row info xwayland "XWayland socket found ($RT/tmp/.X11-unix/X0)"; fi
       if [ -n "$xd" ] && rt_has xdpyinfo; then
         out=$(DISPLAY="$xd" pk-run --gui xdpyinfo 2>&1 | sed -n '2p' | tr '\n' ' ' | cut -c1-70)
         if [ -n "$out" ]; then
@@ -271,7 +271,7 @@ if [ "$DOGUI" = 1 ]; then
       if [ -n "${WAYLAND_DISPLAY:-}" ] && have pk-desktop; then
         if pk-desktop shot /run/pk/desktop-shot.png >/run/pk/shot.log 2>&1; then
           sz=$(wc -c < /run/pk/desktop-shot.png 2>/dev/null); sz_shot=$sz
-          row ok guishot "desktop PNG /run/pk/desktop-shot.png (${sz:-?} B) - isme asli desktop render hai"
+          row ok guishot "desktop PNG /run/pk/desktop-shot.png (${sz:-?} B) - isme asli desktop render is"
         else
           row warn guishot "no screenshot was written: $(tail -2 /run/pk/shot.log 2>/dev/null | tr '\n' '|' | cut -c1-90)"
         fi
@@ -292,12 +292,12 @@ gw=$(ip route 2>/dev/null | awk '/default/{print $3; exit}')
 if [ -n "$ip" ]; then
   row ok net "IP=$ip gw=${gw:-none}"
   if [ -n "$gw" ]; then
-    if ping -c1 -W2 "$gw" >/dev/null 2>&1; then row ok ping "gateway reachable"; else row warn ping "gateway ping nahi gaya"; fi
+    if ping -c1 -W2 "$gw" >/dev/null 2>&1; then row ok ping "gateway reachable"; else row warn ping "gateway ping not gaya"; fi
   fi
   dns=$(awk '/^nameserver/{print $2; exit}' /etc/resolv.conf 2>/dev/null)
   if [ -n "$dns" ]; then
     row info dns "resolver=$dns"
-    if ping -c1 -W3 "$dns" >/dev/null 2>&1; then row ok dns "$dns reachable (real resolve ke liye: wget -qO- http://deb.debian.org/ )"; else row warn dns "$dns ping nahi gaya (user-net gw DNS block karta hai)"; fi
+    if ping -c1 -W3 "$dns" >/dev/null 2>&1; then row ok dns "$dns reachable (real resolve for: wget -qO- http://deb.debian.org/ )"; else row warn dns "$dns ping not gaya (user-net gw DNS block uses)"; fi
   else
     row warn dns "no nameserver in /etc/resolv.conf"
   fi
@@ -323,17 +323,17 @@ done
 if command -v pk-wifi >/dev/null 2>&1; then
   ws=$(pk-wifi status 2>/dev/null | tr '\n' ' ' | tr -s ' ' | cut -c1-150)
   row info wifi "$ws"
-elif [ -n "$wdev" ]; then row ok wifi "wireless iface:$wdev (pk-wifi nahi hai - image purani?)"; else row info wifi "wireless iface nahi dikha; firmware:${fw:- none} (ISO build me PK_FIRMWARE=1 se drivers aaate hain)"; fi
+elif [ -n "$wdev" ]; then row ok wifi "wireless iface:$wdev (pk-wifi is not in - image purani?)"; else row info wifi "wireless iface not dikha; firmware:${fw:- none} (ISO build in PK_FIRMWARE=1 from drivers aaate are)"; fi
 if [ -x /sbin/pk-ssh ]; then
-  if pgrep dropbear >/dev/null 2>&1; then row ok ssh "dropbear :22 chal raha hai"; else row info ssh "dropbear band (pk-ssh start)"; fi
+  if pgrep dropbear >/dev/null 2>&1; then row ok ssh "dropbear :22 run running is"; else row info ssh "dropbear band (pk-ssh start)"; fi
 fi
 
 # ------------------------------------------------------------------ runtime + apps
 if mounted "$RT" && [ -d "$RT/usr" ]; then
   rel=$(cat "$RT/etc/pk-runtime-release" 2>/dev/null | head -1)
   row ok runtime "$RT attached (${rel:-no release file})"
-  [ -x "$RT/usr/bin/apt-get" ] && row ok apt "runtime me apt-get hai -> pk-get install -y <pkg>" || row warn apt "runtime me apt-get nahi (tiny/QA runtime?)"
-  [ -x "$RT/usr/bin/dpkg" ] && row info dpkg "dpkg hai (.deb install direct hoga)"
+  [ -x "$RT/usr/bin/apt-get" ] && row ok apt "runtime in apt-get is -> pk-get install -y <pkg>" || row warn apt "runtime in apt-get not (tiny/QA runtime?)"
+  [ -x "$RT/usr/bin/dpkg" ] && row info dpkg "dpkg is (.deb install direct will)"
   if [ -x "$RT/usr/bin/wine" ] || [ -e "$RT/usr/bin/wine" ] || [ -L "$RT/usr/bin/wine" ]; then
     wv=$(pk-chroot /usr/bin/wine --version 2>/dev/null | head -1)
     row ok wine "wine: ${wv:-present}"
@@ -370,16 +370,16 @@ fi
 # ------------------------------------------------------------------ input + clock + secure boot
 row info kbd "$(ls /sys/class/input 2>/dev/null | grep -c 'event') input event devices; keymap: $(cat /run/pk/keymap 2>/dev/null || echo us)"
 rtc=$(hwclock -r 2>/dev/null | head -1)
-if [ -n "$rtc" ]; then row ok clock "RTC: $rtc"; else row warn clock "hwclock padha nahi ja paya (battery/CMOS check)"; fi
+if [ -n "$rtc" ]; then row ok clock "RTC: $rtc"; else row warn clock "hwclock could not be read (battery/CMOS check)"; fi
 sb=$(od -An -tx1 -j4 -N1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c 2>/dev/null | tr -d ' ')
 if [ -n "$sb" ]; then
   case "$sb" in
-    01) row warn secureboot "SecureBoot ON hai - unsigned GRUB boot nahi karega; BIOS me OFF karo (ya MOK enroll)" ;;
+    01) row warn secureboot "SecureBoot ON is - unsigned GRUB boot not karega; BIOS in OFF do it (ya MOK enroll)" ;;
     00) row ok secureboot "SecureBoot OFF ✓ (hamara signed-naahi GRUB chalega)" ;;
     *)  row info secureboot "SecureBoot var value=$sb" ;;
   esac
 else
-  if [ -d /sys/firmware/efi ]; then row info secureboot "efi vars me SecureBoot nahi mila (CSM? ya var padhne se block)"; else row info secureboot "BIOS/Legacy boot (SecureBoot lagu nahi)"; fi
+  if [ -d /sys/firmware/efi ]; then row info secureboot "efi vars in SecureBoot not found (CSM? ya var padhne from block)"; else row info secureboot "BIOS/Legacy boot (SecureBoot lagu not)"; fi
 fi
 if dmesg 2>/dev/null | grep -qiE "error|fail"; then
   n=$(dmesg 2>/dev/null | grep -ciE "error|fail")

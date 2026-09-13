@@ -14,7 +14,7 @@ TOTAL=$(( $(cat /sys/block/${DEV#/dev/}/size) / 2048 ))
 FREE=$(( TOTAL - LAST ))
 echo "device=$DEV  used=${LAST}MiB  total=${TOTAL}MiB  free=${FREE}MiB"
 [ "$FREE" -gt 128 ] || { echo "less than 128MiB free - persistence will not be created"; exit 1; }
-parted -s "$DEV" mkpart persist ext4 "${LAST}MiB" 100% || { echo "mkpart fail (partition table protected ho sakta hai)"; exit 1; }
+parted -s "$DEV" mkpart persist ext4 "${LAST}MiB" 100% || { echo "mkpart fail (partition table protected may be)"; exit 1; }
 partprobe "$DEV" 2>/dev/null
 # naya partition node dhoondo: /sys se last partition (lsblk par depend na kare)
 d=${DEV#/dev/}

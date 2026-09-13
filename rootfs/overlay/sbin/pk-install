@@ -136,7 +136,7 @@ if [ "$YES" != 1 ]; then
   echo "!! ALL data on $TARGET will be DELETED. Type  YES  to continue."
   printf "> "
   read ans
-  [ "$ans" = YES ] || die "cancel kiya gaya"
+  [ "$ans" = YES ] || die "cancel set gaya"
 fi
 
 # mount ho to umount karo
@@ -199,7 +199,7 @@ note "formatting filesystems"
 # happened to provide. A root filesystem without a journal is not crash-safe, and QA
 # (correctly) failed on INSTALL-JOURNAL. Errors are printed now, not swallowed.
 if mke2fs -q -F -t ext4 -O has_journal -L pkos "$ROOTP"; then : ; else
-  note "  mke2fs -t ext4 fail -> mkfs.ext4 try kiya"
+  note " mke2fs -t ext4 fail -> mkfs.ext4 try set"
   mkfs.ext4 -q -F -t ext4 -O has_journal -L pkos "$ROOTP" || die "root filesystem fail (mke2fs/mkfs.ext4)"
 fi
 [ -n "$ESPP" ] && { mkfs.vfat -F 32 -n PK-EFI "$ESPP" >/dev/null 2>&1 || die "mkfs.vfat fail"; }
@@ -299,7 +299,7 @@ elif [ -n "$ROOTPW" ] && have mkpasswd; then
         mv -f "$TGT/etc/shadow.n" "$TGT/etc/shadow"
     fi
     if awk -F: 'NR==1{exit ($2 ~ /^\$[56ya]\$/ ? 0 : 1)}' "$TGT/etc/shadow" 2>/dev/null; then
-      note "  root password set kiya (sha-crypt hash verify hua)"
+      note " root password set set (sha-crypt hash verify hua)"
     else
       note "  WARNING: the root field of /etc/shadow was not updated"
     fi

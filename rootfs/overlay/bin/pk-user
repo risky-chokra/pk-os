@@ -127,7 +127,7 @@ cmd_list() {
   a=$(sed -n 's/^PK_CONSOLE_AUTOLOGIN=//p' "$CONF" 2>/dev/null | head -1)
   [ -f "$RUNAUTO" ] && a=$(cat "$RUNAUTO" 2>/dev/null)
   row autologin "${a:-off}"
-  row persistent "$(grep -qs 'upperdir=/mnt/persist' /proc/mounts && echo 'haan (users save rahenge)' || echo 'nahee (reboot pe reset - live me normal)')"
+  row persistent "$(grep -qs 'upperdir=/mnt/persist' /proc/mounts && echo 'yes (users save rahenge)' || echo 'nahee (reboot on reset - live in normal)')"
 }
 
 cmd_info() {
@@ -208,7 +208,7 @@ cmd_add() {
     h2=$(hash_pw "$pw" 2>/dev/null || true)
     if [ -n "${h2:-}" ] && [ -f "$SH" ]; then
       awk -v U="$u" -v H="$h2" 'BEGIN{OFS=":"} $1==U {$2=H} {print}' "$SH" > "$SH.pk-tmp" 2>/dev/null && write_back "$SH.pk-tmp" "$SH"
-      say "password set kiya (shadow me sha-512 hash)"
+      say "password set set (shadow in sha-512 hash)"
     elif printf '%s:%s\n' "$u" "$pw" | chpasswd >/dev/null 2>&1; then
       say "password set (with chpasswd)"
     else
@@ -268,7 +268,7 @@ cmd_passwd() {
   if [ -n "$pw" ]; then
     h=$(hash_pw "$pw" 2>/dev/null || true)
     if [ -n "${h:-}" ] && [ -f "$SH" ]; then
-      awk -v U="$u" -v H="$h" 'BEGIN{OFS=":"} $1==U {$2=H; $3=19000} {print}' "$SH" > "$SH.pk-tmp" 2>/dev/null && write_back "$SH.pk-tmp" "$SH"         && say "password badal diya ($u)" || die "shadow update fail"
+      awk -v U="$u" -v H="$h" 'BEGIN{OFS=":"} $1==U {$2=H; $3=19000} {print}' "$SH" > "$SH.pk-tmp" 2>/dev/null && write_back "$SH.pk-tmp" "$SH"         && say "password badal given ($u)" || die "shadow update fail"
     elif printf '%s:%s\n' "$u" "$pw" | chpasswd >/dev/null 2>&1; then
       say "password changed ($u, via chpasswd)"
     else
@@ -288,7 +288,7 @@ cmd_autologin() {
     [ "$u" = off ] && { rm -f "$RUNAUTO" 2>/dev/null; printf 'PK_CONSOLE_AUTOLOGIN=\n' > "$CONF" 2>/dev/null; say "autologin off (login prompt wapas)"; return 0; }
   fi
   user_exists "$u" || die "no such user: $u"
-  printf 'PK_CONSOLE_AUTOLOGIN=%s\n' "$u" > "$CONF" 2>/dev/null || say "could not write $CONF (do it as root on an installed system)"
+  printf 'PK_CONSOLE_AUTOLOGIN=%s\n' "$u" > "$CONF" 2>/dev/null || say "could not write $CONF (pass it it as root on an installed system)"
   printf '%s\n' "$u" > "$RUNAUTO" 2>/dev/null || true
   say "tty1 will now log in as '$u' without a password (next boot / next getty restart)"
   say "  to undo that: pk-user autologin off"
@@ -303,7 +303,7 @@ cmd_doctor() {
     if [ -d "$d" ]; then
       printf '  %-12s %s\n' "$d" "$(ls -l "$d" 2>/dev/null | sed -n '2,4p' | awk '{print $1" "$3":"$4}' | tr '\n' ' ')"
     else
-      printf '  %-12s nahi (driver/hardware nahi mila)\n' "$d"
+      printf ' %-12s not (driver/hardware not found)\n' "$d"
     fi
   done
   # mdev ka ek coldplug: naye nodes ko turant sahi group/mode do

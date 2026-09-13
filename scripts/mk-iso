@@ -10,9 +10,9 @@ ISO=$OUT
 STAGE=$WORK/iso
 resolve_kernel
 
-[ -f "$WORK/iso/live/pk.sqfs" ] || die "pehle: scripts/mk-squashfs"
-[ -f "$WORK/iso/boot/pk-initrd" ] || die "pehle: scripts/mk-initrd"
-have grub-mkrescue || die "grub-mkrescue nahi mila -> sudo apt install grub-pc-bin grub-efi-amd64-bin xorriso mtools"
+[ -f "$WORK/iso/live/pk.sqfs" ] || die "first: scripts/mk-squashfs"
+[ -f "$WORK/iso/boot/pk-initrd" ] || die "first: scripts/mk-initrd"
+have grub-mkrescue || die "grub-mkrescue not found -> sudo apt install grub-pc-bin grub-efi-amd64-bin xorriso mtools"
 
 log "ISO stage: $STAGE"
 # stage me jo files is build ne nahi banaye, unhe phase kiyo (duplicate boot images)
@@ -29,7 +29,7 @@ install -m 0644 "$KERNEL" "$STAGE/boot/pk-kernel"
 # app runtime (optional): WITH_RUNTIME=1 -> ISO ke andar /live/pk-runtime.sqfs
 RTIMG=${PK_RUNTIME_IMG:-$BUILD/pk-runtime.sqfs}
 if [ "${WITH_RUNTIME:-0}" = 1 ] || [ -n "${PK_RUNTIME_IMG:-}" ]; then
-  [ -f "$RTIMG" ] || die "runtime image nahi mila: $RTIMG  (pehle: make runtime)"
+  [ -f "$RTIMG" ] || die "runtime image not found: $RTIMG (first: make runtime)"
   install -m 0644 "$RTIMG" "$STAGE/live/pk-runtime.sqfs"
   log "  + app runtime: $(du -h "$RTIMG" | cut -f1) -> /live/pk-runtime.sqfs"
 fi
@@ -42,7 +42,7 @@ if have sha256sum; then
     sha256sum "$f" | awk '{print $1}' > "$f.sha256"
   done
   ( cd "$STAGE" && sha256sum live/*.sqfs boot/pk-kernel boot/pk-initrd > SHA256SUMS 2>/dev/null ) || true
-  log "  payload sha256 sidecars likhe (pk_verify=1 se boot par check)"
+  log " payload sha256 sidecars written (pk_verify=1 from boot on check)"
 fi
 
 # grub menu (template se @ARGS@/@LABEL@/@VER@ bharte hain)
@@ -95,7 +95,7 @@ Disk me changes: 'pk-persist' helper use karo (docs/persistence.md).
 TXT
 cp "$STAGE/README.txt" "$BUILD/README-ISO.txt" 2>/dev/null || true
 
-log "grub-mkrescue chal raha hai..."
+log "grub-mkrescue is running..."
 # grub-mkrescue /tmp me apna staging banata hai (~100 MB). Jahan /tmp chhota tmpfs
 # hai (1 GB wale containers, live-USB par build) wahan "No space left on device" se
 # ISO build fail ho jaata tha -> staging ko build/ ke andar (disk-backed) bhej dete hain.
@@ -111,12 +111,12 @@ log "ISO ready: $ISO ($sz)"
 if have file; then file "$ISO" | sed 's/^/  /'; fi
 # hybrid check: MBR me bootable partition + protective GPT + El Torito EFI
 printf '  isohybrid : '
-if od -An -tx1 -j510 -N2 "$ISO" 2>/dev/null | grep -qi '55 aa'; then echo "MBR magic 55AA present (dd-able)"; else echo "MISSING - USB pe dd se boot nahi karega!"; fi
+if od -An -tx1 -j510 -N2 "$ISO" 2>/dev/null | grep -qi '55 aa'; then echo "MBR magic 55AA present (dd-able)"; else echo "MISSING - USB on dd from boot not karega!"; fi
 printf '  protective GPT: '
 if dd if="$ISO" bs=512 skip=1 count=1 2>/dev/null | head -c 8 | grep -q "EFI PART"; then
   echo "yes (UEFI-bootable image)"
 else
-  warn "protective GPT nahi mila - UEFI boot issue ho sakta hai"
+  warn "protective GPT not found - UEFI boot issue ho may is"
 fi
 printf '  efi img   : '
 [ -f "$STAGE"/boot/grub/i386-pc/efi.img ] && echo present || echo "(grub-mkrescue ne ISO ke andar banaya)"

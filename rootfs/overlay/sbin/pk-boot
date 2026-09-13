@@ -142,7 +142,7 @@ fi
 # systemd nahi, isliye seatd (runtime ke andar) wahi kaam karta hai. pk_seatd=off se band.
 if ! has pk_seatd=off; then
   if [ ! -S /opt/pk/run/seatd.sock ]; then
-    note "pk-seatd start (weston session ke liye)"
+    note "pk-seatd start (weston session for)"
     pk-seatd start >/run/pk/seatd-boot.log 2>&1 || note "  seatd failed (detail: /run/pk/seatd-boot.log) - weston will try without seatd"
   fi
 fi
@@ -158,11 +158,11 @@ if has pk_desktop=1 || has pk_desktop=on; then
   if grep -qs 'WAYLAND_DISPLAY' /run/pk/x-env 2>/dev/null; then
     printf 'pk-desktop: weston/Wayland session started (%s)\n' "${d_tail:-ok}" > /dev/console 2>/dev/null
   else
-    printf '### PK: DESKTOP-XVFB (screen par kuch nahi; reason: %s) ###\n' "${d_tail:-no-log}" > /dev/console
+    printf '### PK: DESKTOP-XVFB (nothing on screen not; reason: %s) ###\n' "${d_tail:-no-log}" > /dev/console
     if [ -w /dev/tty1 ]; then
       { printf "\npk's OS: desktop session started on Xvfb (virtual - the screen stays blank; view it with 'pk-desktop vnc 5900')\n"
         printf "  reason: %s\n" "${d_tail:-no-log}"
-        printf "  GUI dekhne ke liye: pk-desktop vnc 5900  (viewer host par, guest IP port 5900)\n"
+        printf " GUI to view for: pk-desktop vnc 5900 (viewer host on , guest IP port 5900)\n"
         printf "  ya VM ka graphics device KMS-wala chuno: docs/VM-TEST.md #2b\n"
       } > /dev/tty1 2>/dev/null || true
     fi
@@ -291,7 +291,7 @@ if has 'pk_selftest'; then
           out=$(pk-run "$pkg" $args 2>&1 | head -3 | tr '\n' '|' | cut -c1-140)
           printf '### PK: APPS-GET-OK (%s) %s ###\n' "$pkg" "$out"
         else
-          printf '### PK: APPS-GET-INSTALLED (%s) koi /usr/bin binary nahi mili ###\n' "$pkg"
+          printf '### PK: APPS-GET-INSTALLED (%s) any /usr/bin binary not mili ###\n' "$pkg"
         fi
       else
         printf '### PK: APPS-GET-FAIL (%s) %s ###\n' "$pkg" "$(tail -c 200 /run/pk/apps-get.log 2>/dev/null | tr '\n' '|')"

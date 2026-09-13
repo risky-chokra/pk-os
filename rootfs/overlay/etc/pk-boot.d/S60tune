@@ -18,7 +18,7 @@ command -v pk-tune >/dev/null 2>&1 || { say "pk-tune not found (older image?)"; 
 sw=$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^pk_swap=//p' | head -1)
 [ -n "$sw" ] || sw=$(sed -n 's/^PK_SWAP=//p' "$DEF" 2>/dev/null | tr -d '"' | head -1)
 case "${sw:-}" in
-  off|0) say "swap: boot option ne off kiya" ;;
+  off|0) say "swap: boot option ne off set" ;;
   auto)
     mt=$(awk '/^MemTotal/{print int($2/1024/2)}' /proc/meminfo 2>/dev/null)
     [ "${mt:-0}" -lt 1024 ] && mt=1024

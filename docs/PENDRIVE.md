@@ -35,6 +35,27 @@ Windows: use Rufus (DD/raw mode) or `dd for Windows`, then
 
 Never write to `/dev/sda` on your own machine — `dd` does not ask twice.
 
+### If Rufus warns about the GRUB version
+
+Rufus checks which bootloader an ISO carries and compares it with the copy it ships.
+pk's OS images are built with **GRUB 2.12** (`grub-mkimage (GRUB) 2.12`), while Rufus
+bundles an older GRUB, so it prints something like *"this ISO uses a newer GRUB version
+than the one Rufus will install"*. That warning is not an error in the image:
+
+* choose **DD Image mode** - Rufus copies the image byte for byte and installs no
+  bootloader of its own, so the version question does not even apply;
+* if you stay in ISO Image mode, Rufus rewrites the ESP with *its* GRUB and that is
+  exactly what breaks the hybrid layout (no entry in the firmware boot menu);
+* `tools/write-usb.sh` (Linux) and balenaEtcher always write raw, so they never show it.
+
+You can confirm what the stick really carries:
+
+```sh
+grep -ao 'GRUB version [0-9.]*' /dev/disk/by-id/<stick> 2>/dev/null | head -1
+```
+
+A stick that boots our image reports `2.12`. Anything else means a different
+bootloader was written on top of it.
 ## 2b. The stick does not appear in the boot menu at all
 
 Check it before rebooting - from Linux, on the stick or on the ISO file:

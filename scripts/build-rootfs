@@ -31,7 +31,7 @@ ln -sfn /proc/self/mounts "$OV/etc/mtab"
 if [ -d "$PK_ROOT/rootfs/overlay" ]; then
   ( cd "$PK_ROOT/rootfs/overlay" && tar -cf - . ) | ( cd "$OV" && tar -xf - )
 else
-  warn "rootfs/overlay nahi mila -> khaali rootfs banegi"
+  warn "rootfs/overlay not found -> khaali rootfs banegi"
 fi
 
 # ---------------------------------------------------------------- overlay script hygiene
@@ -56,7 +56,7 @@ if [ -z "$BUSYBOX" ]; then
     [ -z "$BUSYBOX" ] && BUSYBOX=$c
   done
 fi
-[ -n "$BUSYBOX" ] || die "static busybox nahi mila -> sudo apt install busybox-static"
+[ -n "$BUSYBOX" ] || die "static busybox not found -> sudo apt install busybox-static"
 log "busybox: $BUSYBOX"
 install -m 0755 "$BUSYBOX" "$OV/bin/busybox"
 for d in bin sbin usr/bin usr/sbin; do mkdir -p "$OV/$d"; done
@@ -86,7 +86,7 @@ if [ -n "${LIVE_PASS:-}" ]; then
     fi
     log "root password set (live: '$LIVE_PASS')"
   else
-    warn "passwd hash nahi bana paya (busybox mkpasswd/openssl missing) - /etc/shadow waisa hi rahega"
+    warn "could not build a passwd hash (busybox mkpasswd/openssl missing) - /etc/shadow waisa rahega"
   fi
 fi
 
@@ -133,10 +133,10 @@ if [ -d /usr/lib/grub ]; then
   rm -rf "$OV/usr/lib/grub"/arm64-efi "$OV/usr/lib/grub"/i386-pc-uefi 2>/dev/null || true
   [ -d /usr/share/grub ] && cp -a /usr/share/grub "$OV/usr/share/" 2>/dev/null
   for g in i386-pc x86_64-efi; do
-    [ -d "$OV/usr/lib/grub/$g" ] || warn "grub $g modules nahi mile (installer ka $g boot fail ho sakta hai)"
+    [ -d "$OV/usr/lib/grub/$g" ] || warn "grub $g modules not mile (installer $g boot fail ho may is)"
   done
 else
-  warn "/usr/lib/grub nahi mila -> installer grub-install nahi kar payega (sudo apt install grub-pc-bin grub-efi-amd64-bin)"
+  warn "/usr/lib/grub not found -> installer grub-install not run payega (sudo apt install grub-pc-bin grub-efi-amd64-bin)"
 fi
 
 # ---------------------------------------------------------------- firmware (optional)
@@ -189,7 +189,7 @@ if [ -f "$PK_ROOT/config/live-modules.txt" ] && [ -d "$PK_MODULES" ]; then
     ( depmod -b "$OV" -a "$KVER" > "$WORK/depmod.log" 2>&1 ) || warn "depmod -b fail (log: $WORK/depmod.log)"
     rm -f "$OV/lib/modules/$KVER/modules."*.tmp 2>/dev/null || true
   else
-    warn "depmod nahi -> /lib/modules bina modules.dep ke (modprobe kaam nahi karega)"
+    warn "depmod not -> /lib/modules without modules.dep ke (modprobe kaam not karega)"
   fi
   log "  $n modules -> /lib/modules/$KVER"
 fi
@@ -227,7 +227,7 @@ for l in us de fr es it ru uk in jp; do
   else cp -p "$f" "$OV/usr/share/kmap/$l.kmap.gz"; fi
 done
 km=$(ls "$OV/usr/share/kmap" 2>/dev/null | wc -l)
-if [ "$km" = 0 ]; then warn "console keymaps nahi mile (builder par 'kbd' install karo) - pk-keymap GUI-only karega"; else log "  $km console keymaps -> /usr/share/kmap"; fi
+if [ "$km" = 0 ]; then warn "console keymaps not mile (builder but 'kbd' install check) - pk-keymap GUI-only karega"; else log "  $km console keymaps -> /usr/share/kmap"; fi
 
 # ---------------------------------------------------------------- metadata / live marker
 printf '%s\n' "${OS_VERSION:-1.0}" > "$OV/etc/pk-build"

@@ -132,12 +132,12 @@ do_info() { # <ipa|app>
   printf 'device family : %s  (1=iphone 2=ipad)\n' "$(plist_get "$pl" UIDeviceFamily)"
   printf 'platform      : %s\n' "$(plist_get "$pl" DTPlatformName)"
   if [ -n "$exe" ] && [ -f "$exe" ]; then
-    printf 'binary arch   : %s\n' "$(macho_arch "$exe" || echo '(parse nahi)')"
+    printf 'binary arch   : %s\n' "$(macho_arch "$exe" || echo '(parse not)')"
   fi
-  printf '\nkya hoga       : CHALEGA NA (iOS/UKit runtime chahiye). Kya kar sakte ho:\n'
-  printf '  - web app bana do : pk-ios web <url> %s\n' "$(plist_get "$pl" CFBundleDisplayName | tr -d ' ' | tr 'A-Z' 'a-z' | cut -c1-20)"
+  printf '\nkya will : CHALEGA NA (iOS/UKit runtime required). Kya run may ho:\n'
+  printf ' - web app bana pass it : pk-ios web <url> %s\n' "$(plist_get "$pl" CFBundleDisplayName | tr -d ' ' | tr 'A-Z' 'a-z' | cut -c1-20)"
   printf '  - macOS guest me Xcode Simulator (pk-ios mac-guest)\n'
-  printf '  - agar source code hai -> Flutter/React Native/Tauri se yahan native build\n'
+  printf ' - agar source code is -> Flutter/React Native/Tauri from yahan native build\n'
   mark "IOS-INFO-OK $(basename "$app")"
   ls "$app" 2>/dev/null | sed 's/^/  file: /' | head -12
   printf '  (extracted: %s)\n' "$work"
@@ -182,7 +182,7 @@ TXT
 #!/bin/sh
 # pk-ios web launcher: $url  (browser abhi nahi hai)
 echo "$name: no browser found.  Install:  pk-get install -y firefox-esr" >&2
-echo "  GUI ke liye pehle:  pk-x start      phir:  pk-run $name" >&2
+echo " GUI for first: pk-x start then: pk-run $name" >&2
 exit 73
 TXT
   fi
@@ -195,7 +195,7 @@ Name=$name (web)
 Exec=$name
 Comment=pk-ios web wrapper for $url
 TXT
-  say "launcher bana: $d/$name   (chalane ke liye:  pk-run $name   ya   pk-run --gui $name)"
+  say "launcher bana: $d/$name (to run for: pk-run $name ya pk-run --gui $name)"
   [ -n "$b" ] || warn "no browser installed yet (pk-get install -y firefox-esr)"
   mark "IOS-WEB-OK ($name -> $url)"
   return 0
@@ -205,12 +205,12 @@ do_doctor() {
   printf 'pk-ios doctor\n'
   printf '  runtime (/opt/pk) : '
   if runtime_ok; then printf 'attached (%s)\n' "$(cat "$RT/etc/pk-runtime-release" 2>/dev/null | head -1 | cut -c1-50)"; else printf 'no laga\n'; fi
-  printf '  unzip             : '; have unzip && printf 'yes\n' || printf 'NAHI (.ipa kholne ke liye chahiye)\n'
-  printf '  browser (web wrap): '; for c in firefox-esr firefox epiphany chromium surf; do if runtime_ok && [ -x "$RT/usr/bin/$c" ]; then printf '%s (runtime)\n' "$c"; break; fi; if have "$c"; then printf '%s (base)\n' "$c"; break; fi; printf 'koi nahi -> pk-get install -y firefox-esr\n'; break; done
+  printf '  unzip             : '; have unzip && printf 'yes\n' || printf 'NAHI (.ipa kholne for required)\n'
+  printf '  browser (web wrap): '; for c in firefox-esr firefox epiphany chromium surf; do if runtime_ok && [ -x "$RT/usr/bin/$c" ]; then printf '%s (runtime)\n' "$c"; break; fi; if have "$c"; then printf '%s (base)\n' "$c"; break; fi; printf 'any not -> pk-get install -y firefox-esr\n'; break; done
   printf '  qemu (mac guest)  : '; if [ -x "$RT/usr/bin/qemu-system-x86_64" ] || have qemu-system-x86_64; then printf 'yes\n'; else printf 'no -> pk-get install -y qemu-system-x86\n'; fi
-  printf '  /dev/kvm          : '; [ -e /dev/kvm ] && printf 'yes (tezos)\n' || printf 'no (TCG se 5-10x dheema)\n'
-  printf '  darling           : '; if runtime_ok && { [ -x "$RT/usr/bin/darling" ] || [ -x "$RT/usr/bin/darling-shell" ]; }; then printf 'installed\n'; else printf 'no (macOS binaries ke liye; pk-ios darling)\n'; fi
-  printf '\n  yaad: iOS/.ipa kabhi native nahi chalega; upar wale raaste hi real hain.\n'
+  printf '  /dev/kvm          : '; [ -e /dev/kvm ] && printf 'yes (tezos)\n' || printf 'no (TCG from 5-10x slow)\n'
+  printf '  darling           : '; if runtime_ok && { [ -x "$RT/usr/bin/darling" ] || [ -x "$RT/usr/bin/darling-shell" ]; }; then printf 'installed\n'; else printf 'no (macOS binaries for; pk-ios darling)\n'; fi
+  printf '\n yaad: iOS/.ipa kabhi native not run; upar wale raaste real are.\n'
   mark "IOS-DOCTOR-OK"
 }
 
@@ -274,7 +274,7 @@ TXT
       say "ab:  pk-shell  ke andar  git clone --recursive https://github.com/darlinghq/darling.git && make"
       mark "IOS-DARLING-DEPS-OK"
     else
-      warn "pk-get fail (runtime attach hai? net hai?)"
+      warn "pk-get fail (runtime attach is? net? )"
       mark "IOS-DARLING-DEPS-FAIL"
       return 70
     fi
@@ -285,9 +285,9 @@ TXT
 case "${1:-}" in
   doctor)   shift; do_doctor ;;
   why|why-not|why-) why ;;
-  info)     shift; do_info "${1:?file.ipa do}" ;;
-  extract)  shift; do_extract "${1:?file.ipa do}" "${2:-}" ;;
-  web)      shift; do_web "${1:?url do}" "${2:-}" "${3:-}" ;;
+  info)     shift; do_info "${1:?file.ipa pass it}" ;;
+  extract)  shift; do_extract "${1:?file.ipa pass it}" "${2:-}" ;;
+  web)      shift; do_web "${1:?url pass it}" "${2:-}" "${3:-}" ;;
   mac-guest|guest) shift; [ "${1:-}" = --run ] && do_mac_guest --run "${2:-}" || do_mac_guest ;;
   darling)  shift; do_darling "${1:-}" ;;
   ""|--help|-h) sed -n '2,14p' "$0"; echo; why ;;

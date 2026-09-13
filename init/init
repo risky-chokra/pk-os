@@ -35,7 +35,7 @@ bail() {
   say "BOOT FAIL: $*"
   echo "pk-init: FAIL: $*" >/dev/kmsg 2>/dev/null
   echo '--- debug: ls /sys/block ; cat /proc/cmdline ; dmesg | tail -60'
-  echo '--- exit (ctrl-d) = boot continue karne ki koshish'
+  echo '--- exit (ctrl-d) = boot continue to do koshish'
   setsid cttyhack sh 2>/dev/null || sh
 }
 
@@ -337,7 +337,7 @@ mount_live_base() {
         say "WARNING: payload hash mismatch - booting anyway (pk_verify=require would stop)"
       fi
     else
-      say "verify: no sidecar $sc next to the image - old ISO? (mk-iso now writes $(basename "$IMG").sha256)"$IMG").sha256 banata hai)"
+      say "verify: no sidecar $sc next to the image - old ISO? (mk-iso now writes $(basename "$IMG").sha256)"$IMG").sha256 banata is)"
       printf '### PK: VERIFY-NOSIDECAR ###\n' > /dev/console 2>/dev/null
     fi
   fi
@@ -356,7 +356,7 @@ mount_live_base() {
       esac
       say "toram done - the boot medium can be removed now"
     else
-      say "toram copy fail -> media se hi mount"
+      say "toram copy failed -> mounting from the media instead"
     fi
   fi
 
@@ -434,10 +434,10 @@ if [ "$MODE" = live ]; then
       QEMU  : -cdrom build/pkos.iso
       real  : ISO ko USB pe dd karo (tools/write-usb.sh)
       check : ls /sys/block ; dmesg | tail -40"
-  make_rw_root    || bail "writable root nahi ban paya (overlayfs bhi nahi, tmpfs copy bhi nahi)"
+  make_rw_root    || bail "writable root could not be created (overlayfs also not, tmpfs copy also not)"
 fi
-[ -x /newroot/sbin/init ] || bail "/newroot/sbin/init missing - root image kharab lagta hai"
-[ "$BREAK" = mount ] && bail "break=mount - ctrl-d se boot continue"
+[ -x /newroot/sbin/init ] || bail "/newroot/sbin/init missing - root image corrupt lagta is"
+[ "$BREAK" = mount ] && bail "break=mount - boot continues after ctrl-d"
 
 # ------------------------------------------------------------------ runtime mounts
 for m in dev proc sys run; do

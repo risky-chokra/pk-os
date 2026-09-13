@@ -47,18 +47,18 @@ case "${1:-}" in
       esac
       shift
     done
-    mode=$(qemu) || { err "qemu nahi mila. Runtime me install karo:"; err "  pk-get install -y qemu-system-x86 ovmf"; err "(ya host pe: sudo apt-get install -y qemu-system-x86)"; exit 64; }
+    mode=$(qemu) || { err "qemu not found. Runtime in install do it:"; err "  pk-get install -y qemu-system-x86 ovmf"; err "(ya host pe: sudo apt-get install -y qemu-system-x86)"; exit 64; }
     img=""
     if [ -n "$name" ]; then
       for c in "$VMDIR/$name.qcow2" "$VMDIR/$name.raw" "$VMDIR/$name"; do
         [ -f "$c" ] && { img=$c; break; }
       done
-      [ -n "$img" ] || { err "disk image nahi mila: $name (pehle: pk-vm new $name --size=40G)"; exit 1; }
+      [ -n "$img" ] || { err "disk image not found: $name (first: pk-vm new $name --size=40G)"; exit 1; }
     fi
     if [ "$macos" = 1 ] && [ "$agreed" != 1 ]; then
-      err "macOS guest: Apple ka EULA ise sirf Apple hardware par chalne deta hai."
-      err "isliye maine rok diya. Samajhdaari ke saath aage badhna ho to --i-know-the-license add karo."
-      err "aur bhi chahiye: CPU virtualization (grep -c -E 'vmx|svm' /proc/cpuinfo > 0), OpenCore/extra kexts, OVMF."
+      err "macOS guest: Apple EULA ise sirf Apple hardware on run deta is."
+      err "so maine rok given. Care ke saath proceed ho to --i-know-the-license add do it."
+      err "and also required: CPU virtualization (grep -c -E 'vmx|svm' /proc/cpuinfo > 0), OpenCore/extra kexts, OVMF."
       exit 66
     fi
     set -- -name guest="${name:-pk-guest}" -machine q35 -m "$ram" -smp "$cpus" \
@@ -69,7 +69,7 @@ case "${1:-}" in
       [ -f "$f" ] && set -- "$@" -drive "if=pflash,format=raw,readonly=on,file=$f"
     done
     [ "$macos" = 1 ] && set -- "$@" -cpu Penryn,kvm=on,hv_relaxed=1 -device usb-ehci
-    say "VNC: localhost$vnc  (guest dekhne ke liye kisi bhi machine se: vnc <ip>:5900+${vnc#:})"
+    say "VNC: localhost$vnc (guest to view for any also machine se: vnc <ip>:5900+${vnc#:})"
     say "cmd: qemu-system-x86_64 $*"
     run_in "$mode" /usr/bin/qemu-system-x86_64 "$@" ;;
   *) cat <<USAGE

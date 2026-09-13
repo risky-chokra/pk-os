@@ -187,7 +187,7 @@ while IFS='|' read -r path name; do
   size=$(wc -c < "$path" | tr -d ' ')
   sha=$(sha256sum "$path" | cut -c1-64)
   # replace an asset of the same name (upload is not idempotent on GitHub)
-  if [ -n "$aid" ]; then
+  if [ -n "$existing" ]; then
     oldid=$(printf '%s' "$existing" | sed -n 's/.*"assets":\[{.*"id":[ ]*\([0-9]*\).*/\1/p' | head -1)
     for j in $(printf '%s' "$existing" | sed 's/},{/}\n{/g' | grep -n "\"name\":\"$name\"" | cut -d: -f1); do
       oldid=$(printf '%s' "$existing" | sed -n "${j}p" | sed -n 's/.*"id":[ ]*\([0-9]*\).*/\1/p' | head -1)

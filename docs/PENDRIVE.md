@@ -35,6 +35,43 @@ Windows: use Rufus (DD/raw mode) or `dd for Windows`, then
 
 Never write to `/dev/sda` on your own machine — `dd` does not ask twice.
 
+## 2b. The stick does not appear in the boot menu at all
+
+Check it before rebooting - from Linux, on the stick or on the ISO file:
+
+```sh
+tools/usb-bootable.sh /dev/sdX            # what the firmware will actually find
+tools/usb-bootable.sh build/pkos-apps.iso # the image you are about to write
+```
+
+It reports the MBR signature, the partition type, the GPT header (`EFI PART`), the El Torito
+catalogue and whether `/boot` (kernel, initrd, live payload) and `EFI/BOOT/BOOTX64.EFI` exist.
+`VERDICT: layout looks bootable` means the image is fine and the problem is the firmware
+settings below; `BAD` means the write itself was wrong.
+
+The four causes we actually see, in order:
+
+1. **Rufus wrote in "ISO Image mode".** Rufus then *extracts* the files and installs its own
+   bootloader, which destroys the hybrid layout - the stick has no GPT and no El Torito, and
+   firmware lists nothing. Re-run Rufus and when it asks **"How you want to write the image"
+   choose `DD Image mode`** (if it did not ask, hold Shift and click START, or use the
+   "Selection" dropdown). `balenaEtcher` or `dd for Windows` always write raw and also work.
+   Wipe the stick first if the partition table is now messy: `diskpart` > `select disk N` > `clean`.
+2. **Secure Boot is on.** The kernel and GRUB here are unsigned, so UEFI hides the entry
+   instead of booting it. Turn Secure Boot off (some firms need a supervisor password set
+   before the option becomes editable).
+3. **Fast Boot / "USB boot support" is on/off.** Dell, HP and Lenovo firmware each has a
+   toggle for booting from USB; Fast Boot also skips the menu key entirely. On Windows 11 the
+   reliable way in: *Settings > System > Recovery > Advanced start-up > Restart now*, then
+   **Use a device > UEFI: <your stick>**.
+4. **The port or the stick.** USB 3 ports behind a hub and some 128 GB+ sticks behave badly at
+   firmware level: use a direct USB 2.0 port, and if the BIOS has "Legacy/CSM" try that too -
+   the image boots both ways.
+
+If `tools/usb-bootable.sh` says the stick is fine but the laptop still lists nothing, write the
+same image to a different stick before suspecting the PC: firmware USB init failures look exactly
+like a bad image.
+
 ## 3. Boot the target PC
 
 1. Power on, enter the firmware menu (usually `F12`, `F2`, `Esc`, `Del`), choose USB.

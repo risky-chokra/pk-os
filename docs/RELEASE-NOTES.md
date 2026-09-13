@@ -8,7 +8,7 @@ user management. Built entirely from source on your machine.
 
 | File | Size | Use |
 |---|---|---|
-| `pkos-1.1-apps.iso` | 648560640 bytes (618.5 MiB) | **this one.** Base live system + Debian app runtime + desktop + Wine + essentials |
+| `pkos-1.1-apps.iso` | 648503296 bytes (618.5 MiB) | **this one.** Base live system + Debian app runtime + desktop + Wine + essentials |
 | `pkos-1.1.iso` | 97820672 bytes (93.3 MiB) | console-only live system + installer + device modules (add a runtime later) |
 
 Write it to a stick (destroys the stick's data):

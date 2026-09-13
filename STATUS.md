@@ -9,8 +9,8 @@ been folded into this document (the original wording stays in the git history).
 |---|---|
 | Version | 1.1 (tag `v1.1`) |
 | Base live ISO | `build/pkos.iso` — 97820672 bytes (93.3 MiB) |
-| Apps ISO (recommended) | `build/pkos-apps.iso` — 648560640 bytes (618.5 MiB) |
-| App runtime | `build/pk-runtime.sqfs` — 550703104 bytes (525.2 MiB), zstd, Debian bookworm `desktop` variant |
+| Apps ISO (recommended) | `build/pkos-apps.iso` — 648503296 bytes (618.5 MiB) |
+| App runtime | `build/pk-runtime.sqfs` — 550645760 bytes (525.1 MiB), zstd, Debian bookworm `desktop` variant |
 | Essential commands verified in the runtime | `count=55 missing=0` (`/etc/pk-essentials.txt`, published as a release asset) |
 | Documentation | English only — README, all 13 `docs/*.md`, this file, the in-image cheat sheet, `pk-help`, `/etc/motd`, `/etc/issue`; guarded by `tools/publish.sh --docs-only` |
 | On-screen text | English everywhere - the 13 GRUB menu titles, the initramfs handoff lines, `pk-boot`/`pk-install`/`pk-runtime` progress and every error they raise, all 53 `pk-check` rows, and the printed messages of every shipped tool (`pk-run`, `pk-x`, `pk-desktop`, `pk-user`, `pk-net`, `pk-wifi`, `pk-tune`, `pk-ios`, `pk-android`, ...). Only in-code developer comments and the QA script's own pass/fail labels are Hinglish |

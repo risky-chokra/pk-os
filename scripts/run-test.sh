@@ -233,16 +233,49 @@ elif want 2 || want 3; then
   mnt=$BUILD/test-mnt; mkdir -p "$mnt"
   off=$(parted -s -m "$DISK" unit B print 2>/dev/null | awk -F: '$1=="3"{print $2}' | tr -d 'B')
   as_root umount "$mnt" 2>/dev/null || true
-  if [ -n "${off:-}" ] && as_root mount -o ro,loop,offset="$off" "$DISK" "$mnt" 2>/dev/null; then
+  mounted=no; DFS=""
+  # noload: the ext4 journal is still dirty right after the installer wrote it, and a
+  # plain read-only mount of a dirty-journal fs is refused by the kernel.
+  for opt in "ro,noload,loop" "ro,loop" "loop"; do
+    [ -n "${off:-}" ] || break
+    [ "$mounted" = yes ] && break
+    as_root mount -o "$opt,offset=$off" "$DISK" "$mnt" 2>/dev/null && mounted=yes
+  done
+  if [ "$mounted" = no ] && [ -n "${off:-}" ] && have debugfs; then
+    dfstmp=$BUILD/test-dfs; mkdir -p "$dfstmp"
+    DFS=$(as_root losetup -f 2>/dev/null || true)
+    if [ -n "${DFS:-}" ]; then as_root losetup -o "$off" "$DFS" "$DISK" 2>/dev/null || DFS=""; fi
+  fi
+  # read through the mount as root: the fs root can be 0700, so a plain user test -e lies
+  inst_present() {  # $1 = path that must exist (and be non-empty, except symlinks)
+    if [ "$mounted" = yes ]; then
+      as_root sh -c "[ -e '$mnt/$1' ]" 2>/dev/null || return 1
+      case $1 in
+        sbin/init) as_root sh -c "[ -x '$mnt/$1' ]" 2>/dev/null ;;
+        *)         as_root sh -c "[ -s '$mnt/$1' ]" 2>/dev/null ;;
+      esac
+    else
+      [ -n "${DFS:-}" ] || return 1
+      as_root debugfs -R "stat $1" "$DFS" 2>/dev/null | grep -qE 'Size: [1-9]'
+    fi
+  }
+  inst_cat() {       # $1 = path -> contents on stdout
+    if [ "$mounted" = yes ]; then as_root cat "$mnt/$1" 2>/dev/null
+    elif [ -n "${DFS:-}" ]; then
+      as_root debugfs -R "dump $1" "$DFS" "$BUILD/test-dfs/f" 2>/dev/null && cat "$BUILD/test-dfs/f" 2>/dev/null
+    fi
+  }
+  if [ "$mounted" = yes ] || [ -n "${DFS:-}" ]; then
     total=$((total + 1))
-    if [ -f "$mnt/etc/pk-installed" ] && [ -x "$mnt/sbin/init" ] && \
-       [ -s "$mnt/boot/pk-kernel" ] && [ -s "$mnt/boot/pk-initrd" ]; then
-      pass "installed tree sahi (init + kernel + initrd + marker)"
+    if inst_present etc/pk-installed && inst_present sbin/init && \
+       inst_present boot/pk-kernel && inst_present boot/pk-initrd; then
+      [ "$mounted" = yes ] && pass "installed tree sahi (init + kernel + initrd + marker)" \
+        || pass "installed tree sahi (init + kernel + initrd + marker) [debugfs]"
     else
       bad "installed tree adhoori (init/kernel/initrd check karo)"
     fi
     # root password: shadow ka salt nikaal ke host par dobara hash banao -> match hona chahiye
-    sh_line=$(as_root grep '^root:' "$mnt/etc/shadow" 2>/dev/null || true)
+    sh_line=$(inst_cat etc/shadow | grep '^root:' || true)
     salth=$(printf '%s' "$sh_line" | cut -d: -f2)
     salt=$(printf '%s' "$salth" | cut -d'$' -f3)
     id=$(printf '%s' "$salth" | cut -d'$' -f2)
@@ -259,19 +292,20 @@ elif want 2 || want 3; then
       *) bad "installed /etc/shadow me root hash nahi mila (id='$id')" ;;
     esac
     total=$((total + 1))
-    if grep -q 'root=UUID=' "$mnt/boot/grub/grub.cfg" 2>/dev/null; then
+    if inst_cat boot/grub/grub.cfg | grep -q 'root=UUID='; then
       pass "installed grub.cfg root=UUID use karta hai (device-name pe depend nahi)"
     else
       bad "installed grub.cfg me root=UUID nahi hai"
     fi
-    if [ -f "$mnt/etc/pk-boot.d/S20net" ] && as_root grep -q 'PK_DHCP=yes' "$mnt/etc/default/pk" 2>/dev/null; then
+    if inst_present etc/pk-boot.d/S20net && inst_cat etc/default/pk | grep -q 'PK_DHCP=yes'; then
       pass "installed system me DHCP on hai (etc/default/pk)"
     else
       note "installed DHCP flag check nahi ho paya"
     fi
-    as_root umount "$mnt" 2>/dev/null || true
+    [ "$mounted" = yes ] && { as_root umount "$mnt" 2>/dev/null || true; }
+    [ -n "${DFS:-}" ] && { as_root losetup -d "$DFS" 2>/dev/null || true; }
   else
-    note "disk image mount nahi ho payi (sudo/parted chahiye) -> host-side verify skip"
+    note "disk image mount bhi debugfs bhi nahi chala (sudo/parted/e2fsprogs chahiye) -> host-side verify skip"
   fi
 
   stage "3/8  installed disk ka apna GRUB (BIOS) -> installed root"

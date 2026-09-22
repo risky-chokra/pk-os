@@ -1,13 +1,13 @@
 #!/bin/sh
 # pk's OS :: collect-bins <dest-root> <binary...>
 #
-# Host se binaries + unki library closure (ldd) + dynamic loader <dest-root> me
-# copy karta hai, original absolute paths preserve karte hue. Is se bina package
-# management wale squashfs/initrd me bhi binaries chalte hain.
+# Copies binaries from the host + their library closure (ldd) + the dynamic loader into <dest-root>,
+# preserving original absolute paths. So binaries also run in squashfs/initrd without package
+# management.
 #
-# NOTE: hum symlinks *recreate* nahi karte (merged-usr par nirbhar padta hai,
-# jisse /lib -> /usr/lib wala relative link staged tree me dangling ho jata hai).
-# Har referenced path par real file copy karte hain - thoda duplication, par guarantee.
+# NOTE: we do not *recreate* symlinks (it would depend on merged-usr,
+# leaving the /lib -> /usr/lib relative link dangling in the staged tree).
+# Every referenced path gets a real file copy - some duplication, but guaranteed.
 # shellcheck shell=sh disable=SC3030,SC2086,SC2046
 set -eu
 
@@ -21,7 +21,7 @@ seen=$(mktemp 2>/dev/null || echo "$dest/.seen.$$")
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
-copy_one() { # absolute src path (symlink bhi ho sakta hai)
+copy_one() { # absolute src path (may be a symlink)
   src=$1
   [ -n "$src" ] || return 0
   case $src in
@@ -35,14 +35,14 @@ copy_one() { # absolute src path (symlink bhi ho sakta hai)
   dir=$dest$(dirname "$src")
   mkdir -p "$dir" 2>/dev/null || return 0
   dstf=$dir/$(basename "$src")
-  # staged tree me pehle se busybox symlink ho sakta hai (tar, mount, e2fsck...)
-  # -> cp us symlink ke THROUGH asal busybox ko destroy kar deta hai. Hatao pehle.
+  # the staged tree may already hold a busybox symlink (tar, mount, e2fsck...)
+  # -> cp THROUGH that symlink would destroy the real busybox. Remove it first.
   if [ -L "$dstf" ]; then rm -f "$dstf"; fi
   cp -p "$real" "$dstf" 2>/dev/null ||
     cp "$real" "$dstf" 2>/dev/null || return 0
   chmod 755 "$dstf" 2>/dev/null || true
 
-  # canonical location bhi exist kare (ld.so /lib64 se refer hota hai)
+  # the canonical location should exist too (ld.so refers via /lib64)
   if [ "$real" != "$src" ] && [ -e "$real" ]; then
     rdir=$dest$(dirname "$real")
     rdstdir="$rdir/$(basename "$real")"
@@ -77,7 +77,7 @@ for b in "$@"; do
   copy_one "$src"
 done
 
-# dynamic loader hamesha chahiye
+# the dynamic loader is always needed
 for ld in /lib64/ld-linux-x86-64.so.2 /lib/ld-linux-aarch64.so.1 /lib/ld-linux.so.2; do
   [ -e "$ld" ] && copy_one "$ld"
 done

@@ -1,26 +1,26 @@
 #!/bin/sh
-# pk's OS :: initramfs /init   (busybox ash, koi bashism nahi)
+# pk's OS :: initramfs /init   (busybox ash, no bashisms)
 #
 # Kaam:
 #   1) /dev /proc /sys /run mount, boot modules load (/mods)
 #   2) mode decide:
-#        installed : grub ne root=... diya -> us partition ko rw mount
-#        live      : boot medium (dd-ki hui ISO / USB) se live/pk.sqfs
-#                    ro mount + overlay (upper = RAM ya PK-PERSIST partition)
+#        installed : grub gave root=... -> mount that partition rw
+#        live      : live/pk.sqfs from the boot medium (dd'ed ISO / USB)
+#                    ro mount + overlay (upper = RAM or PK-PERSIST partition)
 #   3) exec run-init -c /dev/console /newroot /sbin/init
 #
 # Kernel cmdline knobs
 #   root=<dev|UUID=..|LABEL=..>       installed mode
-#   pk_media=/dev/sdb              live: sirf isi device pe dhoondo
-#   toram                             image pehle RAM me copy (fir media nikaal lo)
-#   persistent[=LABEL]                root changes persistence partition pe
-#   pk_install=<auto|/dev/vda>      boot hote hi installer
-#   pk_install_user=<name>          install ke saath non-root user bhi banao
-#   pk_install_userpw=<pw>          us user ka password (--user-password)
-#   pk_halt                        install ke baad poweroff
+#   pk_media=/dev/sdb              live: search only this device
+#   toram                             copy the image to RAM first (then remove the media)
+#   persistent[=LABEL]                root changes go to the persistence partition
+#   pk_install=<auto|/dev/vda>      installer as soon as boot starts
+#   pk_install_user=<name>          also create a non-root user with the install
+#   pk_install_userpw=<pw>          that user's password (--user-password)
+#   pk_halt                        poweroff after install
 #   pk_debug                       verbose init (set -x)
 #   break=mount                       initramfs shell
-#   single                            live-init ko single-user batao
+#   single                            tell live-init single-user
 #
 # shellcheck shell=sh disable=SC3030,SC2039,SC2086
 
@@ -35,7 +35,7 @@ bail() {
   say "BOOT FAIL: $*"
   echo "pk-init: FAIL: $*" >/dev/kmsg 2>/dev/null
   echo '--- debug: ls /sys/block ; cat /proc/cmdline ; dmesg | tail -60'
-  echo '--- exit (ctrl-d) = boot continue to do koshish'
+  echo '--- exit (ctrl-d) = try to continue boot'
   setsid cttyhack sh 2>/dev/null || sh
 }
 
@@ -54,14 +54,14 @@ if [ ! -e /dev/loop0 ]; then
 fi
 
 # ------------------------------------------------------------------ cmdline
-# (/proc mount hone ke BAAD parse karo, warna /proc/cmdline khali milega)
+# (parse AFTER /proc is mounted, else /proc/cmdline comes up empty)
 MODE=live
 ROOTARG=""
 MEDIAHINT=""
 TORAM=0
 PERSISTREQ=0
 PERSISTLABEL=PK-PERSIST
-PERSISTLABELS=""        # khaali = default + legacy dono accept
+PERSISTLABELS=""        # empty = accept both default + legacy
 PERSISTDIRNAME=pk-persist
 SINGLE=0
 BREAK=""
@@ -79,7 +79,7 @@ ROOTDELAY=
 FSDEBUG=0
 VERIFY=
 for a in $(cat /proc/cmdline); do
-  # legacy: purane SwapeOS images/USB `swape_*` options bhej sakte hain
+  # legacy: old SwapeOS images/USB may send `swape_*` options
   case "$a" in swape_*) a="pk_${a#swape_}" ;; esac
   case "$a" in
     pk_debug|debug)  DEBUG=1 ;;
@@ -113,11 +113,11 @@ done
 if [ "$DEBUG" = 1 ]; then
   set -x
 else
-  dmesg -n 1 2>/dev/null || true   # "Can't open blockdev" jaisa probe noise chhupao
+  dmesg -n 1 2>/dev/null || true   # hide "Can't open blockdev"-style probe noise
 fi
 
 # ------------------------------------------------------------------ modules
-# /mods = build ke waqt dependency-order me copy + decompress kiye gaye .ko
+# /mods = .ko files copied + decompressed in dependency order at build time
 if [ -d /mods ]; then
   for m in /mods/*; do
     [ -e "$m" ] || continue
@@ -129,7 +129,7 @@ if [ -d /mods ]; then
 fi
 
 # ------------------------------------------------------------------ helpers
-list_devices() { # disks + unke partitions, /dev/..
+list_devices() { # disks + their partitions, /dev/..
   for d in /sys/block/*; do
     [ -d "$d" ] || continue
     disk=${d##*/}
@@ -143,14 +143,14 @@ list_devices() { # disks + unke partitions, /dev/..
   done
 }
 
-list_extra_devs() { # device-mapper / Ventoy jaise naam: /dev/mapper/* + /dev/dm-*
+list_extra_devs() { # device-mapper / Ventoy-style names: /dev/mapper/* + /dev/dm-*
   for d in /dev/mapper/* /dev/dm-*; do
     [ -b "$d" ] || continue
     printf '%s\n' "$d"
   done
 }
 
-mounted() { # <path> -> 0 agar mount hai
+mounted() { # <path> -> 0 if mounted
   grep -q " $1 " /proc/mounts 2>/dev/null
 }
 
@@ -201,21 +201,21 @@ fi
 # ------------------------------------------------------------------ live base
 live_paths() { printf '%s\n' /live/pk.sqfs /live/swape.sqfs /PK/SQFS /SWAPE/SQFS /boot/live/pk.sqfs; }
 
-try_sqfs_here() { # <fs-ka-mountpoint-ready-at-/mnt/media> -> 0 if found (prints path)
+try_sqfs_here() { # <fs-mountpoint-ready-at-/mnt/media> -> 0 if found (prints path)
   for p in $(live_paths); do
     if [ -f "/mnt/media$p" ]; then printf '%s\n' "$p"; return 0; fi
   done
   return 1
 }
 
-# Frugal / Ventoy-style support: ISO *file* kisi partition par para ho
-# (mk_usb ntfs3/fat32 partition, hard-disk boot, "iso file copy kar di") ->
-# use loop-mount karke usme /live/pk.sqfs dhoondo.
+# Frugal / Ventoy-style support: ISO *file* lying on some partition
+# (mk_usb ntfs3/fat32 partition, hard-disk boot, "iso file copied") ->
+# loop-mount it and look for /live/pk.sqfs inside.
 try_iso_file() { # <dev> -> prints "<loopdev> <path> iso9660" 0
   iso=""
   if [ -n "${ISOHINT:-}" ]; then
     case "$ISOHINT" in
-      /*) [ -f "$ISOHINT" ] && iso=$ISOHINT ;;      # absolute path /mnt/media ke andar ka
+      /*) [ -f "$ISOHINT" ] && iso=$ISOHINT ;;      # absolute path inside /mnt/media
       *)  for c in "/mnt/media/$ISOHINT" "/mnt/media"/*"$ISOHINT"*.iso; do
             [ -f "$c" ] && { iso=$c; break; }
           done ;;
@@ -228,7 +228,7 @@ try_iso_file() { # <dev> -> prints "<loopdev> <path> iso9660" 0
     done
   fi
   [ -n "$iso" ] || return 1
-  # 512-byte aligned hone par hi direct loop chalega (ntfs/exfat par unaligned bhi ho sakta hai)
+  # direct loop works only when 512-byte aligned (may be unaligned on ntfs/exfat)
   loop=$(losetup -f 2>/dev/null); [ -n "$loop" ] || return 1
   losetup -r "$loop" "$iso" 2>/dev/null || losetup "$loop" "$iso" 2>/dev/null || return 1
   mkdir -p /mnt/iso-src 2>/dev/null
@@ -252,8 +252,8 @@ find_live_image() { # -> "<dev> <path-in-fs> <fstype>"
   fi
   for dev in $cands; do
     [ -b "$dev" ] || continue
-    # (a) common fs types, (b) vfat ke option variants (kernels/images ke bhed se
-    # iocharset/utf8 par EINVAL mil sakta hai), (c) ant me kernel ka auto-detect.
+    # (a) common fs types, (b) vfat option variants (kernels/images differ, so
+    # iocharset/utf8 may give EINVAL), (c) kernel auto-detect at the end.
     for spec in iso9660:ro udf:ro vfat:ro vfat:ro,utf8 vfat:ro,iocharset=utf8 \
                 msdos:ro exfat:ro ext4:ro xfs:ro ntfs3:ro btrfs:ro f2fs:ro auto:ro; do
       t=${spec%%:*}; o=${spec#*:}
@@ -276,11 +276,11 @@ find_live_image() { # -> "<dev> <path-in-fs> <fstype>"
         continue
       fi
       if p=$(try_sqfs_here); then
-        # /mnt/media MOUNTED rehne do - caller reuse karta hai
+        # leave /mnt/media MOUNTED - the caller reuses it
         printf '%s %s %s\n' "$dev" "$p" "$t"
         return 0
       fi
-      # FS mila par sqfs nahi -> kya yahan ISO file pari hai? (frugal / Ventoy-style)
+      # FS found but no sqfs -> is there an ISO file lying here? (frugal / Ventoy-style)
       if out=$(try_iso_file "$dev"); then
         printf '%s\n' "$out"
         return 0
@@ -293,8 +293,8 @@ find_live_image() { # -> "<dev> <path-in-fs> <fstype>"
 
 mount_live_base() {
   mkdir -p /ro /mnt/media
-  # media settle ka wait: slow USB3 stick / mmc par devices 2-8s me aate hain
-  # (Alpine rootdelay, Arch rootdelay, Fedora rd.retry jaisa hi) - pk rootdelay=/rootdelay= se badhayein
+  # wait for media to settle: devices on slow USB3 sticks / mmc arrive in 2-8s
+  # (Alpine rootdelay, Arch rootdelay, Fedora rd.retry ) - raise via pk_rootdelay or rootdelay
   tries=0
   maxtries=${ROOTDELAY:-12}
   found=""
@@ -309,7 +309,7 @@ mount_live_base() {
   set -- $found
   MEDIA=$1; IMG=$2; MEDIATYPE=${3:-auto}
   say "live base: $IMG from $MEDIA (fs=$MEDIATYPE)"
-  # scan ke waqt wahi mount already laga hai to use karo, warna lagao
+  # if that same mount is already on at scan time, use it, else mount
   if ! mounted /mnt/media; then
     mount -o ro -t "$MEDIATYPE" "$MEDIA" /mnt/media 2>/dev/null ||
       mount -o ro "$MEDIA" /mnt/media 2>/dev/null || return 1
@@ -317,8 +317,8 @@ mount_live_base() {
   SRC=/mnt/media$IMG
 
   # ---------------------------------------------------------------- payload integrity (pk_verify=1|require)
-  # ISO ke /live/*.sha256 sidecar se squashfs ka hash milata hai: yeh root-of-trust
-  # ka pehla kadam hai (signed boot nahi - wo TPM/MOK wale round me, docs/ARCHITECTURE.md).
+  # matches the squashfs hash against the ISO's /live/*.sha256 sidecar: the first step of
+  # root-of-trust (not signed boot - that comes in the TPM/MOK round, docs/ARCHITECTURE.md).
   if [ -n "${VERIFY:-}" ]; then
     sc="/mnt/media${IMG}.sha256"
     if [ -r "$sc" ]; then
@@ -337,20 +337,20 @@ mount_live_base() {
         say "WARNING: payload hash mismatch - booting anyway (pk_verify=require would stop)"
       fi
     else
-      say "verify: no sidecar $sc next to the image - old ISO? (mk-iso now writes $(basename "$IMG").sha256)"$IMG").sha256 banata is)"
+      say "verify: no sidecar $sc next to the image - old ISO? (mk-iso now writes $(basename "$IMG").sha256)"$IMG").sha256 creates)"
       printf '### PK: VERIFY-NOSIDECAR ###\n' > /dev/console 2>/dev/null
     fi
   fi
 
   if [ "$TORAM" = 1 ]; then
     kb=$(( $(wc -c < "$SRC") / 1024 + 65536 ))
-    say "toram: $((kb / 1024)) MB RAM me copy..."
+    say "toram: copying $((kb / 1024)) MB to RAM..."
     mkdir -p /run/toram
     mount -o remount,size=${kb}k tmpfs /run 2>/dev/null
     if cp "$SRC" /run/toram/pk.sqfs 2>/dev/null; then
       SRC=/run/toram/pk.sqfs
       umount /mnt/media 2>/dev/null
-      # frugal (ISO file) case: loop + source fs ab chahiye nahi -> chhod do
+      # frugal (ISO file) case: loop + source fs no longer needed -> drop them
       case "${MEDIA:-}" in
         /dev/loop*) losetup -d "$MEDIA" 2>/dev/null || true; umount /mnt/iso-src 2>/dev/null || true ;;
       esac
@@ -363,7 +363,7 @@ mount_live_base() {
   if mount -o ro -t squashfs "$SRC" /ro 2>/dev/null; then
     return 0
   fi
-  dbg "direct squashfs mount fail -> losetup wala raasta"
+  dbg "direct squashfs mount failed -> the losetup way"
   loop=$(losetup -f 2>/dev/null)
   [ -n "$loop" ] || { mknod /dev/loop8 b 7 8 2>/dev/null; loop=/dev/loop8; }
   losetup -r "$loop" "$SRC" 2>/dev/null || losetup "$loop" "$SRC" 2>/dev/null || return 1
@@ -371,7 +371,7 @@ mount_live_base() {
   mount -o ro -t squashfs "$loop" /ro 2>/dev/null || mount -o ro "$loop" /ro 2>/dev/null
 }
 
-persist_upper() { # -> "<upperdir> <workdir>"  (agar persistence partition mili)
+persist_upper() { # -> "<upperdir> <workdir>"  (if a persistence partition was found)
   mkdir -p /mnt/persist
   for dev in $(list_devices); do
     [ "$dev" = "${MEDIA:-}" ] && continue
@@ -379,7 +379,7 @@ persist_upper() { # -> "<upperdir> <workdir>"  (agar persistence partition mili)
     mount -o rw "$dev" /mnt/persist 2>/dev/null || continue
     lbl=$(blkid -s LABEL -o value "$dev" 2>/dev/null)
     if [ -n "$lbl" ]; then
-      # explicit persistent=<label> diya to wahi chahiye; warna naya + legacy label
+      # if explicit persistent=<label> was given, that one is wanted; else new + legacy labels
       accept=" $PERSISTLABEL "
       [ -z "$PERSISTLABELS" ] && accept=" $PERSISTLABEL SWAPE-PERSIST "
       case "$accept" in *" $lbl "*) : ;; *) umount /mnt/persist 2>/dev/null; continue ;; esac
@@ -390,8 +390,8 @@ persist_upper() { # -> "<upperdir> <workdir>"  (agar persistence partition mili)
       umount /mnt/persist 2>/dev/null; continue; }
     mkdir -p "$d/upper" "$d/work" 2>/dev/null || {
       umount /mnt/persist 2>/dev/null; continue; }
-    # NOTE: caller command-substitution me hai -> variables wapas nahi aa sakte,
-    # isliye dev ko bhi print karke bhejte hain (upper work dev)
+    # NOTE: the caller is in command-substitution -> variables cannot come back,
+    # so also print and send dev (upper work dev)
     printf '%s %s %s\n' "$d/upper" "$d/work" "$dev"
     return 0
   done
@@ -408,7 +408,7 @@ make_rw_root() {
       PERSISTDEV=${3:-unknown}
       if mount -t overlay overlay -o lowerdir=/ro,upperdir=$1,workdir=$2 /newroot 2>/dev/null; then
         printf '%s\n' "$PERSISTDEV" > /run/pk-persist-dev 2>/dev/null
-        say "root = squashfs + persistence ($PERSISTDEV) - changes disk pe rahenge"
+        say "root = squashfs + persistence ($PERSISTDEV) - changes stay on disk"
         return 0
       fi
       say "overlay(persistence) fail -> RAM overlay"
@@ -419,7 +419,7 @@ make_rw_root() {
   mount -t tmpfs -o size=75% tmpfs /tmp.rw 2>/dev/null || { mkdir -p /tmp.rw; }
   mkdir -p /tmp.rw/upper /tmp.rw/work
   if mount -t overlay overlay -o lowerdir=/ro,upperdir=/tmp.rw/upper,workdir=/tmp.rw/work /newroot 2>/dev/null; then
-    say "root = squashfs (ro) + RAM overlay - reboot pe sab reset"
+    say "root = squashfs (ro) + RAM overlay - everything resets on reboot"
     return 0
   fi
   say "no overlayfs -> copying the whole root into RAM"
@@ -430,13 +430,13 @@ make_rw_root() {
 }
 
 if [ "$MODE" = live ]; then
-  mount_live_base || bail "live image (live/pk.sqfs) kisi medium pe nahi mila.
+  mount_live_base || bail "live image (live/pk.sqfs) not found on any medium.
       QEMU  : -cdrom build/pkos.iso
-      real  : ISO ko USB pe dd karo (tools/write-usb.sh)
+      real  : dd the ISO to USB (tools/write-usb.sh)
       check : ls /sys/block ; dmesg | tail -40"
   make_rw_root    || bail "writable root could not be created (overlayfs also not, tmpfs copy also not)"
 fi
-[ -x /newroot/sbin/init ] || bail "/newroot/sbin/init missing - root image corrupt lagta is"
+[ -x /newroot/sbin/init ] || bail "/newroot/sbin/init missing - root image seems corrupt"
 [ "$BREAK" = mount ] && bail "break=mount - boot continues after ctrl-d"
 
 # ------------------------------------------------------------------ runtime mounts
@@ -449,7 +449,7 @@ mkdir -p /newroot/dev/shm /newroot/tmp /newroot/sys /newroot/proc
 [ -e /newroot/dev/console ] || mknod /newroot/dev/console c 5 1 2>/dev/null
 mount -t tmpfs -o mode=1777 tmpfs /newroot/dev/shm 2>/dev/null || true
 
-# live base + medium live system ke andar bhi dikhe (installer ko chahiye)
+# live base + medium also visible inside the live system (the installer needs them)
 if [ "$MODE" = live ]; then
   mkdir -p /newroot/live-base /newroot/live-iso
   mount --move /ro /newroot/live-base 2>/dev/null || mount -o bind /ro /newroot/live-base 2>/dev/null

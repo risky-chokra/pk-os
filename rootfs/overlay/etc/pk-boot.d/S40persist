@@ -1,5 +1,5 @@
 #!/bin/sh
-# boot hook: persistence ka status bata do
+# boot hook: report the persistence status
 [ -e /run/pk-persist-on ] || exit 0
 echo "pk-boot: persistence ON (changes are written to /persistence)"
 exit 0

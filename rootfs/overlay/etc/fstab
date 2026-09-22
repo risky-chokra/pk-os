@@ -1,2 +1,2 @@
-# pk's OS live session: root = squashfs + RAM overlay, isliye yahan kuch mount
-# nahi karna. Installed system me installer is file ko UUID ke saath bharta hai.
+# pk's OS live session: root = squashfs + RAM overlay, so mount nothing
+# here. On installed systems the installer fills this file with UUIDs.

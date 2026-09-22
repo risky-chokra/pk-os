@@ -33,7 +33,7 @@ case "${1:-}" in
     elif command -v qemu-img >/dev/null 2>&1; then qemu-img create -f qcow2 "$img" "$size" >/dev/null
     else dd if=/dev/zero of="$VMDIR/$name.raw" bs=1M count=0 seek=$(( $(echo "$size" | tr -dc 0-9) * 1024 )) >/dev/null 2>&1; img=$VMDIR/$name.raw; fi
     say "created: $img" ;;
-  list) ls -l "$VMDIR" 2>/dev/null | sed 's/^/  /' || say "$VMDIR khali" ;;
+  list) ls -l "$VMDIR" 2>/dev/null | sed 's/^/  /' || say "$VMDIR is empty" ;;
   run)
     shift; name=; cdrom=; ram=2048; cpus=2; uefi=0; vnc=":1"; extra=""; macos=0; agreed=0
     while [ $# -gt 0 ]; do
@@ -47,7 +47,7 @@ case "${1:-}" in
       esac
       shift
     done
-    mode=$(qemu) || { err "qemu not found. Runtime in install do it:"; err "  pk-get install -y qemu-system-x86 ovmf"; err "(ya host pe: sudo apt-get install -y qemu-system-x86)"; exit 64; }
+    mode=$(qemu) || { err "qemu not found. Install in the runtime:"; err "  pk-get install -y qemu-system-x86 ovmf"; err "(or on the host: sudo apt-get install -y qemu-system-x86)"; exit 64; }
     img=""
     if [ -n "$name" ]; then
       for c in "$VMDIR/$name.qcow2" "$VMDIR/$name.raw" "$VMDIR/$name"; do
@@ -56,8 +56,8 @@ case "${1:-}" in
       [ -n "$img" ] || { err "disk image not found: $name (first: pk-vm new $name --size=40G)"; exit 1; }
     fi
     if [ "$macos" = 1 ] && [ "$agreed" != 1 ]; then
-      err "macOS guest: Apple EULA ise sirf Apple hardware on run deta is."
-      err "so maine rok given. Care ke saath proceed ho to --i-know-the-license add do it."
+      err "macOS guest: the Apple EULA allows this only on Apple hardware."
+      err "so I have blocked it. To proceed carefully, add --i-know-the-license."
       err "and also required: CPU virtualization (grep -c -E 'vmx|svm' /proc/cpuinfo > 0), OpenCore/extra kexts, OVMF."
       exit 66
     fi
@@ -69,7 +69,7 @@ case "${1:-}" in
       [ -f "$f" ] && set -- "$@" -drive "if=pflash,format=raw,readonly=on,file=$f"
     done
     [ "$macos" = 1 ] && set -- "$@" -cpu Penryn,kvm=on,hv_relaxed=1 -device usb-ehci
-    say "VNC: localhost$vnc (guest to view for any also machine se: vnc <ip>:5900+${vnc#:})"
+    say "VNC: localhost$vnc (to view the guest from any machine: vnc <ip>:5900+${vnc#:})"
     say "cmd: qemu-system-x86_64 $*"
     run_in "$mode" /usr/bin/qemu-system-x86_64 "$@" ;;
   *) cat <<USAGE
@@ -78,7 +78,7 @@ pk-vm :: guest VMs (Windows / macOS / Android-x86 / any ISO)
   pk-vm run <name> [--cdrom=installer.iso] [--uefi] [--ram=4096] [--vnc=:1] [--macos --i-know-the-license]
   pk-vm run --image=/path/disk.qcow2 [--cdrom=x.iso]
   pk-vm list
-QEMU runtime ke andar se:  pk-get install -y qemu-system-x86 ovmf
+QEMU from inside the runtime:  pk-get install -y qemu-system-x86 ovmf
 USAGE
      [ -n "${1:-}" ] && exit 1 ;;
 esac

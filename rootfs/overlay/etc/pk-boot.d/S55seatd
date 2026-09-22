@@ -1,10 +1,10 @@
 #!/bin/sh
-# pk's OS boot hook :: seatd session manager uthao (GUI/weston iske upar chalta hai)
-#   pk_seatd=off se band; runtime na ho to apne aap skip (base ISO prabhavit nahi)
+# pk's OS boot hook :: start the seatd session manager (GUI/weston runs on top of it)
+#   pk_seatd=off disables it; auto-skips without a runtime (base ISO unaffected)
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 for a in $(cat /proc/cmdline 2>/dev/null); do
-  case "$a" in pk_seatd=off) printf 'pk-seatd-hook: band (pk_seatd=off)\n'; exit 0 ;; esac
+  case "$a" in pk_seatd=off) printf 'pk-seatd-hook: disabled (pk_seatd=off)\n'; exit 0 ;; esac
 done
 have() { command -v "$1" >/dev/null 2>&1; }
   have pk-seatd || { printf 'pk-seatd-hook: pk-seatd image in not -> skip\n'; exit 0; }

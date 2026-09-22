@@ -12,7 +12,7 @@ IMG=$WORK/iso/live/pk.sqfs
 have mksquashfs || die "mksquashfs missing -> sudo apt install squashfs-tools"
 resolve_kernel
 
-# kernel kis compression ko unpack kar sakta hai? /boot/config se pata karo
+# which compression can the kernel unpack? find out from /boot/config
 cfg=/boot/config-$KVER
 comp=${SQUASH_COMP:-auto}
 if [ "$comp" = auto ]; then
@@ -22,25 +22,25 @@ if [ "$comp" = auto ]; then
     if grep -qE "^CONFIG_SQUASHFS_$key=y" "$cfg"; then comp=$c; break; fi
   done
   [ -n "$comp" ] || { warn "$cfg in any SQUASHFS_*=y not -> gzip"; comp=gzip; }
-  [ -r "$cfg" ] || log "note: $cfg not found, $comp use run hoon"
+  [ -r "$cfg" ] || log "note: $cfg not found, using $comp"
 fi
 mkdir -p "$(dirname "$IMG")"
 rm -f "$IMG"
-# reproducible builds: SOURCE_DATE_EPOCH set ho to squashfs ke timestamps fix karo
+# reproducible builds: if SOURCE_DATE_EPOCH is set, fix squashfs timestamps
 epochopt=""
 if [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
-  # squashfs-tools 4.4+ SOURCE_DATE_EPOCH ko KHUD honor karta hai; -mkfs-time bhi
-  # do to "can't be used at the same time" se fatal -> version dekh ke hi flag do
+  # squashfs-tools 4.4+ honors SOURCE_DATE_EPOCH ITSELF; -mkfs-time too
+  # do to "can't be used at the same time" is fatal -> pass the flag only after checking the version
   ver=$( { mksquashfs -version 2>/dev/null; mksquashfs --version 2>/dev/null; } \
          | sed -n 's/.*version \([0-9]*\.[0-9]*\).*$/\1/p' | head -1)
   case "$ver" in
-    4.[4-9]*|4.1[0-9]*|5.*)  log " reproducible: mksquashfs $ver SOURCE_DATE_EPOCH khud use uses" ;;
-    "")                      log " reproducible: version parse not hui - env hi kaam karega" ;;
+    4.[4-9]*|4.1[0-9]*|5.*)  log " reproducible: mksquashfs $ver uses SOURCE_DATE_EPOCH itself" ;;
+    "")                      log " reproducible: version not parsed - the env alone will do" ;;
     *)   if mksquashfs -help 2>&1 | grep -q 'all-time'; then
            epochopt="-all-time $SOURCE_DATE_EPOCH -mkfs-time $SOURCE_DATE_EPOCH"
            log "  reproducible: -all-time/-mkfs-time = @$SOURCE_DATE_EPOCH (mksquashfs $ver)"
          else
-           warn " mksquashfs $ver in timestamp fix to run option not -> payload reproducible not will"
+           warn " mksquashfs $ver has no timestamp-fix option -> payload will not be reproducible"
          fi ;;
   esac
 fi

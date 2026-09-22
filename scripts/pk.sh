@@ -30,7 +30,7 @@ as_root() {
   fi
 }
 
-# build tree ke andar hi rm -rf chalega
+# rm -rf runs only inside the build tree
 wipe() {
   case "${1:-}" in
     "") die "wipe: no arg" ;;
@@ -39,7 +39,7 @@ wipe() {
   esac
 }
 
-find_host() { # basename -> pehla absolute path
+find_host() { # basename -> first absolute path
   for d in /usr/bin /bin /usr/sbin /sbin /usr/local/bin /usr/local/sbin; do
     [ -e "$d/$1" ] && { printf '%s/%s\n' "$d" "$1"; return 0; }
   done
@@ -51,15 +51,15 @@ subst() { # subst file TOKEN VALUE
   sed -e "s|@$1@|$2|g" "$3" > "$3.tmp" && mv "$3.tmp" "$3"
 }
 
-# tar ke liye mtime fix (reproducible image)
+# fixed mtime for tar (reproducible image)
 normalize_tree() { # dir
   [ -d "$1" ] || return 0
   find "$1" -exec touch -h -d "@0" {} + 2>/dev/null || true
 }
 
 # kernel + modules resolve:
-#   PK_KERNEL + PK_MODULES do dena padega agar custom kernel use kar rahe ho
-#   warna host ka sabse naya /boot/vmlinuz-* + /usr/lib/modules/<ver>
+#   you must give PK_KERNEL + PK_MODULES if you use a custom kernel
+#   else the host's newest /boot/vmlinuz-* + /usr/lib/modules/<ver>
 resolve_kernel() {
   if [ -n "${PK_MODULES:-}" ] && [ -n "${PK_KERNEL:-}" ]; then
     KERNEL=$PK_KERNEL

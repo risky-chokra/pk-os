@@ -1,7 +1,7 @@
 #!/bin/sh
 # pk's OS boot hook :: CPU/IO/IPC tuning + binfmt (foreign-arch) setup
-#   boot option: pk_tune=1|report|desktop|hybrid   (ya /etc/default/pk me PK_TUNE=desktop)
-# Sab kuch best-effort: jo machine support na kare wo skip, boot kabhi nahi rokta.
+#   boot option: pk_tune=1|report|desktop|hybrid   (or PK_TUNE=desktop in /etc/default/pk)
+# Everything is best-effort: skips what the machine does not support, never blocks boot.
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 DEF=/etc/default/pk
@@ -14,11 +14,11 @@ case "$mode" in yes|on|1) mode=desktop ;; esac
 
 command -v pk-tune >/dev/null 2>&1 || { say "pk-tune not found (older image?)"; exit 0; }
 
-# --- swap: pk_swap=<MB>|auto|off (pk_tune mode se independent; PK_SWAP= se default) ---
+# --- swap: pk_swap=<MB>|auto|off (independent of pk_tune mode; default via PK_SWAP=) ---
 sw=$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^pk_swap=//p' | head -1)
 [ -n "$sw" ] || sw=$(sed -n 's/^PK_SWAP=//p' "$DEF" 2>/dev/null | tr -d '"' | head -1)
 case "${sw:-}" in
-  off|0) say "swap: boot option ne off set" ;;
+  off|0) say "swap: turned off by boot option" ;;
   auto)
     mt=$(awk '/^MemTotal/{print int($2/1024/2)}' /proc/meminfo 2>/dev/null)
     [ "${mt:-0}" -lt 1024 ] && mt=1024
@@ -26,7 +26,7 @@ case "${sw:-}" in
     sw=$mt ;;
 esac
 if [ -n "${sw:-}" ] && [ "$sw" != off ] && [ "$sw" != 0 ]; then
-  say "swap: $sw MB maanga (pk_swap=$sw)"
+  say "swap: $sw MB requested (pk_swap=$sw)"
   pk-tune swap "$sw" 2>&1 | sed 's/^/  /' || say "swap could not be enabled (the reason is above: filesystem or free space)"
 fi
 
@@ -49,7 +49,7 @@ if command -v pk-binfmt >/dev/null 2>&1; then
   fi
 fi
 
-# dispatch smoke test: ek synthetic arm64 ELF header -> pk-run sahi raasta bataye
+# dispatch smoke test: a synthetic arm64 ELF header -> pk-run should show the right path
 t=/run/pk/arch-smoke.bin
 mkdir -p /run/pk 2>/dev/null
 printf '\177ELF\002\001\001\000\000\000\000\000\000\000\000\000\002\000\267\000' > "$t" 2>/dev/null

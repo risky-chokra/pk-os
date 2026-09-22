@@ -1,11 +1,11 @@
 #!/bin/sh
 # pk's OS boot hook :: dynamic device/node + driver management (busybox mdev)
-#   default: ON   (band karna ho to boot option: pk_mdev=off  ya  nomdev)
+#   default: ON   (to disable, boot option: pk_mdev=off  or  nomdev)
 #
-# Modern kernels (>=6.5) me purana /proc/sys/kernel/hotplug helper interface par
-# bharosa nahi; isliye yahan netlink listener (`uevent mdev`) + coldplug (`mdev -s`)
-# chalate hain. Har uevent par /etc/mdev/hotplug.sh chalta hai -> modprobe $MODALIAS
-# (USB wifi/ethernet/storage aate hi driver) aur NIC aaye to (PK_DHCP=yes ho) DHCP bhi.
+# Do not trust the old /proc/sys/kernel/hotplug helper interface on modern kernels (>=6.5);
+# so run a netlink listener (`uevent mdev`) + coldplug (`mdev -s`) here instead.
+# /etc/mdev/hotplug.sh runs on every uevent -> modprobe $MODALIAS
+# (drivers as soon as USB wifi/ethernet/storage arrives) and DHCP too if a NIC appears (with PK_DHCP=yes).
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 say()  { printf 'pk-boot(mdev): %s\n' "$*"; }
@@ -13,7 +13,7 @@ mark() { ( printf '### PK: %s ###\n' "$*" > /dev/console ) 2>/dev/null; ( printf
 have() { command -v "$1" >/dev/null 2>&1; }
 
 for a in $(cat /proc/cmdline 2>/dev/null); do
-  case "$a" in pk_mdev=off|nomdev) say "band (pk_mdev=off)"; exit 0 ;; esac
+  case "$a" in pk_mdev=off|nomdev) say "disabled (pk_mdev=off)"; exit 0 ;; esac
 done
 
 if [ ! -x /bin/mdev ] && ! have mdev; then
@@ -25,17 +25,17 @@ fi
 mkdir -p /etc/mdev 2>/dev/null
 cat > /etc/mdev/hotplug.sh <<'HOOK'
 #!/bin/sh
-# /etc/mdev.conf ke @action se chalta hai; vars mdev set karta hai
+# runs via /etc/mdev.conf @action; mdev sets the vars
 case "${ACTION:-add}" in
   add)
     [ -n "${MODALIAS:-}" ] && modprobe -q "$MODALIAS" 2>/dev/null
-    # NIC aaya par IP nahi? sirf yaad dilate hain - DHCP ko S20net/pk-net hi
-    # control karta hai (yahan se pk-net chalana race karta tha: hook ka udhcpc
-    # pidfile le leta tha, phir mar jaata tha -> NET-FAIL).
+    # NIC appeared but no IP? just a reminder - only S20net/pk-net controls DHCP
+    # (running pk-net from here used to race: the hook's udhcpc
+    # grabbed the pidfile, then died -> NET-FAIL).
     if [ -n "${INTERFACE:-}" ]; then
       cnt=$(ip -4 addr show "$INTERFACE" 2>/dev/null | grep -c 'inet ')
       if [ "${cnt:-0}" = 0 ]; then
-        printf 'pk-boot(mdev): NIC %s add hua on IP not - `pk-net dhcp` run\n' "$INTERFACE" > /dev/kmsg 2>/dev/null
+        printf 'pk-boot(mdev): NIC %s added but no IP - run `pk-net dhcp`\n' "$INTERFACE" > /dev/kmsg 2>/dev/null
       fi
     fi
     ;;
@@ -59,17 +59,17 @@ say "coldplug: /dev scan (mdev -s)"
 busybox mdev -s >/dev/null 2>&1
 rc=$?
 
-# mdev jin nodes ko chhu leta nahi (devtmpfs ne pehle se bana diye the) unke group/mode
-# yahan set karte hain - warna /dev/dri, /dev/snd, /dev/input root-only reh jaate hain aur
-# normal user ko GPU/sound/keyboard nahi milta. (GPU driver *baad* me load hota hai, isliye
-# S99zdisplay isi ko dobara chalata hai.)
+# set group/mode here for nodes mdev does not touch (devtmpfs already created them):
+# otherwise /dev/dri, /dev/snd, /dev/input stay root-only and
+# normal users get no GPU/sound/keyboard. (GPU drivers load *later*, so
+# S99zdisplay re-runs this.)
 if have pk-devperms; then pk-devperms; fi
 
 lis=0
 if [ -x /bin/uevent ] || have uevent; then
   ( setsid busybox uevent busybox mdev >/dev/null 2>&1 & ) 2>/dev/null && lis=1
 fi
-# purana interface agar maujood ho to wo bhi bhar dete hain (harmless bonus)
+# also fill the old interface if present (harmless bonus)
 if [ -e /proc/sys/kernel/hotplug ]; then
   printf '/bin/mdev\n' > /proc/sys/kernel/hotplug 2>/dev/null || true
 fi

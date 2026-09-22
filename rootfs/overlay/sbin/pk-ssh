@@ -6,8 +6,8 @@ case "${1:-status}" in
   start)
     have dropbear || { echo "dropbear is not in this live image"; exit 1; }
     mkdir -p /etc/dropbear
-    # ed25519 pehle: instant (slow machine pe RSA keygen 10-30s le sakta hai ->
-    # dropbear der se start hota, isliye RSA optional)
+    # ed25519 first: instant (on slow machines RSA keygen may take 10-30s ->
+    # dropbear would start late, hence RSA is optional)
     if [ ! -f /etc/dropbear/dropbear_ed25519_host_key ]; then
       dropbearkey -t ed25519 -f /etc/dropbear/dropbear_ed25519_host_key >/dev/null 2>&1 \
         || echo "ed25519 key fail" >&2
@@ -16,8 +16,8 @@ case "${1:-status}" in
       echo "generating an RSA host key (this takes a moment)..."
       dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key >/dev/null 2>&1
     fi
-    dropbear -R -p 22 && echo "sshd (dropbear) chal gaya - port 22"
+    dropbear -R -p 22 && echo "sshd (dropbear) started - port 22"
     ;;
-  stop)  killall dropbear 2>/dev/null && echo "band set" ;;
+  stop)  killall dropbear 2>/dev/null && echo "stopped" ;;
   status) pidof dropbear >/dev/null 2>&1 && echo "running (pid $(pidof dropbear))" || echo "stopped" ;;
 esac

@@ -8,8 +8,8 @@ PATH=/bin:/sbin:/usr/bin:/usr/sbin
 RT=${PK_RUNTIME_ROOT:-/opt/pk}
 
 have() { command -v "$1" >/dev/null 2>&1; }
-# chroot/CAP_SYS_CHROOT + runtime ke /etc me write = root chahiye. Non-root user ko
-# pehle hi saaf bata dete hain (warna 'Operation not permitted' ke beech me khona padta).
+# chroot/CAP_SYS_CHROOT + writing the runtime's /etc = root needed. A non-root user
+# is told clearly upfront (else they get lost amid 'Operation not permitted').
 if [ "$(id -u)" != 0 ]; then
   echo "pk-chroot: only root can run this (it needs chroot and write access to /opt/pk/etc)."
   echo " live system in desktop root session is; user for device access"
@@ -33,16 +33,16 @@ enter() {
   mounted "$RT/dev" || { mount --bind /dev "$RT/dev" 2>/dev/null || true; }
   mounted "$RT/dev/pts" || { mkdir -p "$RT/dev/pts"; mount -t devpts devpts "$RT/dev/pts" 2>/dev/null || true; }
   mounted "$RT/tmp" || mount -t tmpfs tmpfs "$RT/tmp" 2>/dev/null || true
-  # /dev/shm apps ke liye (chromium/wine)
+  # /dev/shm for apps (chromium/wine)
   bind /dev/shm /dev/shm
-  # X11/Wayland sessions (pk-x) agar chal rahe hon
+  # X11/Wayland sessions (pk-x) if any are running
   [ -d /tmp/.X11-unix ] && bind /tmp/.X11-unix /tmp/.X11-unix
   [ -e /run/pk/x-wayland ] && bind "$(dirname /run/pk/x-wayland)" /run/pk-x
-  # DNS: live me /etc/resolv.conf chalta hai, runtime me copy karo
+  # DNS: /etc/resolv.conf works in live, copy it into the runtime
   mkdir -p "$RT/etc" 2>/dev/null
   cat /etc/resolv.conf > "$RT/etc/resolv.conf" 2>/dev/null || true
   hostname > "$RT/etc/hostname" 2>/dev/null || true
-  # HOME ke apps/wine prefix ko runtime me bhi dikhao
+  # also show HOME's apps/wine prefix in the runtime
   [ -d "$HOME" ] && bind "$HOME" /root
   return 0
 }
@@ -51,7 +51,7 @@ umount_all() {
   for p in /tmp/.X11-unix /run/pk-x /dev/shm /tmp /dev/pts /dev /sys /proc /root; do
     umount -R "$RT$p" 2>/dev/null || umount "$RT$p" 2>/dev/null || true
   done
-  say "binds hataye"
+  say "binds removed"
 }
 
 case "${1:-}" in
@@ -60,7 +60,7 @@ case "${1:-}" in
 esac
 [ $# -gt 0 ] || { set -- /bin/sh; }
 enter || exit $?
-# env: runtime ke andar wahi PATH jo profile set karta
+# env: the same PATH inside the runtime that the profile sets
 if [ -x "$RT/usr/bin/env" ]; then
   chroot "$RT" /usr/bin/env -i HOME=/root TERM="${TERM:-linux}" \
     PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \

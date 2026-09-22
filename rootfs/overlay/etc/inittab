@@ -6,8 +6,8 @@ tty1::respawn:/sbin/pk-console tty1
 tty2::respawn:/sbin/pk-console tty2
 tty3::respawn:/sbin/pk-console tty3
 tty4::respawn:/sbin/pk-console tty4
-# serial console (laptop pe koi effect nahi: device na mila to 120s so jata hai)
+# serial console (no effect on laptops: sleeps 120s if no device is found)
 ttyS0::respawn:/sbin/pk-console ttyS0
-# poweroff/reboot ctrl-alt-del se (live demo ke liye handy)
+# poweroff/reboot via ctrl-alt-del (handy for live demos)
 ::ctrlaltdel:/sbin/reboot
 ::shutdown:/sbin/pk-halt

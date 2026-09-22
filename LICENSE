@@ -22,8 +22,8 @@ SOFTWARE.
 
 ---
 
-Note: ye license sirf is repo ke scripts/config ke liye hai. Build ka result Linux
-kernel, busybox, squashfs-tools, GRUB, e2fsprogs, parted, dropbear waghera ka apni
-apni license (GPL/BSD/MIT/...) ke under aata hai — unki licensing ka dhyan rakhna,
-khaas kar agar distribution banane soch rahe ho (kernel GPL-2.0 -> source offer
-available rakhna).
+Note: this license covers only this repo's scripts/config. Build results
+(Linux kernel, busybox, squashfs-tools, GRUB, e2fsprogs, parted, dropbear, etc.)
+fall under their own licenses (GPL/BSD/MIT/...) — mind their licensing,
+especially if you plan to make a distribution (kernel GPL-2.0 -> keep a
+source offer available).

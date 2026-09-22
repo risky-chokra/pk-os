@@ -1,5 +1,5 @@
-# Live image me daale jaane wale host binaries (jo busybox me nahi hain).
-# Inke shared libs apne aap copy ho jaate hain (ldd se). Host pe na mila to skip + warn.
+# Host binaries that go into the live image (those missing from busybox).
+# Their shared libs get copied automatically (via ldd). If not found on the host, skip + warn.
 parted
 mkfs.ext4
 mke2fs
@@ -32,6 +32,6 @@ setfacl
 swapon
 dumpe2fs
 blkdiscard
-# users/auth ke liye (busybox me su/adduser applet hote hi nahi hain)
+# for users/auth (busybox has no su/adduser applets at all)
 su
 chpasswd

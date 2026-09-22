@@ -24,7 +24,7 @@ say()  { printf 'pk-wifi: %s\n' "$*"; }
 warn() { printf 'pk-wifi: %s\n' "$*" >&2; }
 mark() { ( printf '### PK: %s ###\n' "$*" > /dev/console ) 2>/dev/null; ( printf '%s\n' "$*" > /dev/kmsg ) 2>/dev/null; }
 runtime_ok() { grep -q " $RT " /proc/mounts 2>/dev/null && [ -d "$RT/usr" ]; }
-# tool host me hai ya runtime ke andar?
+# is the tool on the host or inside the runtime?
 tool() { # <name> -> "host" | "chroot" | ""
   have "$1" && { printf 'host\n'; return 0; }
   if runtime_ok; then
@@ -72,10 +72,10 @@ do_status() {
     printf '  wpa_supplicant runtime : '; tool wpa_supplicant >/dev/null 2>&1 && printf 'yes\n' || printf 'not -> pk-get install -y wpasupplicant iw\n'
     printf '  iw                     : '; tool iw >/dev/null 2>&1 && printf 'yes\n' || printf 'not\n'
   else
-    printf ' runtime : not laga (pk-runtime start) - wpa_supplicant usually wahin from aayega\n'
+    printf ' runtime : not attached (pk-runtime start) - wpa_supplicant usually comes from there\n'
   fi
   fw=$(ls /lib/firmware 2>/dev/null | wc -l)
-  printf ' firmware : /lib/firmware me %s entries (ISO build in PK_FIRMWARE=1 from also bhar may ho)\n' "${fw:-0}"
+  printf ' firmware : %s entries in /lib/firmware (an ISO built with PK_FIRMWARE=1 may add more)\n' "${fw:-0}"
   mark "WIFI-STATUS-OK"
   return 0
 }
@@ -94,7 +94,7 @@ do_connect() {
   pick_iface || { warn "no wireless interface found"; mark "WIFI-FAIL (no iface)"; return 1; }
   tool wpa_supplicant >/dev/null 2>&1 || {
     warn "wpa_supplicant not found"
-    warn "  runtime ke andar:  pk-get install -y wpasupplicant iw"
+    warn "  inside the runtime:  pk-get install -y wpasupplicant iw"
     warn "  (deliberately not in the base image - for size)"
     mark "WIFI-FAIL (no wpa_supplicant)"; return 70; }
   mkdir -p /run/pk 2>/dev/null
@@ -128,7 +128,7 @@ do_connect() {
 }
 
 do_stop() {
-  [ -f "$PIDF" ] && kill "$(cat "$PIDF")" 2>/dev/null && say "wpa_supplicant band"
+  [ -f "$PIDF" ] && kill "$(cat "$PIDF")" 2>/dev/null && say "wpa_supplicant stopped"
   rm -f "$PIDF" 2>/dev/null
   return 0
 }

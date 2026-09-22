@@ -4,8 +4,8 @@
 # installed = a normal login prompt
 # shellcheck shell=sh
 TTY=${1:-tty1}
-# device nahi hai (e.g. inittab me ttyS0 aur machine me serial port nahi) ->
-# exit karne se pehle so jao, warna init ka respawn busy-loop
+# no device (e.g. ttyS0 in inittab but no serial port on the machine) ->
+# sleep before exiting, else init's respawn busy-loops
 if [ ! -c "/dev/$TTY" ]; then sleep 120; exit 0; fi
 case $TTY in
   ttyS*|ttyAMA*|hvc*|ttyGS*) SPEED=${PK_SERIAL_SPEED:-115200} ;;
@@ -17,8 +17,8 @@ AUTO=""
 if [ -z "$AUTO" ] && [ -f /etc/pk-console.conf ]; then
   AUTO=$(sed -n 's/^PK_CONSOLE_AUTOLOGIN=//p' /etc/pk-console.conf 2>/dev/null | head -1)
 fi
-# serial/SSH-jaise console par autologin NAHI lagate: wo recovery/debug channel hai,
-# wahan root hi chahiye (aur bob jaisa user wahan root ke logs padh bhi na sake).
+# no autologin on serial/SSH-like consoles: that is the recovery/debug channel,
+# only root is wanted there (and a bob-like user must not even read root's logs there).
 case $TTY in
   ttyS*|ttyAMA*|ttyUSB*|hvc*|ttyGS*) AUTO="" ;;
 esac
@@ -35,9 +35,9 @@ if [ -n "$AUTO" ] && [ "$AUTO" != root ]; then
   H=$(awk -F: -v U="$AUTO" '$1==U{print $6; exit}' /etc/passwd 2>/dev/null)
   [ -n "$H" ] && [ -d "$H" ] || { echo "pk-console: home '$H' does not exist (run pk-user doctor)"; H=/tmp; }
   echo "  logged in as: $AUTO  (uid $(id -u "$AUTO" 2>/dev/null || echo ?); pk-user info $AUTO)"
-  # su root se password nahi mangta; -m se env (PATH etc.) barkarar
-  # 'su -' (login) isliye: HOME + cwd target user ke milte hain; 'su -m' parent ka
-  # HOME (/root) barkarar rakh deta tha -> apps root ki home me likhne ki koshish karti
+  # su asks no password for root; -m preserves env (PATH etc.)
+  # 'su -' (login) because: HOME + cwd come from the target user; 'su -m' kept the parent's
+  # HOME (/root), so apps tried writing into root's home
   su - "$AUTO" -c "exec /bin/sh -l" 2>/dev/null \
     || su -m "$AUTO" -c "cd \"$H\" 2>/dev/null || cd /tmp; exec /bin/sh -l"
   echo "pk-console: shell of '$AUTO' exited -> root shell"

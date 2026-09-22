@@ -1,6 +1,6 @@
 #!/bin/sh
 # pk's OS :: live rootfs staging -> build/work/rootfs
-# Ye tree squashfs banakar ISO me jaati hai. Root lagta nahi hai.
+# This tree is turned into a squashfs for the ISO. No root needed.
 # shellcheck shell=sh disable=SC2086,SC3030
 set -eu
 
@@ -9,8 +9,8 @@ PK_ROOT=$(cd "$(dirname "$0")/.." && pwd); export PK_ROOT
 . "$PK_ROOT/scripts/pk.sh"
 
 OV=$WORK/rootfs
-# ISO stage har baar fresh: warna rename/purane naam ke boot-live files (jaise
-# swape-kernel, swape.sqfs) naye files ke saath ISO me ghus jaate hain (size double).
+# Fresh ISO stage every time: otherwise renamed/old-named boot-live files (like
+# swape-kernel, swape.sqfs) sneak into the ISO alongside the new files (double size).
 rm -rf "$WORK/iso"
 log "live rootfs staging -> $OV"
 resolve_kernel
@@ -27,18 +27,18 @@ done
 chmod 1777 "$OV/tmp" "$OV/var/tmp"
 ln -sfn /proc/self/mounts "$OV/etc/mtab"
 
-# ---------------------------------------------------------------- overlay config (repo se)
+# ---------------------------------------------------------------- overlay config (from the repo)
 if [ -d "$PK_ROOT/rootfs/overlay" ]; then
   ( cd "$PK_ROOT/rootfs/overlay" && tar -cf - . ) | ( cd "$OV" && tar -xf - )
 else
-  warn "rootfs/overlay not found -> khaali rootfs banegi"
+  warn "rootfs/overlay not found -> rootfs will be empty"
 fi
 
 # ---------------------------------------------------------------- overlay script hygiene
-# mode bhoolna common footgun hai (git tar/zip se +x ud jaata hai) -> yahan fix
-# NOTE: git me exec bit kho jaati hai (zip/clone/mode-reset) - yahan stage karte
-# waqt dobara 755 kar dete hain, warna udhcpc ka default.script non-executable
-# reh jaata hai aur DHCP lease milne ke baad bhi IP configure nahi hota (NET-FAIL).
+# forgetting the mode is a common footgun (+x flies off via git tar/zip) -> fix here
+# NOTE: git loses the exec bit (zip/clone/mode-reset) - while staging here,
+# re-chmod 755, otherwise udhcpc's default.script stays non-executable
+# and the IP never gets configured even after the DHCP lease arrives (NET-FAIL).
 for f in "$OV"/sbin/pk-* "$OV"/bin/pk-* "$OV"/etc/pk-boot.d/S* \
          "$OV"/usr/share/udhcpc/default.script "$OV"/etc/init.d/pk-boot; do
   [ -f "$f" ] || continue
@@ -70,8 +70,8 @@ done
 
 # ---------------------------------------------------------------- root password
 if [ -n "${LIVE_PASS:-}" ]; then
-  # reproducible build me salt bhi deterministic chahiye (warna /etc/shadow har
-  # build me badalta hai aur payload sha256 match nahi karta)
+  # reproducible builds also need a deterministic salt (otherwise /etc/shadow changes every
+  # build and the payload sha256 never matches)
   if [ -n "${SOURCE_DATE_EPOCH:-}" ] && have sha256sum; then
     dsalt=$(printf 'pk-live-%s' "$SOURCE_DATE_EPOCH" | sha256sum | cut -c1-16)
     hash=$("$OV/bin/busybox" mkpasswd -m sha-512 -S "$dsalt" "$LIVE_PASS" 2>/dev/null || \
@@ -86,7 +86,7 @@ if [ -n "${LIVE_PASS:-}" ]; then
     fi
     log "root password set (live: '$LIVE_PASS')"
   else
-    warn "could not build a passwd hash (busybox mkpasswd/openssl missing) - /etc/shadow waisa rahega"
+    warn "could not build a passwd hash (busybox mkpasswd/openssl missing) - /etc/shadow stays as-is"
   fi
 fi
 
@@ -97,7 +97,7 @@ if [ -f "$PK_ROOT/config/live-bins.txt" ]; then
   "$PK_ROOT/scripts/collect-bins" "$OV" \
     $(grep -vE '^[[:space:]]*(#|$)' "$PK_ROOT/config/live-bins.txt") \
     2>&1 | grep -v '^  skip' | sed 's/^/    /' || true
-  # /usr/bin wale ko /bin me, /usr/sbin wale ko /sbin me mirror karo
+  # mirror the /usr/bin ones into /bin, the /usr/sbin ones into /sbin
   for b in $(grep -vE '^[[:space:]]*(#|$)' "$PK_ROOT/config/live-bins.txt"); do
     for src in "$OV/usr/bin/$b" "$OV/usr/sbin/$b"; do
       [ -e "$src" ] || continue
@@ -110,14 +110,14 @@ if [ -f "$PK_ROOT/config/live-bins.txt" ]; then
   done
 fi
 # ------------------------------------------------------------- compat aliases
-# SwapeOS 1.0 ke users/docs ke liye purane naam bhi kaam karein
+# old names keep working for SwapeOS 1.0 users/docs
 for c in "$OV"/sbin/pk-* "$OV"/bin/pk-*; do
   [ -f "$c" ] || continue
   ln -sf "/${c#"$OV"/}" "$OV/$(dirname "${c#"$OV"}")/swape-$(basename "$c" | sed 's/^pk-//')" 2>/dev/null || true
 done
 [ -d "$OV/etc/pk-boot.d" ] && ln -sfn pk-boot.d "$OV/etc/swape-boot.d" 2>/dev/null || true
 
-# udhcpc ka compiled-in default path /etc/udhcpc/default.script hota hai
+# udhcpc's compiled-in default path is /etc/udhcpc/default.script
 mkdir -p "$OV/etc/udhcpc"
 [ -f "$OV/usr/share/udhcpc/default.script" ] && ln -sf /usr/share/udhcpc/default.script "$OV/etc/udhcpc/default.script"
 
@@ -125,7 +125,7 @@ for f in /etc/mke2fs.conf /etc/blkid.conf /etc/e2fsck.conf; do
   [ -e "$f" ] && { cp -pL "$f" "$OV$f" 2>/dev/null || true; }
 done
 
-# ---------------------------------------------------------------- grub (installer ko chahiye)
+# ---------------------------------------------------------------- grub (needed by the installer)
 if [ -d /usr/lib/grub ]; then
   log "grub module dirs copy (/usr/lib/grub)"
   mkdir -p "$OV/usr/lib"
@@ -133,10 +133,10 @@ if [ -d /usr/lib/grub ]; then
   rm -rf "$OV/usr/lib/grub"/arm64-efi "$OV/usr/lib/grub"/i386-pc-uefi 2>/dev/null || true
   [ -d /usr/share/grub ] && cp -a /usr/share/grub "$OV/usr/share/" 2>/dev/null
   for g in i386-pc x86_64-efi; do
-    [ -d "$OV/usr/lib/grub/$g" ] || warn "grub $g modules not mile (installer $g boot fail ho may is)"
+    [ -d "$OV/usr/lib/grub/$g" ] || warn "grub $g modules not found (installer $g boot may fail)"
   done
 else
-  warn "/usr/lib/grub not found -> installer grub-install not run payega (sudo apt install grub-pc-bin grub-efi-amd64-bin)"
+  warn "/usr/lib/grub not found -> installer cannot run grub-install (sudo apt install grub-pc-bin grub-efi-amd64-bin)"
 fi
 
 # ---------------------------------------------------------------- firmware (optional)
@@ -146,7 +146,7 @@ if [ "${PK_FIRMWARE:-0}" = 1 ] && [ -d /usr/lib/firmware ]; then
   cp -a /usr/lib/firmware "$OV/usr/lib/" 2>/dev/null || true
 fi
 
-# ---------------------------------------------------------------- kernel modules (live system wale)
+# ---------------------------------------------------------------- kernel modules (the live-system ones)
 if [ -f "$PK_ROOT/config/live-modules.txt" ] && [ -d "$PK_MODULES" ]; then
   log "kernel modules copy (curated set)..."
   mkdir -p "$OV/lib/modules/$KVER"
@@ -157,9 +157,9 @@ if [ -f "$PK_ROOT/config/live-modules.txt" ] && [ -d "$PK_MODULES" ]; then
       find $pat -name '*.ko*' -print 2>/dev/null || true
     done < "$PK_ROOT/config/live-modules.txt"
   ) | sort -u > "$WORK/live-modules.list"
-  # dependency closure: copied drivers ko jo modules chahiye (jaise virtio_net ->
-  # net_failover/failover) woh host ke modules.dep se utha ke add kar lete hain,
-  # warna modprobe insmod par "Unknown symbol" de kar fail ho jata hai.
+  # dependency closure: modules needed by the copied drivers (e.g. virtio_net ->
+  # net_failover/failover), picked up from the host's modules.dep and added,
+  # otherwise modprobe fails at insmod with "Unknown symbol".
   if [ -f "$PK_MODULES/modules.dep" ] && have awk; then
     awk '
       NR==FNR { need[$1]=1; next }
@@ -189,14 +189,14 @@ if [ -f "$PK_ROOT/config/live-modules.txt" ] && [ -d "$PK_MODULES" ]; then
     ( depmod -b "$OV" -a "$KVER" > "$WORK/depmod.log" 2>&1 ) || warn "depmod -b fail (log: $WORK/depmod.log)"
     rm -f "$OV/lib/modules/$KVER/modules."*.tmp 2>/dev/null || true
   else
-    warn "depmod not -> /lib/modules without modules.dep ke (modprobe kaam not karega)"
+    warn "no depmod -> /lib/modules without modules.dep (modprobe will not work)"
   fi
   log "  $n modules -> /lib/modules/$KVER"
 fi
 
 # ---------------------------------------------------------------- extra shared libs
-# config/live-libs.txt: jo libs ldd direct nahi batata par runtime me chahiye hoti
-# hain (jaise libgcc_s.so.1 -> pthread_exit; iske bina mksquashfs abort karta tha).
+# config/live-libs.txt: libs ldd does not report directly but the runtime needs
+# (e.g. libgcc_s.so.1 -> pthread_exit; without it mksquashfs used to abort).
 if [ -f "$PK_ROOT/config/live-libs.txt" ]; then
   nll=0
   for l in $(grep -vE '^[[:space:]]*(#|$)' "$PK_ROOT/config/live-libs.txt"); do
@@ -217,8 +217,8 @@ if [ -f "$PK_ROOT/config/live-libs.txt" ]; then
 fi
 
 # ---------------------------------------------------------------- console keymaps (pk-keymap)
-# builder ke /usr/share/keymaps (kbd package) se chhote .kmap copy karte hain; na
-# mile to pk-keymap sirf GUI side (setxkbmap) karega - isliye warning, error nahi.
+# copy small .kmap files from the builder's /usr/share/keymaps (kbd package); if not
+# found, pk-keymap only does the GUI side (setxkbmap) - hence warning, not error.
 mkdir -p "$OV/usr/share/kmap"
 for l in us de fr es it ru uk in jp; do
   f=$(ls /usr/share/keymaps/*/*/"$l.kmap.gz" /usr/share/keymaps/*/"$l.kmap.gz" 2>/dev/null | head -1)
@@ -227,7 +227,7 @@ for l in us de fr es it ru uk in jp; do
   else cp -p "$f" "$OV/usr/share/kmap/$l.kmap.gz"; fi
 done
 km=$(ls "$OV/usr/share/kmap" 2>/dev/null | wc -l)
-if [ "$km" = 0 ]; then warn "console keymaps not mile (builder but 'kbd' install check) - pk-keymap GUI-only karega"; else log "  $km console keymaps -> /usr/share/kmap"; fi
+if [ "$km" = 0 ]; then warn "console keymaps not found (install 'kbd' on the builder) - pk-keymap will be GUI-only"; else log "  $km console keymaps -> /usr/share/kmap"; fi
 
 # ---------------------------------------------------------------- metadata / live marker
 printf '%s\n' "${OS_VERSION:-1.0}" > "$OV/etc/pk-build"

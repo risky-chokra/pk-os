@@ -1,5 +1,5 @@
 #!/bin/sh
-# pk's OS :: grub-mkrescue se bootable isohybrid ISO (BIOS + UEFI)
+# pk's OS :: bootable isohybrid ISO via grub-mkrescue (BIOS + UEFI)
 # layout:  /boot/pk-kernel  /boot/pk-initrd  /live/pk.sqfs  README.txt
 set -eu
 PK_ROOT=$(cd "$(dirname "$0")/.." && pwd); export PK_ROOT
@@ -15,18 +15,18 @@ resolve_kernel
 have grub-mkrescue || die "grub-mkrescue not found -> sudo apt install grub-pc-bin grub-efi-amd64-bin xorriso mtools"
 
 log "ISO stage: $STAGE"
-# stage me jo files is build ne nahi banaye, unhe phase kiyo (duplicate boot images)
+# remove files in stage that this build did not create (duplicate boot images)
 mkdir -p "$STAGE/boot" "$STAGE/live"
 find "$STAGE/boot" -maxdepth 1 -mindepth 1 ! -name pk-kernel ! -name pk-initrd \
      ! -name grub -exec rm -rf {} + 2>/dev/null || true
 find "$STAGE/live" -maxdepth 1 -mindepth 1 ! -name pk.sqfs \
      -exec rm -f {} + 2>/dev/null || true
-# runtime pichhli baar stage me pada rahe to bina WITH_RUNTIME wali ISO me bhi
-# ghuss jaata tha (349 MB!) -> hamesha pehle hatao, phir maangne par daalo
+# if a runtime stays lying in stage from last time, it leaks even into a non-WITH_RUNTIME ISO
+# (349 MB!) -> always remove first, put back only when asked
 rm -f "$STAGE/live/pk-runtime.sqfs"
 install -m 0644 "$KERNEL" "$STAGE/boot/pk-kernel"
 
-# app runtime (optional): WITH_RUNTIME=1 -> ISO ke andar /live/pk-runtime.sqfs
+# app runtime (optional): WITH_RUNTIME=1 -> /live/pk-runtime.sqfs inside the ISO
 RTIMG=${PK_RUNTIME_IMG:-$BUILD/pk-runtime.sqfs}
 if [ "${WITH_RUNTIME:-0}" = 1 ] || [ -n "${PK_RUNTIME_IMG:-}" ]; then
   [ -f "$RTIMG" ] || die "runtime image not found: $RTIMG (first: make runtime)"
@@ -34,8 +34,8 @@ if [ "${WITH_RUNTIME:-0}" = 1 ] || [ -n "${PK_RUNTIME_IMG:-}" ]; then
   log "  + app runtime: $(du -h "$RTIMG" | cut -f1) -> /live/pk-runtime.sqfs"
 fi
 
-# payload integrity ke liye sidecar hashes (init me pk_verify=1 se check hote hain;
-# ye signed boot nahi hai - bas corruption/tamper ka pehla kadam)
+# sidecar hashes for payload integrity (checked in init via pk_verify=1;
+# this is not signed boot - just the first step against corruption/tamper)
 if have sha256sum; then
   for f in "$STAGE/live/pk.sqfs" "$STAGE/live/pk-runtime.sqfs"; do
     [ -f "$f" ] || continue
@@ -45,11 +45,11 @@ if have sha256sum; then
   log " payload sha256 sidecars written (pk_verify=1 from boot on check)"
 fi
 
-# grub menu (template se @ARGS@/@LABEL@/@VER@ bharte hain)
+# grub menu (fill @ARGS@/@LABEL@/@VER@ from the template)
 mkdir -p "$STAGE/boot/grub"
-# default GRUB args: config/live.conf ka KERNEL_CMDLINE hi canonical source hai
-# (pehle yahan hardcoded "quiet loglevel=3" tha -> live.conf me consoleblank=0 add
-#  karne ke baad bhi ISO ke menu me nahi aata tha; ab dono ek hi jagah se aate hain)
+# default GRUB args: config/live.conf's KERNEL_CMDLINE is the canonical source
+# (it used to be hardcoded here as "quiet loglevel=3" -> adding consoleblank=0 in live.conf
+#  still did not reach the ISO menu; now both come from the same place)
 if [ -z "${KERNEL_CMDLINE:-}" ] && [ -f "$PK_ROOT/config/live.conf" ]; then
   KERNEL_CMDLINE=$(sed -n 's/^KERNEL_CMDLINE=.*:-//p' "$PK_ROOT/config/live.conf" \
                    | head -1 | tr -d '"}')
@@ -57,48 +57,48 @@ fi
 args=${KERNEL_CMDLINE:-"quiet loglevel=3 consoleblank=0 vt.global_cursor_default=1"}
 [ -n "$args" ] || args="quiet loglevel=3 consoleblank=0 vt.global_cursor_default=1"
 [ -n "${PK_TEST_CMDLINE:-}" ] && args="$args $PK_TEST_CMDLINE"
-# PK_SERIAL=1 -> default entry me serial console bhi: VM jisme screen nahi dikhti
-# (headless / VBox display issue) wahan bhi GRUB menu + kernel log + ### PK: markers
-# ek file me mill jaate hain (VBox: --uart1 0x3F8 4 --uartmode1 file <path>)
+# PK_SERIAL=1 -> serial console in the default entry too: for VMs whose screen stays blank
+# (headless / VBox display issue) GRUB menu + kernel log + ### PK: markers still land
+# in one file (VBox: --uart1 0x3F8 4 --uartmode1 file <path>)
 if [ "${PK_SERIAL:-0}" = 1 ]; then
   args="$args console=tty0 console=ttyS0,115200n8"
-  log "  PK_SERIAL=1 -> default args me serial console (VM headless debug)"
+  log "  PK_SERIAL=1 -> serial console in default args (headless VM debug)"
 fi
-# $args ko sed ke delimiter/escape chars se bachao: kernel args me '/', '|', '&'
-# aate hain (pk_runtime=/dev/sdb1, pk_run=...;...) -> pehle ye grub.cfg generation
-# todta tha (sed: unknown option to `s') . Ab escape karke daalte hain.
+# protect $args from sed delimiter/escape chars: kernel args may hold '/', '|', '&'
+# (pk_runtime=/dev/sdb1, pk_run=...;...) -> earlier this broke grub.cfg generation
+# (sed: unknown option to `s'). Now they are escaped before adding.
 args_esc=$(printf '%s' "$args" | sed -e 's/[\\|&]/\\&/g')
 sed -e "s|@ARGS@|$args_esc|g" \
     -e "s|@LABEL@|${ISO_LABEL:-PKOS}|g" \
     -e "s|@VER@|${OS_VERSION:-1.0}|g" \
     "$PK_ROOT/init/grub.cfg" > "$STAGE/boot/grub/grub.cfg"
 
-# ISO ke andar ek README (USB me mount karne par dikhega)
+# a README inside the ISO (shows when mounted from USB)
 cat > "$STAGE/README.txt" <<TXT
 pk's OS ${OS_VERSION:-1.0} live
 =========================
-Ye ISO hybrid hai: ise CD pe burn bhi kar sakte ho aur
+This ISO is hybrid: you can burn it to a CD and also
   dd if=pkos.iso of=/dev/sdX bs=4M status=progress oflag=sync
-se USB pe likh bhi sakte ho (BIOS + UEFI dono se boot karega).
+to write it onto USB (boots from both BIOS + UEFI).
 
 Boot menu options:
-  live                 - RAM me overlay, reboot pe sab reset
-  toram                - image pehle RAM me copy, phir USB nikaal lo
-  persistent           - agar USB pe PK-PERSIST (ext4) partition hai to changes wahan
-  install to disk      - internal disk pe install karne wala installer
+  live                 - overlay in RAM, everything resets on reboot
+  toram                - copy the image to RAM first, then remove the USB
+  persistent           - if the USB has a PK-PERSIST (ext4) partition, changes go there
+  install to disk      - installer that installs to the internal disk
   debug                - kernel logs + init shell prompt
 
-Live login: user 'root' password 'pk'  (autologin ON hai, so normally prompt nahi aayega)
+Live login: user 'root' password 'pk'  (autologin is ON, so normally no prompt appears)
 
-Keyboard: us layout; console me 'loadkmap' se apna keymap load kar sakte ho.
-Disk me changes: 'pk-persist' helper use karo (docs/persistence.md).
+Keyboard: us layout; in console you can load your keymap via 'loadkmap'.
+For changes on disk: use the 'pk-persist' helper (docs/persistence.md).
 TXT
 cp "$STAGE/README.txt" "$BUILD/README-ISO.txt" 2>/dev/null || true
 
 log "grub-mkrescue is running..."
-# grub-mkrescue /tmp me apna staging banata hai (~100 MB). Jahan /tmp chhota tmpfs
-# hai (1 GB wale containers, live-USB par build) wahan "No space left on device" se
-# ISO build fail ho jaata tha -> staging ko build/ ke andar (disk-backed) bhej dete hain.
+# grub-mkrescue builds its staging in /tmp (~100 MB). Where /tmp is a small tmpfs
+# (1 GB containers, building on a live USB), the ISO build used to fail with "No space left on device"
+# -> so staging is sent inside build/ (disk-backed).
 mkdir -p "$WORK/tmp"; export TMPDIR="$WORK/tmp"
 rm -f "$ISO"
 if ! grub-mkrescue -o "$ISO" "$STAGE" > "$WORK/mk-iso.log" 2>&1; then
@@ -109,14 +109,14 @@ sz=$(du -h "$ISO" | cut -f1)
 log "ISO ready: $ISO ($sz)"
 # quick sanity: isohybrid MBR + EFI partition table + bootspec
 if have file; then file "$ISO" | sed 's/^/  /'; fi
-# hybrid check: MBR me bootable partition + protective GPT + El Torito EFI
+# hybrid check: bootable partition in MBR + protective GPT + El Torito EFI
 printf '  isohybrid : '
-if od -An -tx1 -j510 -N2 "$ISO" 2>/dev/null | grep -qi '55 aa'; then echo "MBR magic 55AA present (dd-able)"; else echo "MISSING - USB on dd from boot not karega!"; fi
+if od -An -tx1 -j510 -N2 "$ISO" 2>/dev/null | grep -qi '55 aa'; then echo "MBR magic 55AA present (dd-able)"; else echo "MISSING - dd to USB will not boot!"; fi
 printf '  protective GPT: '
 if dd if="$ISO" bs=512 skip=1 count=1 2>/dev/null | head -c 8 | grep -q "EFI PART"; then
   echo "yes (UEFI-bootable image)"
 else
-  warn "protective GPT not found - UEFI boot issue ho may is"
+  warn "protective GPT not found - UEFI boot may have issues"
 fi
 printf '  efi img   : '
-[ -f "$STAGE"/boot/grub/i386-pc/efi.img ] && echo present || echo "(grub-mkrescue ne ISO ke andar banaya)"
+[ -f "$STAGE"/boot/grub/i386-pc/efi.img ] && echo present || echo "(created by grub-mkrescue inside the ISO)"

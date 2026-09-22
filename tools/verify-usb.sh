@@ -1,11 +1,11 @@
 #!/bin/sh
-# pk's OS :: jo image likhi, wahi pendrive/disk pe padi hai? (host se check)
-#   tools/verify-usb.sh /dev/sdX                    # device ke partitions mount karke
+# pk's OS :: is the written image lying on the pendrive/disk? (check from host)
+#   tools/verify-usb.sh /dev/sdX                    # mounting the device partitions
 #   tools/verify-usb.sh /mnt/point                  # already mounted path
-#   tools/verify-usb.sh --iso build/pkos.iso        # ISO file hi check karo
-#   tools/verify-usb.sh /dev/sdX build/manifest.txt # manifest se tulna (rebuild verify)
+#   tools/verify-usb.sh --iso build/pkos.iso        # check the ISO file itself
+#   tools/verify-usb.sh /dev/sdX build/manifest.txt # compare with manifest (rebuild verify)
 #
-# root chahiye jab device mount karna ho (mount point / --iso ke liye nahi).
+# root is needed to mount devices (not for mount points / --iso).
 set -u
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
@@ -63,7 +63,7 @@ say "----------------------------------------------------------------"
 
 if [ -n "$ISOFILE" ]; then
   [ -f "$ISOFILE" ] || { echo "ISO not found: $ISOFILE"; exit 1; }
-  say " (ISO file mode - extract karke check run rahe are)"
+  say " (ISO file mode - extracting and checking)"
   have xorriso || { echo "xorriso required (sudo apt-get install -y xorriso)"; exit 1; }
   xorriso -osirrox on -indev "$ISOFILE" -extract / "$TDIR/iso" >/dev/null 2>&1 || { echo "extract fail"; exit 1; }
   check_file "$TDIR/iso/boot/pk-kernel"   "boot/pk-kernel"
@@ -76,15 +76,15 @@ if [ -n "$ISOFILE" ]; then
   exit 0
 fi
 
-# ---------- block device: hybrid MBR + partitions ka content
+# ---------- block device: hybrid MBR + partitions content
 if [ "$MOUNTIT" = 1 ]; then
-  [ -r "$TARGET" ] || { echo "device padha not ja may: $TARGET (root? sudo)"; exit 1; }
+  [ -r "$TARGET" ] || { echo "cannot read device: $TARGET (root? sudo)"; exit 1; }
   mbr=$(dd if="$TARGET" bs=512 count=1 2>/dev/null | od -An -tx1 -j510 -N2 | tr -d ' \n')
-  if [ "$mbr" = "55aa" ]; then line ok "mbr/bootsector" "55AA ✓ (dd from likhi hui image bootable is)"
+  if [ "$mbr" = "55aa" ]; then line ok "mbr/bootsector" "55AA ✓ (dd-written image is bootable)"
   else line bad "mbr/bootsector" "55AA not found (m='$mbr') - image incomplete was written?"; fi
   gpt=$(dd if="$TARGET" bs=512 skip=1 count=1 2>/dev/null | head -c 8 | grep -c "EFI PART")
   if [ "$gpt" = 1 ]; then line ok "protective-gpt" "yes (UEFI boot for)"
-  else line skip "protective-gpt" "not found (sirf BIOS boot?)" ; fi
+  else line skip "protective-gpt" "not found (BIOS boot only?)" ; fi
   if have blkid; then
     say "  partitions:"
     blkid -o list -w /dev/null 2>/dev/null | grep "^$TARGET" | sed 's/^/    /'
@@ -129,9 +129,9 @@ if [ "$MOUNTIT" = 1 ]; then
     fi
   done
   if [ "$found" = 0 ]; then
-    line skip "payload" "any partition me /live/pk.sqfs not found"
-    say " (ISO ko partition ke *andar* copy done was? pendrive test in to poora ISO dd to run is,"
-    say "     ya /live/ dir partition ki root me ho: 'cp -a isomount/. /dev/sdX1/' wala flow)"
+    line skip "payload" "/live/pk.sqfs not found in any partition"
+    say " (did you copy the ISO *inside* a partition? for the pendrive test, dd the whole ISO,"
+    say "     or keep the /live/ dir at the partition root: the 'cp -a isomount/. /dev/sdX1/' flow)"
   fi
 else
   # mounted directory mode
@@ -149,5 +149,5 @@ say "----------------------------------------------------------------"
 printf '  result: ok=%s fail=%s skip=%s\n' "$ok" "$bad" "$skip"
 say ""
 say "  now boot from the pendrive and run:   pk-check --save   (report: /run/pk/check.txt)"
-[ "$bad" = 0 ] || { say " FAIL: dobara dd check (tools/write-usb.sh) or manifest match not ho "; exit 1; }
+[ "$bad" = 0 ] || { say " FAIL: dd again (tools/write-usb.sh) or the manifest does not match "; exit 1; }
 exit 0

@@ -1,6 +1,6 @@
-# pk's OS :: extra shared libs jo hamesha live image me chahiye
-# (ldd inhe direct list nahi karta - dlopen/pthread paths se aate hain)
-# ek line = ek lib (host par jo mile, uska real file copy hoga)
+# pk's OS :: extra shared libs always needed in the live image
+# (ldd does not list them directly - they come via dlopen/pthread paths)
+# one line = one lib (the real file found on the host gets copied)
 libgcc_s.so.1
 libatomic.so.1
 libstdc++.so.6

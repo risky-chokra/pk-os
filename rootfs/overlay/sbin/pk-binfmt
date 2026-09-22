@@ -41,7 +41,7 @@ emulator_for() { # <arch>
   for cand in "$RT/usr/bin/qemu-$a" "$RT/usr/bin/qemu-$a-static" "/usr/bin/qemu-$a" "/usr/bin/qemu-$a-static"; do
     [ -x "$cand" ] && { printf '%s\n' "${cand#$RT}"; return 0; }
   done
-  # runtime ke andar hi ho to bhi theek (path /opt/pk prefix ke saath dena padega kernel ko)
+  # inside the runtime is fine too (the kernel must be given the path with the /opt/pk prefix)
   if [ -n "$a" ] && [ -e "$RT/usr/bin/qemu-$a-static" ]; then
     printf '/opt/pk/usr/bin/qemu-%s-static\n' "$a"; return 0
   fi
@@ -89,7 +89,7 @@ EOF
     warn "no qemu-user found. Install it:  pk-get install -y qemu-user-static"
     mark "BINFMT-NOQEMU"; return 70
   fi
-  say "$reg handlers registered -> ab arm64/arm/riscv64 ELF direct:  pk-run ./binary"
+  say "$reg handlers registered -> now arm64/arm/riscv64 ELF direct:  pk-run ./binary"
   mark "BINFMT-OK ($reg)"
   return 0
 }
@@ -99,7 +99,7 @@ unregister() {
     [ -f "$f" ] || continue
     rm -f "$f" 2>/dev/null && n=$((n + 1))
   done
-  say "$n handlers hataye"; mark "BINFMT-UNREG ($n)"
+  say "$n handlers removed"; mark "BINFMT-UNREG ($n)"
 }
 case "${1:-status}" in
   status) status ;;

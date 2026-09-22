@@ -1,15 +1,15 @@
-# pk's OS - chhota Linux OS jo live USB se chale aur disk pe install bhi ho jaye.
+# pk's OS - a small Linux OS that runs from a live USB and also installs to disk.
 #
-#   make doctor      dependencies check (kya install karna hai wo btayega)
-#   make iso         build/pkos.iso banao
-#   make run         QEMU (BIOS) me live boot  -> terminal me console
-#   make run-efi     QEMU (UEFI/OVMF) me live boot
-#   make test        end-to-end auto test: live boot -> disk pe install -> installed boot
-#   make usb USB=/dev/sdX   ISO ko pendrive pe likh do (dd)
-#   make kernel      apna custom kernel banao (optional, slow)
+#   make doctor      check dependencies (tells you what to install)
+#   make iso         build build/pkos.iso
+#   make run         live boot in QEMU (BIOS) -> console in terminal
+#   make run-efi     live boot in QEMU (UEFI/OVMF)
+#   make test        end-to-end auto test: live boot -> install to disk -> installed boot
+#   make usb USB=/dev/sdX   write the ISO to a pendrive (dd)
+#   make kernel      build your own custom kernel (optional, slow)
 #   make clean       build/ delete
 #
-# User se build hota hai; jis step ko root chahiye (losetup/depmod) wo khud sudo leta hai.
+# Builds as a user; whichever step needs root (losetup/depmod) takes sudo itself.
 
 SHELL       := /bin/bash
 export PK_ROOT := $(CURDIR)
@@ -26,14 +26,14 @@ export OUT
 ISO         := $(OUT)
 TESTDISK    := $(BUILD)/testdisk.img
 
-# ---- knobs (command line se override karo) --------------------------------
+# ---- knobs (override from the command line) --------------------------------
 SUDO          ?= sudo
 QEMU          ?= qemu-system-x86_64
 PK_KERNEL  ?=
 PK_MODULES ?=
 PK_BUSYBOX ?=
 SQUASH_COMP   ?= auto
-# canonical default config/live.conf se match karna chahiye (consoleblank: kaali-screen fix)
+# canonical default must match config/live.conf (consoleblank: black-screen fix)
 KERNEL_CMDLINE?= quiet loglevel=3 consoleblank=0 vt.global_cursor_default=1
 PK_QEMU_MEM?= 2048
 export SUDO QEMU PK_KERNEL PK_MODULES PK_BUSYBOX SQUASH_COMP KERNEL_CMDLINE PK_QEMU_MEM
@@ -48,31 +48,31 @@ help:
 	@echo "pk's OS build system - targets:"
 	@echo "  make doctor     dependencies check"
 	@echo "  make iso        --> $(ISO)"
-	@echo "  make run        QEMU me live boot (headless pe serial + direct kernel boot)"
-	@echo "  make run-iso    QEMU me pura ISO+GRUB boot (display chahiye)"
-	@echo "  make run-efi    QEMU me UEFI live boot"
+	@echo "  make run        live boot in QEMU (serial + direct kernel boot when headless)"
+	@echo "  make run-iso    full ISO+GRUB boot in QEMU (needs a display)"
+	@echo "  make run-efi    UEFI live boot in QEMU"
 	@echo "  make test       auto end-to-end QA (8 stages: live, install, installed, toram,"
 	@echo "                      UEFI, persistence+net+ssh, apps, pendrive kit)"
-	@echo "  make check      sirf stage 8 (pk-check + keymap + install+user+runtime)"
+	@echo "  make check      only stage 8 (pk-check + keymap + install+user+runtime)"
 	@echo "  make gui-test   stage 8 + desktop session (weston/Xvfb + xterm round-trip)"
-	@echo "  make apps-iso   base ISO + App Runtime andar  -> build/pkos-apps.iso"
-	@echo "  make manifest   ISO ke payload hashes (build/manifest.txt) -> rebuild verify"
-	@echo "  make verify     manifest se ISO/USB verify (tools/verify-usb.sh)"
-	@echo "  make bundle     git bundle + source tar (sandbox reset se bachne ke liye)"
+	@echo "  make apps-iso   base ISO + App Runtime inside  -> build/pkos-apps.iso"
+	@echo "  make manifest   ISO payload hashes (build/manifest.txt) -> rebuild verify"
+	@echo "  make verify     verify ISO/USB from manifest (tools/verify-usb.sh)"
+	@echo "  make bundle     git bundle + source tar (to survive a sandbox reset)"
 	@echo "  sudo make runtime   # App Runtime (Debian squashfs) -> build/pk-runtime.sqfs"
 	@echo "                      # VARIANT=lean|desktop|full|dev   PKGS=wine,firefox-esr"
-	@echo "  sudo make runtime-desktop   # GUI wala runtime (weston+Xvfb+xterm+mesa+wine)"
-	@echo "  make iso WITH_RUNTIME=1   # runtime ISO ke andar (/live/pk-runtime.sqfs)"
-	@echo "  make test-apps    apps layer ka QA (14 checks; REAL_RUNTIME=1 / WINE=1 bhi)"
-	@echo "                      # PK_TEST_REAL_RUNTIME=1 make test-apps  (asli Debian se)"
+	@echo "  sudo make runtime-desktop   # GUI runtime (weston+Xvfb+xterm+mesa+wine)"
+	@echo "  make iso WITH_RUNTIME=1   # runtime inside the ISO (/live/pk-runtime.sqfs)"
+	@echo "  make test-apps    QA of the apps layer (14 checks; REAL_RUNTIME=1 / WINE=1 too)"
+	@echo "                      # PK_TEST_REAL_RUNTIME=1 make test-apps  (with real Debian)"
 	@echo "                      # boot option: pk_runtime=off|auto|<dev|file>  pk_apps_get=<pkg>"
-	@echo "  make usb USB=/dev/sdX    ISO ko USB pe dd"
-	@echo "  make kernel     apna kernel banao (build/kernel-<ver>), phir:"
+	@echo "  make usb USB=/dev/sdX    dd the ISO to USB"
+	@echo "  make kernel     build your own kernel (build/kernel-<ver>), then:"
 	@echo "                      make clean-rootfs && make iso PK_KERNEL=... PK_MODULES=..."
 	@echo "  make clean"
 	@echo "notes:"
-	@echo "  make iso REPRODUCIBLE=1   # SOURCE_DATE_EPOCH se squashfs/initrd byte-stable"
-	@echo "  console keymaps ke liye builder par 'kbd' chahiye (na ho to pk-keymap GUI-only)"
+	@echo "  make iso REPRODUCIBLE=1   # byte-stable squashfs/initrd via SOURCE_DATE_EPOCH"
+	@echo "  console keymaps need 'kbd' on the builder (else pk-keymap is GUI-only)"
 
 doctor:
 	@scripts/doctor.sh
@@ -97,7 +97,7 @@ $(STAMP)/initrd: $(STAMP)/rootfs $(PK_ROOT)/init/init $(PK_ROOT)/init/kernel-mod
 	@scripts/mk-initrd
 	@touch $@
 
-# app runtime: build/pk-runtime.sqfs (+ rw img) - Linux/Windows apps ke liye
+# app runtime: build/pk-runtime.sqfs (+ rw img) - for Linux/Windows apps
 runtime:
 	@sh scripts/make-runtime $(if $(strip $(VARIANT)),--variant=$(VARIANT),) $(if $(strip $(PKGS)),--pkgs=$(PKGS),)
 runtime-desktop:
@@ -111,7 +111,7 @@ manifest-apps: apps-iso
 	@scripts/manifest.sh $(BUILD)/pkos-apps.iso $(BUILD)/manifest-apps.txt
 kit: iso apps-iso manifest manifest-apps bundle
 	@echo "[pk] kit ready: build/pkos.iso build/pkos-apps.iso build/manifest*.txt build/pkos-main.bundle"
-	@echo "[pk] pendrive: tools/write-usb.sh  ya  dd  (docs/PENDRIVE.md)"
+	@echo "[pk] pendrive: tools/write-usb.sh  or  dd  (docs/PENDRIVE.md)"
 verify: manifest
 	@tools/verify-usb.sh --iso $(ISO) $(BUILD)/manifest.txt
 check: iso
@@ -122,22 +122,22 @@ bundle:
 	@git bundle create $(BUILD)/pkos-main.bundle --all >/dev/null 2>&1 || true
 	@tar --exclude=build --exclude=.git -czf $(BUILD)/pkos-src.tar.gz -C .. pkos 2>/dev/null || true
 	@echo "[pk] bundle: $(BUILD)/pkos-main.bundle  +  $(BUILD)/pkos-src.tar.gz"
-	@echo "[pk] dono /home/user me copy kar lo (persist ke liye): cp $(BUILD)/pkos-*.tar.gz $(BUILD)/pkos-main.bundle .."
+	@echo "[pk] copy both to /home/user (to persist): cp $(BUILD)/pkos-*.tar.gz $(BUILD)/pkos-main.bundle .."
 clean-runtime:
 	@rm -f $(BUILD)/pk-runtime.sqfs $(BUILD)/pk-runtime-rw.img
-	@echo "runtime images hataye (make runtime se dobara ban jayenge)"
+	@echo "runtime images removed (rebuilt by make runtime)"
 
 iso: $(ISO)
 $(ISO): $(STAMP)/squash $(STAMP)/initrd $(PK_ROOT)/init/grub.cfg $(PK_ROOT)/config/live.conf
-	# ^ grub.cfg/live.conf ko prerequisite isliye: inme (KERNEL_CMDLINE, menu entries) badlav
-	#   hone par purani ISO dobara bane, warna stale image ship ho jaati (asli footgun).
+	# ^ grub.cfg/live.conf are prerequisites because: if these change (KERNEL_CMDLINE, menu entries)
+	#   the old ISO gets rebuilt, otherwise a stale image would ship (a real footgun).
 	@scripts/mk-iso
 	@touch $@
 
-# rootfs ko refresh karo (config/live.conf ya kernel badalne ke baad)
+# refresh the rootfs (after changing config/live.conf or the kernel)
 clean-rootfs:
 	@rm -f $(STAMP)/rootfs $(STAMP)/squash $(STAMP)/initrd
-	@echo "stamps cleared - agla 'make iso' rootfs dobara banayega"
+	@echo "stamps cleared - next 'make iso' rebuilds the rootfs"
 
 # ---------------------------------------------------------------- run / test
 run: iso
@@ -163,7 +163,7 @@ test-live: iso
 
 # ---------------------------------------------------------------- USB
 usb:
-	@test -n "$(USB)" || { echo "usage: make usb USB=/dev/sdX  (poora device, partition nahi)"; exit 1; }
+	@test -n "$(USB)" || { echo "usage: make usb USB=/dev/sdX  (whole device, not a partition)"; exit 1; }
 	@tools/write-usb.sh $(USB) $(ISO)
 
 # ---------------------------------------------------------------- optional custom kernel
@@ -172,8 +172,8 @@ kernel:
 
 clean:
 	@rm -rf $(WORK) $(ISO) $(TESTDISK) $(BUILD)/*.log $(BUILD)/test-logs
-	@echo "build/work aur build/*.iso delete ho gaye"
+	@echo "build/work and build/*.iso deleted"
 
 deepclean: clean
 	@rm -rf $(BUILD)
-	@echo "pura build/ delete"
+	@echo "delete the whole build/"

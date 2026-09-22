@@ -1,7 +1,7 @@
 #!/bin/sh
-# pk's OS boot hook :: users/groups ki dekhbhaal (har boot par, sasta hai)
-#   - groups bana do (audio/video/input/render/seat/...) -> device perms inhi par depend
-#   - /etc/passwd me harkar har user ka home dir + owner theek karo (warna login fail)
+# pk's OS boot hook :: users/groups upkeep (on every boot, cheap)
+#   - create groups (audio/video/input/render/seat/...) -> device perms depend on these
+#   - walk /etc/passwd to fix every user's home dir + owner (else login fails)
 #   - marker: ### PK: USERS-OK (users=N groups=M autologin=X) ###
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
@@ -13,7 +13,7 @@ ng=0
 for g in tty disk lp dialout cdrom audio video users input render seat wheel; do
   grep -qs "^$g:" /etc/group || { have addgroup && addgroup "$g" >/dev/null 2>&1 && ng=$((ng + 1)); }
 done
-# uid>=1000 wale users ke homes
+# homes of uid>=1000 users
 nu=0; fixed=0
 while IFS=: read -r un _pw uid gid _gc home shell; do
   case "${uid:-}" in ''|*[!0-9]*) continue ;; esac

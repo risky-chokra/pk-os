@@ -1,13 +1,13 @@
 #!/bin/sh
-# pk's OS :: VM ka screenshot lo - "GRUB ke baad screen kaali" jaisa maamla 20 second me clear ho jaata hai
+# pk's OS :: take a VM screenshot - a "black screen after GRUB"-style case becomes clear in 20 seconds
 #   tools/vm-shot.sh [iso] [out-prefix] [seconds-to-run] [extra qemu args...]
 #
-# Kya karta hai: QEMU ko headless (-display none) chalata hai, monitor socket par
-# `screendump` bhejta hai, aur PNG banaata hai - yaani *wo hi image* jo user ko
-# VM window me dikhti. --kernel/--initrd/-append bhi de sakte ho (extra args me).
+# What it does: runs QEMU headless (-display none), on the monitor socket
+# sends `screendump`, and creates a PNG - *the same image* the user
+# sees in the VM window. You can also pass --kernel/--initrd/-append (in extra args).
 #   tools/vm-shot.sh build/pkos.iso /tmp/shot 60
 #   tools/vm-shot.sh build/pkos.iso /tmp/safe 60 -append "console=tty0 loglevel=4 nomodeset pk_poweroff"
-# deps: qemu-system-x86_64, (convert | pnmcut) - ImageMagick na ho to PPM/PBM hi bachega.
+# deps: qemu-system-x86_64, (convert | pnmcut) - without ImageMagick only PPM/PBM remains.
 set -u
 ISO=${1:-build/pkos.iso}
 OUT=${2:-/tmp/pk-shot}
@@ -42,7 +42,7 @@ PY
   if have convert; then
     [ -f "$OUT-$n.ppm" ] && convert "$OUT-$n.ppm" "$OUT-$n.png" 2>/dev/null && SHOTS="$SHOTS $OUT-$n.png"
   fi
-  # blank-pixel ratio: 100% kaali screen ka pata isi se chalta hai
+  # blank-pixel ratio: this is how a 100% black screen is detected
   if [ -f "$OUT-$n.ppm" ] && have python3; then
     python3 - "$OUT-$n.ppm" <<'PY'
 import sys
@@ -50,7 +50,7 @@ p=sys.argv[1]
 b=open(p,'rb').read()
 # P5 ppm: header 'P5 w h 255'
 try:
-    # P5 header: magic, width, height, maxval - whitespace-separated, kahin bhi line breaks
+    # P5 header: magic, width, height, maxval - whitespace-separated, line breaks anywhere
     i = 0; toks = []
     while len(toks) < 4 and i < len(b):
         j = b.find(b'\n', i)
@@ -74,16 +74,16 @@ setsid qemu-system-x86_64 -machine q35 -cpu max -smp 2 -m 1536 -cdrom "$ISO" -bo
   -serial "file:$LOG" $EXTRA >/dev/null 2>&1 &
 QPID=$!
 sleep 3
-shot grub          # GRUB menu dikh raha hai?
+shot grub          # is the GRUB menu showing?
 sleep $(( SECS > 20 ? 15 : SECS/2 ))
-shot boot          # boot ke baad
+shot boot          # after boot
 i=0
 while [ $i -lt 3 ]; do
   sleep 6; shot "late$i"; i=$((i + 1))
 done
 kill -TERM -$QPID 2>/dev/null || true; sleep 1; kill -KILL -$QPID 2>/dev/null || true
 rm -f "$MON" 2>/dev/null
-echo "[shot] serial log: $LOG (kernel/console output yahan)"
+echo "[shot] serial log: $LOG (kernel/console output here)"
 echo "[shot] images:$SHOTS"
 if [ -s "$LOG" ]; then
   echo "[shot] last console lines:"; tail -5 "$LOG" | sed 's/^/    /'

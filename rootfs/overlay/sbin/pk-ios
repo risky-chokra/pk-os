@@ -26,15 +26,15 @@ runtime_ok() { grep -q " $RT " /proc/mounts 2>/dev/null && [ -d "$RT/usr" ]; }
 
 why() {
   cat <<'TXT'
-iOS apps Linux par native nahi chal sakti. Teen wajah:
-  1) Binary format: Mach-O (arm64) -> Linux kernel ye execute nahi kar sakta (XNU chahiye)
-  2) Frameworks: UIKit/SwiftUI/CoreAnimation closed-source hain, koi Linux port nahi
-  3) Codesign + sandbox: iOS kernel-level entitlements maangta hai
-Chalane ke *sachche* raaste (isi order me acche):
-  A) Service use karo, app nahi:  pk-ios web https://...      (browser kiosk launcher)
-  B) macOS guest me Xcode Simulator:  pk-ios mac-guest         (QEMU + legal macOS)
-  C) macOS console binaries (iOS nahi): Darling -> pk-ios darling
-  D) Cross-platform rewrite: Flutter/React Native/Tauri -> yahan Linux app ke taur par chalti hai
+iOS apps cannot run natively on Linux. Three reasons:
+  1) Binary format: Mach-O (arm64) -> the Linux kernel cannot execute this (needs XNU)
+  2) Frameworks: UIKit/SwiftUI/CoreAnimation are closed-source, no Linux port
+  3) Codesign + sandbox: demands iOS kernel-level entitlements
+The *true* ways to run it (best in this order):
+  A) Use the service, not the app:  pk-ios web https://...      (browser kiosk launcher)
+  B) Xcode Simulator in a macOS guest:  pk-ios mac-guest         (QEMU + legal macOS)
+  C) macOS console binaries (not iOS): Darling -> pk-ios darling
+  D) Cross-platform rewrite: Flutter/React Native/Tauri -> runs here as a Linux app
 TXT
 }
 
@@ -48,7 +48,7 @@ plist_get() { # <file> <key>
       f {
         line=$0
         gsub(/^[ \t]+|[ \t]+$/, "", line)
-        if (line ~ /^<array>/ || line ~ /<array>/) {   # <array> ke andar values
+        if (line ~ /^<array>/ || line ~ /<array>/) {   # values inside <array>
           buf=line; got=0
           while (buf !~ /<\/array>/ && (getline nxt) > 0) {
             buf = buf " " nxt
@@ -68,7 +68,7 @@ plist_get() { # <file> <key>
   fi
 }
 
-# Mach-O header se arch nikaalo
+# extract arch from the Mach-O header
 macho_arch() { # <file>
   f=$1
   [ -f "$f" ] || return 1
@@ -78,7 +78,7 @@ macho_arch() { # <file>
     feedfacf*|cffaedfe*|feedface*|cefaedfe*)
       ct=$(od -An -tx1 -j4 -N4 "$f" 2>/dev/null | tr -d ' \n') ;;
     cafebabe*|bebafeca*)
-      # fat binary: nfat_HDR ke baad pehli entry ka cputype (offset 12)
+      # fat binary: cputype of the first entry after nfat_HDR (offset 12)
       ct=$(od -An -tx1 -j12 -N4 "$f" 2>/dev/null | tr -d ' \n')
       pre='universal/' ;;
     *) return 1 ;;
@@ -134,10 +134,10 @@ do_info() { # <ipa|app>
   if [ -n "$exe" ] && [ -f "$exe" ]; then
     printf 'binary arch   : %s\n' "$(macho_arch "$exe" || echo '(parse not)')"
   fi
-  printf '\nkya will : CHALEGA NA (iOS/UKit runtime required). Kya run may ho:\n'
-  printf ' - web app bana pass it : pk-ios web <url> %s\n' "$(plist_get "$pl" CFBundleDisplayName | tr -d ' ' | tr 'A-Z' 'a-z' | cut -c1-20)"
-  printf '  - macOS guest me Xcode Simulator (pk-ios mac-guest)\n'
-  printf ' - agar source code is -> Flutter/React Native/Tauri from yahan native build\n'
+  printf '\nwhat will NOT run (iOS/UKit runtime required). What may run:\n'
+  printf ' - create a web app with : pk-ios web <url> %s\n' "$(plist_get "$pl" CFBundleDisplayName | tr -d ' ' | tr 'A-Z' 'a-z' | cut -c1-20)"
+  printf '  - Xcode Simulator in macOS guest (pk-ios mac-guest)\n'
+  printf ' - if you have the source code -> build natively here with Flutter/React Native/Tauri\n'
   mark "IOS-INFO-OK $(basename "$app")"
   ls "$app" 2>/dev/null | sed 's/^/  file: /' | head -12
   printf '  (extracted: %s)\n' "$work"
@@ -180,7 +180,7 @@ TXT
   else
     cat > "$d/$name" <<TXT
 #!/bin/sh
-# pk-ios web launcher: $url  (browser abhi nahi hai)
+# pk-ios web launcher: $url  (no browser yet)
 echo "$name: no browser found.  Install:  pk-get install -y firefox-esr" >&2
 echo " GUI for first: pk-x start then: pk-run $name" >&2
 exit 73
@@ -195,7 +195,7 @@ Name=$name (web)
 Exec=$name
 Comment=pk-ios web wrapper for $url
 TXT
-  say "launcher bana: $d/$name (to run for: pk-run $name ya pk-run --gui $name)"
+  say "launcher created: $d/$name (to run: pk-run $name or pk-run --gui $name)"
   [ -n "$b" ] || warn "no browser installed yet (pk-get install -y firefox-esr)"
   mark "IOS-WEB-OK ($name -> $url)"
   return 0
@@ -204,13 +204,13 @@ TXT
 do_doctor() {
   printf 'pk-ios doctor\n'
   printf '  runtime (/opt/pk) : '
-  if runtime_ok; then printf 'attached (%s)\n' "$(cat "$RT/etc/pk-runtime-release" 2>/dev/null | head -1 | cut -c1-50)"; else printf 'no laga\n'; fi
-  printf '  unzip             : '; have unzip && printf 'yes\n' || printf 'NAHI (.ipa kholne for required)\n'
-  printf '  browser (web wrap): '; for c in firefox-esr firefox epiphany chromium surf; do if runtime_ok && [ -x "$RT/usr/bin/$c" ]; then printf '%s (runtime)\n' "$c"; break; fi; if have "$c"; then printf '%s (base)\n' "$c"; break; fi; printf 'any not -> pk-get install -y firefox-esr\n'; break; done
+  if runtime_ok; then printf 'attached (%s)\n' "$(cat "$RT/etc/pk-runtime-release" 2>/dev/null | head -1 | cut -c1-50)"; else printf 'not attached\n'; fi
+  printf '  unzip             : '; have unzip && printf 'yes\n' || printf 'NO (needed to open .ipa)\n'
+  printf '  browser (web wrap): '; for c in firefox-esr firefox epiphany chromium surf; do if runtime_ok && [ -x "$RT/usr/bin/$c" ]; then printf '%s (runtime)\n' "$c"; break; fi; if have "$c"; then printf '%s (base)\n' "$c"; break; fi; printf 'none found -> pk-get install -y firefox-esr\n'; break; done
   printf '  qemu (mac guest)  : '; if [ -x "$RT/usr/bin/qemu-system-x86_64" ] || have qemu-system-x86_64; then printf 'yes\n'; else printf 'no -> pk-get install -y qemu-system-x86\n'; fi
   printf '  /dev/kvm          : '; [ -e /dev/kvm ] && printf 'yes (tezos)\n' || printf 'no (TCG from 5-10x slow)\n'
   printf '  darling           : '; if runtime_ok && { [ -x "$RT/usr/bin/darling" ] || [ -x "$RT/usr/bin/darling-shell" ]; }; then printf 'installed\n'; else printf 'no (macOS binaries for; pk-ios darling)\n'; fi
-  printf '\n yaad: iOS/.ipa kabhi native not run; upar wale raaste real are.\n'
+  printf '\n remember: iOS/.ipa never runs natively; the routes above are real.\n'
   mark "IOS-DOCTOR-OK"
 }
 
@@ -218,11 +218,11 @@ do_mac_guest() {
   out=${HOME}/pk-ios-mac.sh
   cat > "$out" <<'TXT'
 #!/bin/sh
-# pk's OS :: macOS guest + Xcode iOS Simulator ka setup (jo actually chalta hai)
-# Ye script QEMU guest banati hai; macOS image aapko khud chahiye (Apple license:
-# macOS sirf Apple hardware par; hackintosh/virtualization apke risk par -
-# padh lo: https://apple.com/legal/macos-license ). Setup ke liye sabse
-# maintain kiya gaya recipe: github.com/kholia/OSX-KVM (boot-macOS.py / OpenCore).
+# pk's OS :: setting up a macOS guest + Xcode iOS Simulator (what actually works)
+# This script creates the QEMU guest; you need the macOS image yourself (Apple license:
+# macOS only on Apple hardware; hackintosh/virtualization at your own risk -
+# read: https://apple.com/legal/macos-license ). The best-maintained
+# recipe for setup: github.com/kholia/OSX-KVM (boot-macOS.py / OpenCore).
 set -eu
 IMG=${1:-}
 NAME=macos
@@ -234,7 +234,7 @@ pk-vm new "$NAME" --size=80G
 echo
 echo "now attach the image and install:"
 echo "  pk-vm run $NAME --cdrom=<macOS.iso> --ram=8192 --cpus=4 --uefi --vnc=:1"
-echo "  (guest me: Xcode install -> Xcode > Settings > Platforms -> iOS Simulator)"
+echo "  (in the guest: install Xcode -> Xcode > Settings > Platforms -> iOS Simulator)"
 echo "  then drag the .ipa into the simulator - that is the only real iOS app runtime"
 echo
 if [ -n "$IMG" ]; then
@@ -253,25 +253,25 @@ TXT
 
 do_darling() {
   cat <<'TXT'
-Darling (https://darling.software) macOS userspace ka Linux translator hai:
-  - kya chalta hai : macOS ka *x86_64/arm64 Mach-O console/GUI* code (Cocoa subset)
-  - kya NAHI chalta: iOS apps (.ipa) - UIKit/CoreAnimation/etc Darling me nahi hain
-  - Linux kernel modules chahiye (darwin.ko / dyld shared cache) -> real PC par
-    kernel headers + build; yahan (VM/sandbox) test nahi kiya gaya hai
-Setup (aapke PC par, ~15-30 min):
+Darling (https://darling.software) is a Linux translator for macOS userspace:
+  - what runs : macOS *x86_64/arm64 Mach-O console/GUI* code (Cocoa subset)
+  - what does NOT run: iOS apps (.ipa) - UIKit/CoreAnimation/etc are not in Darling
+  - needs Linux kernel modules (darwin.ko / dyld shared cache) -> on a real PC
+    kernel headers + build; not tested here (VM/sandbox)
+Setup (on your PC, ~15-30 min):
   sudo apt-get install -y git cmake build-essential libcap-dev zlib1g-dev \
     libicu-dev libxml2-dev libssl-dev libsdl2-dev libvulkan-dev pkg-config \
     uuid-dev libevent-dev libunwind-dev
   git clone --recursive https://github.com/darlinghq/darling.git
   cd darling && mkdir build && cd build && cmake .. && make -j2
-  ./darling shell            # ek macOS-like shell; wahan ./hello.chalega
+  ./darling shell            # a macOS-like shell; ./hello runs there
 TXT
   if [ "${1:-}" = "--setup" ]; then
     say "--setup: installing the dependencies inside the runtime (needs network)"
     if pk-get install -y git cmake build-essential libcap-dev zlib1g-dev libicu-dev \
         libxml2-dev libssl-dev libsdl2-dev libvulkan-dev pkg-config uuid-dev \
         libevent-dev libunwind-dev 2>&1 | tail -3; then
-      say "ab:  pk-shell  ke andar  git clone --recursive https://github.com/darlinghq/darling.git && make"
+      say "now, inside pk-shell:  git clone --recursive https://github.com/darlinghq/darling.git && make"
       mark "IOS-DARLING-DEPS-OK"
     else
       warn "pk-get fail (runtime attach is? net? )"

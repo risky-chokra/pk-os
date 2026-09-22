@@ -1,8 +1,8 @@
 #!/bin/sh
 # pk's OS :: app runtime builder
-#   ek Debian (ya busybox) userland squashfs banata hai jisse OS me "koi bhi Linux app"
-#   (aur Wine se Windows app) direct chal jaaye. Runtime base ISO me nahi hota -
-#   alag file/partition pe rehta hai, boot par /opt/pk par mount hota hai.
+#   builds a Debian (or busybox) userland squashfs so that "any Linux app" in the OS
+#   (and Windows apps via Wine) runs directly. The runtime is not in the base ISO -
+#   it lives on a separate file/partition, mounted at /opt/pk on boot.
 #
 # usage: scripts/make-runtime [--tiny] [--variant=lean|full|dev] [--pkgs=a,b]
 #                             [--out=build/pk-runtime.sqfs] [--rw-mb=1024] [--no-rw]
@@ -22,8 +22,8 @@ SUIT=$WORK/runtime
 DEB_MIRROR=${RUNTIME_MIRROR:-http://deb.debian.org/debian}
 DEB_DIST=${RUNTIME_DIST:-bookworm}
 
-# args: --opt=val aur --opt val dono chalte hain
-need_val() { [ -n "${2:-}" ] || die "$1 ke saath value pass it"; }
+# args: both --opt=val and --opt val work
+need_val() { [ -n "${2:-}" ] || die "pass a value with $1"; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --tiny)    TINY=1; shift ;;
@@ -45,12 +45,12 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# tiny (QA) aur real (Debian) tree ALAG rakhte hain — warna `make test-apps` ka
-# tiny run build/work/runtime ko overwrite karke asli Debian tree uda deta hai.
+# keep tiny (QA) and real (Debian) trees SEPARATE — otherwise `make test-apps`'s
+# tiny run would overwrite build/work/runtime and wipe out the real Debian tree.
 [ "$TINY" = 1 ] && SUIT=$WORK/runtime-tiny
 
-# tree prep ek hi privilege se hoti hai; agar sudo laga to tree ko wapas caller ke
-# haath de dete hain, taaki next bina-sudo run permission error na de (yeh bug tha).
+# tree prep happens under one privilege; if sudo was used, the tree is handed back to the
+# caller, so the next sudo-less run gives no permission error (that was a bug).
 if [ "$(id -u)" = 0 ]; then
   run_as() { "$@"; }
 elif have sudo; then
@@ -66,8 +66,8 @@ if [ "$(id -u)" != 0 ] && have sudo; then
 fi
 
 # ---------------------------------------------------------------- tiny variant (QA)
-# debootstrap ke bina, ek chhota par asli runtime: busybox + /usr/bin + /usr/lib,
-# taaki mount/overlay/chroot/dispatch ka poora flow test ho sake.
+# without debootstrap, a small but real runtime: busybox + /usr/bin + /usr/lib,
+# so the whole mount/overlay/chroot/dispatch flow can be tested.
 if [ "$TINY" = 1 ]; then
   log "tiny runtime (busybox-based) -> $SUIT"
   for d in bin sbin usr/bin usr/sbin usr/lib usr/lib/x86_64-linux-gnu lib lib64 etc/ssl var/lib/dpkg \
@@ -80,10 +80,10 @@ if [ "$TINY" = 1 ]; then
            env stat stat-1 sleep expr1 install; do
     ln -sf busybox "$SUIT/bin/$a" 2>/dev/null || true
   done
-  # fake wine + waydroid: dispatch path test karne ke liye marker print karte hain
+  # fake wine + waydroid: they print markers to test the dispatch path
   cat > "$SUIT/usr/bin/wine" <<'FW'
 #!/bin/sh
-# tiny-runtime fake wine (QA ke liye): args echo karta hai
+# tiny-runtime fake wine (for QA): echoes args
 echo "fake-wine: exec $*"
 if [ "${1:-}" = "--version" ]; then echo "wine-9.0-tiny"; exit 0; fi
 case " $* " in
@@ -101,7 +101,7 @@ exit 0
 FA
   cat > "$SUIT/usr/bin/java" <<'FJ'
 #!/bin/sh
-# tiny-runtime fake java (QA ke liye): -jar <f> ko echo karta hai
+# tiny-runtime fake java (for QA): echoes -jar <f>
 for a in "$@"; do
   case "$a" in
     *.jar) echo "JAVA-STUB-RAN $a"; exit 0 ;;
@@ -113,12 +113,12 @@ exit 0
 FJ
   cat > "$SUIT/usr/bin/qemu-aarch64" <<'FQ'
 #!/bin/sh
-# tiny-runtime fake qemu-user (QA ke liye): args ka pehla path echo karta hai
+# tiny-runtime fake qemu-user (for QA): echoes the first path in args
 echo "QEMU-USER-RAN $*"
 exit 0
 FQ
   chmod 755 "$SUIT/usr/bin/wine" "$SUIT/usr/bin/waydroid" "$SUIT/usr/bin/java" "$SUIT/usr/bin/qemu-aarch64"
-  # "app" jo runtime ke andar se chalaya ja sakta hai (static busybox hi kaafi hai)
+  # an "app" that can be run from inside the runtime (static busybox is enough)
   cat > "$SUIT/usr/bin/pk-tiny-app" <<'APP'
 #!/bin/sh
 echo "tiny-runtime app: hello from pk runtime"
@@ -129,58 +129,58 @@ APP
 else
   # ------------------------------------------------------------ real Debian runtime
   have debootstrap || die "debootstrap required -> sudo apt-get install -y debootstrap"
-  [ "$(id -u)" = 0 ] || SUDO_OK=1   # debootstrap ke liye
+  [ "$(id -u)" = 0 ] || SUDO_OK=1   # for debootstrap
   have sudo >/dev/null 2>&1 || SUDO_OK=0
   case " ${PATH} " in *" /usr/sbin "*|*" /sbin "*) : ;; *) export PATH="$PATH:/usr/sbin:/sbin" ;; esac
-  log "debootstrap $DEB_DIST ($VARIANT) -> $SUIT (anything minute lagenge)"
-  # "basic essential software" - ISO release karne se pehle hi image me, taaki live
-  # stick utarte hi system usable ho (editor, files, network, diagnostics, archives,
-  # python, man pages) aur Wi-Fi/Bluetooth bina pk-get ke chale. desktop variant me
-  # GUI essentials (browser, image/pdf viewer, audio player) bhi jaate hain.
+  log "debootstrap $DEB_DIST ($VARIANT) -> $SUIT (takes a few minutes)"
+  # "basic essential software" - into the image before ISO release, so a live
+  # stick is usable as soon as it boots (editor, files, network, diagnostics, archives,
+  # python, man pages) and Wi-Fi/Bluetooth work without pk-get. In the desktop variant
+  # GUI essentials (browser, image/pdf viewer, audio player) go in too.
   PK_ESSENTIALS=${PK_ESSENTIALS:-"nano,vim,less,htop,procps,psmisc,which,file,tree,pv,tmux,rsync,git,make,curl,wget,openssh-client,ca-certificates,jq,zip,unzip,p7zip-full,xz-utils,patch,diffutils,bc,ncdu,strace,lsof,iputils-ping,iproute2,dnsutils,iperf3,ethtool,socat,dialog,pciutils,usbutils,dmidecode,python3,python3-venv,man-db,bash-completion,locales,poppler-utils,xdg-utils,gnupg,openssh-sftp-server"}
   PK_GUI_ESSENTIALS=${PK_GUI_ESSENTIALS:-"dillo,sxiv,mupdf-tools,xpdf,mpg123,wpasupplicant,iw,wireless-regdb,rfkill,wireless-tools,bluez,bluez-obexd,pinentry-curses"}
-  # build ke baad yeh commands runtime me actually milein ya nahi - isi list ki
-  # verification /etc/pk-essentials.txt me likhi jaati hai (boot marker isi se banta hai)
+  # whether these commands are actually found in the runtime after the build - this list's
+  # verification is written to /etc/pk-essentials.txt (the boot marker comes from it)
   PK_ESSENTIAL_BINS=${PK_ESSENTIAL_BINS:-"nano vim less htop tmux rsync git make curl wget ssh sftp jq zip unzip 7z xz tree pv watch ncdu strace lsof ping ip dig nslookup iperf3 ethtool socat dialog lspci lsusb dmidecode python3 man bc diff patch gpg pdftotext file"}
   PK_GUI_ESSENTIAL_BINS=${PK_GUI_ESSENTIAL_BINS:-"dillo sxiv mutool muraster xpdf mpg123 wpa_cli wpa_supplicant iwlist iw rfkill bluetoothctl btmgmt"}
 
   case "$VARIANT" in
     lean) EXTRA="hello,vim-tiny,htop,wget,ca-certificates" ;;
     full) EXTRA="apt-utils,ca-certificates,vim,htop,wget,curl,less,file,man,dialog,locales,sudo" ;;
-    # fonts-dejavu-core + adwaita-icon-theme: inke bina weston-terminal/xterm khulte
-    # hain par text render nahi hota (aur weston "could not load cursor" warn karta hai)
-    # -> desktop kaali/khaali screen jaisi dikhti thi. ~2 MB, desktop variant me hi.
+    # fonts-dejavu-core + adwaita-icon-theme: without these, weston-terminal/xterm open
+    # but render no text (and weston warns "could not load cursor")
+    # -> the desktop looked like a black/empty screen. ~2 MB, only in the desktop variant.
     desktop) EXTRA="apt-utils,ca-certificates,htop,wget,curl,less,file,locales,sudo,fonts-dejavu-core,adwaita-icon-theme,xkb-data,libgl1-mesa-dri,libegl-mesa0,seatd,alsa-utils,xwayland" ;;
     dev)  EXTRA="build-essential,git,make,pkg-config,apt-utils,ca-certificates,vim,htop,wget,curl,less,file" ;;
     *)    EXTRA="" ;;
   esac
   [ -n "$PKGS" ] && EXTRA=$PKGS
   run_as debootstrap --variant=minbase --include="$EXTRA" --arch=amd64 "$DEB_DIST" "$SUIT" "$DEB_MIRROR"
-  # hygiene: cache/man/docs hatao (size ka farak)
-  # hygiene: cache/man/docs hatao. apt ki *lists* (package index) RAKHTE hain —
-  # unke bina guest me pehla `pk-get install` 40 MB index download + parse karta hai
-  # (320 MB VM me 10 min lagte hain). Lists ke saath install sirf .deb khinchta hai.
-  # RUNTIME_KEEP_LISTS=0 do to image chhoti (par pehla update guest me khud chalega).
+  # hygiene: remove cache/man/docs (saves size)
+  # hygiene: remove cache/man/docs. KEEP apt *lists* (package index) —
+  # without them, the first `pk-get install` in the guest downloads + parses a 40 MB index
+  # (takes 10 min in a 320 MB VM). With lists, install only pulls the .deb.
+  # RUNTIME_KEEP_LISTS=0 gives a smaller image (but the first update runs itself in the guest).
   if [ "${RUNTIME_KEEP_LISTS:-1}" = 1 ]; then
     run_as sh -c "rm -rf '$SUIT'/var/cache/apt/archives/*.deb '$SUIT'/usr/share/man '$SUIT'/usr/share/doc/* '$SUIT'/var/lib/apt/lists/partial 2>/dev/null; true"
-    [ -d "$SUIT/var/lib/apt/lists" ] && log "  apt lists: $(du -sh "$SUIT/var/lib/apt/lists" 2>/dev/null | cut -f1) (image in will remain)" || warn " apt lists not mili (guest in pehla install update karega)"
+    [ -d "$SUIT/var/lib/apt/lists" ] && log "  apt lists: $(du -sh "$SUIT/var/lib/apt/lists" 2>/dev/null | cut -f1) (will remain in the image)" || warn " apt lists not found (first install in guest will update)"
   else
     run_as sh -c "rm -rf '$SUIT'/var/cache/apt/archives/*.deb '$SUIT'/usr/share/man '$SUIT'/usr/share/doc/* '$SUIT'/var/lib/apt/lists/* 2>/dev/null; true"
   fi
-  # --- basic essential software: apt se install (debootstrap ka minbase index sirf
-  # required/important packages janta hai -> git/python3/dillo jaise wahan nahi milte;
-  # isliye yeh ek asli apt transaction hai, aur neeche verify bhi hota hai).
+  # --- basic essential software: install via apt (debootstrap's minbase index only
+  # knows required/important packages -> git/python3/dillo are not found there;
+  # hence this is a real apt transaction, also verified below).
   ess_pkgs=$(printf '%s' "$PK_ESSENTIALS" | tr ',' ' ')
   if [ "$VARIANT" = full ] || [ "$VARIANT" = desktop ]; then
     ess_pkgs="$ess_pkgs $(printf '%s' "$PK_GUI_ESSENTIALS" | tr ',' ' ')"
   fi
   if [ -n "${PKGS:-}" ]; then
-    log " essentials: --pkgs given hua is, apni list but anything add not done"
+    log " essentials: --pkgs was given, but nothing added to our list"
   else
     log "  essentials install: $(printf '%s' "$ess_pkgs" | tr ' ' ',' )"
     run_as chroot "$SUIT" /bin/sh -c \
       "apt-get update -qq >/dev/null 2>&1; DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $ess_pkgs" >/dev/null 2>&1 \
-      || { warn "poora transaction lag not gaya -> ek-ek package try run rahe are"; \
+      || { warn "whole transaction did not apply -> trying packages one by one"; \
            for ep in $ess_pkgs; do
              run_as chroot "$SUIT" /bin/sh -c \
                "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $ep" >/dev/null 2>&1 \
@@ -189,29 +189,29 @@ else
   fi
 
   if [ "$VARIANT" = full ] || [ "$VARIANT" = desktop ]; then
-    log "$VARIANT variant: GUI stack (weston + xterm + Xvfb + mesa) + wine install (lamba chalega)"
+    log "$VARIANT variant: GUI stack (weston + xterm + Xvfb + mesa) + wine install (takes a while)"
     run_as chroot "$SUIT" /bin/sh -c \
       "apt-get update -qq && apt-get install -y --no-install-recommends wine mesa-utils weston xterm xvfb x11-utils x11-xkb-utils xkb-data" >/dev/null 2>&1 || \
-      warn "wine/weston install fail (later runtime ke andar 'pk-get install -y wine' instead lena)"
+      warn "wine/weston install failed (later, inside the runtime, take 'pk-get install -y wine' instead)"
   fi
-  # --- trim (install ke BAAD): doc/man/info, apt ki .deb cache, non-English locales.
-  # Pehle yeh step sirf debootstrap ke turant baad chalta tha, to essentials + wine ke
-  # docs/man/locale image me wapas aa jaate the (runtime 897 MB ban gaya tha). Ab sab
-  # installs ke baad chalta hai -> "pre-installed but still small" dono bachte hain.
+  # --- trim (AFTER install): doc/man/info, apt .deb cache, non-English locales.
+  # Earlier this step ran only right after debootstrap, so the essentials + wine
+  # docs/man/locale came back into the image (runtime had become 897 MB). Now everything
+  # runs after installs -> both "pre-installed" and "still small" survive.
   for td in var/cache/apt/archives var/cache/apt/archives/partial usr/share/doc \
             usr/share/man usr/share/info usr/share/lintian usr/share/gtk-doc \
             usr/share/i18n usr/share/backgrounds usr/share/common-licenses; do
     run_as sh -c "rm -rf '$SUIT/$td'/* 2>/dev/null; true"
   done
   run_as sh -c "rm -rf '$SUIT'/usr/share/vim/*/doc 2>/dev/null; true"
-  # locales: C/en rakhte hain, baaki hata dete hain (~90 MB) - messages English hi aayenge
+  # locales: keep C/en, remove the rest (~90 MB) - messages will come in English only
   run_as sh -c "cd '$SUIT/usr/share/locale' 2>/dev/null && ls -d */ 2>/dev/null | grep -vE '^(C|en|en_US|en_GB)(\\..*)?$' | xargs -r rm -rf; true"
-  log " trim ke after runtime tree: $(du -sh "$SUIT" 2>/dev/null | cut -f1)"
+  log " runtime tree after trim: $(du -sh "$SUIT" 2>/dev/null | cut -f1)"
 
-  # --- essentials: image me actually kaun-kaun se commands maujood hain -------------
-  # /etc/pk-essentials.txt guest boot par 'ESSENTIALS-OK (count=.. missing=0)' marker
-  # banata hai, aur QA host par isi file ko check karta hai - matlab "pre-installed"
-  # ka claim har build me verify hota hai, maan ke nahi chalta.
+  # --- essentials: which commands are actually present in the image -------------
+  # /etc/pk-essentials.txt carries the 'ESSENTIALS-OK (count=.. missing=0)' marker on guest boot
+  # creates, and QA checks this same file on the host - meaning "pre-installed"
+  # is verified in every build, never taken on faith.
   cat > "$WORK/pk-check-essentials.sh" <<'CHK'
 #!/bin/sh
 # pk's OS runtime build: record which essential commands are present.
@@ -230,18 +230,18 @@ CHK
   { [ "$VARIANT" = desktop ] || [ "$VARIANT" = full ]; } && essbins="$PK_ESSENTIAL_BINS $PK_GUI_ESSENTIAL_BINS"
   run_as cp "$WORK/pk-check-essentials.sh" "$SUIT/tmp/pk-check-essentials.sh" 2>/dev/null || true
   run_as chroot "$SUIT" /bin/sh /tmp/pk-check-essentials.sh "$essbins" >/dev/null 2>&1 \
-    || warn "anything essential commands runtime in not mile (pk-essentials.txt check)"
+    || warn "some essential commands not found in runtime (check pk-essentials.txt)"
   run_as chmod 644 "$SUIT/etc/pk-essentials.txt" 2>/dev/null || true
   log "  essentials in image: $(run_as tail -1 "$SUIT/etc/pk-essentials.txt" 2>/dev/null || cat "$SUIT/etc/pk-essentials.txt" 2>/dev/null | tail -1 || echo unknown)"
 
   printf '%s\n' "pk's OS runtime: Debian $DEB_DIST ($VARIANT) built $(date -u +%Y-%m-%dT%H:%MZ)" > "$WORK/pk-runtime-release.tmp"
-  # ^ debootstrap + chroot root se chalte hain, isliye '$SUIT/etc' root-owned reh jaata
-  # hai: seedha `>` write EACCES deta aur `make runtime` poora fail ho jaata (bina-root
-  # user ke liye asli blocker). File $WORK me likh kar privileged copy karte hain, phir
-  # poori tree wapas caller ke haath de dete hain (agle run/tools ke liye).
+  # ^ debootstrap + chroot run as root, so '$SUIT/etc' stays root-owned:
+  # a direct `>` write gives EACCES and `make runtime` fails fully (a real blocker
+  # for root-less users). Write the file in $WORK, copy it privileged, then
+  # hand the whole tree back to the caller (for the next run/tools).
   ${SUDO:-sudo} cp -f "$WORK/pk-runtime-release.tmp" "$SUIT/etc/pk-runtime-release" 2>/dev/null \
     || cp -f "$WORK/pk-runtime-release.tmp" "$SUIT/etc/pk-runtime-release" 2>/dev/null \
-    || warn "release file not likh paye (image then also theek is)"
+    || warn "could not write the release file (the image is fine anyway)"
   run_as chown -R "$(id -u):$(id -g)" "$SUIT" 2>/dev/null || true
 fi
 
@@ -263,14 +263,14 @@ if [ "$MAKE_RW" = 1 ]; then
   run_as2 mkdir -p "$mnt/pk-runtime/upper" "$mnt/pk-runtime/work"
   run_as2 chmod 755 "$mnt/pk-runtime" "$mnt/pk-runtime/upper" "$mnt/pk-runtime/work"
   run_as2 sync; run_as2 umount "$mnt" 2>/dev/null || true
-  log "  rw img: $(du -h "$RWOUT" | cut -f1) (apparent size; disk par sparse)"
+  log "  rw img: $(du -h "$RWOUT" | cut -f1) (apparent size; sparse on disk)"
 fi
 
 cat <<TXT
 
-runtime ready. use karne ke 3 tarike:
-  1) ISO me daal do :  make iso WITH_RUNTIME=1        (sab kuch ek hi image me)
-  2) USB ke free space me partition : (boot karke)  pk-runtime --setup $OUT
-  3) kisi bhi ext4/vfat partition ki root me rakho : pk-runtime.sqfs  (+ pk-runtime-rw.img)
-Boot par /opt/pk par mount ho jaayega; phir:  pk-shell | pk-get install -y <pkg> | pk-run ./app
+runtime ready. 3 ways to use it:
+  1) put into the ISO :  make iso WITH_RUNTIME=1   (everything in one image)
+  2) partition in the USB free space : (after boot)  pk-runtime --setup $OUT
+  3) place at the root of any ext4/vfat partition : pk-runtime.sqfs  (+ pk-runtime-rw.img)
+Mounts at /opt/pk on boot; then:  pk-shell | pk-get install -y <pkg> | pk-run ./app
 TXT

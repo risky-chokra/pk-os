@@ -1,6 +1,6 @@
 #!/bin/sh
-# pk's OS :: udhcpc hook - lease milne par IP/route/DNS set karta hai.
-# busybox udhcpc isse $1 = bound|renew|deconfig|release ke saath bulate hai.
+# pk's OS :: udhcpc hook - sets IP/route/DNS when a lease arrives.
+# busybox udhcpc calls it with $1 = bound|renew|deconfig|release.
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
 [ -n "$1" ] || exit 1
 [ -n "$interface" ] || interface=${1:-eth0}

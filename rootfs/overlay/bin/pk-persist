@@ -16,7 +16,7 @@ echo "device=$DEV  used=${LAST}MiB  total=${TOTAL}MiB  free=${FREE}MiB"
 [ "$FREE" -gt 128 ] || { echo "less than 128MiB free - persistence will not be created"; exit 1; }
 parted -s "$DEV" mkpart persist ext4 "${LAST}MiB" 100% || { echo "mkpart fail (partition table protected may be)"; exit 1; }
 partprobe "$DEV" 2>/dev/null
-# naya partition node dhoondo: /sys se last partition (lsblk par depend na kare)
+# find the new partition node: last partition from /sys (does not depend on lsblk)
 d=${DEV#/dev/}
 pn=$(ls -1 /sys/block/$d/${d}* 2>/dev/null | sed "s|.*/||" | grep -E '[0-9]$' | tail -1)
 [ -n "$pn" ] || pn="${d}2"
@@ -28,4 +28,4 @@ mkdir -p /mnt/p
 mount "/dev/$pn" /mnt && mkdir -p /mnt/pk-persist && umount /mnt
 echo
 echo "OK - reboot now and pick 'pk's OS @VER@ (live: persistent)' in GRUB."
-echo "changes us USB partition pe save honge."
+echo "changes will be saved on that USB partition."

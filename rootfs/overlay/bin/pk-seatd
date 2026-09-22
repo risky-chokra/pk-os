@@ -22,9 +22,9 @@ have() { command -v "$1" >/dev/null 2>&1; }
 rbin() { [ -x "$RT/usr/sbin/$1" ] || [ -x "$RT/usr/bin/$1" ]; }
 
 start() {
-  # S55seatd hook runtime-attach ke turant baad chalta hai, par overlay mount thoda der
-  # se stable ho sakta hai -> 15s tak intezaar, phir hi skip. (Warna hook order par
-  # nirbhar hokar "SEATD-SKIP (no runtime)" aa jaata tha jabki runtime 2s baad lag jaata.)
+  # the S55seatd hook runs right after runtime-attach, but the overlay mount may settle a little late
+  # -> wait up to 15s, only then skip. (Else, depending on hook order,
+  # "SEATD-SKIP (no runtime)" used to appear though the runtime attached 2s later.)
   i=0
   while ! mounted; do
     i=$((i + 1)); [ $i -gt 15 ] && break
@@ -37,14 +37,14 @@ start() {
   fi
   mkdir -p /run/pk "$RT/run" 2>/dev/null
   rm -f "$SOCK" 2>/dev/null
-  # seatd '-g seat' group ko resolve karta hai -> runtime ke /etc/group me bhi chahiye
+  # seatd resolves the '-g seat' group -> also needed in the runtime's /etc/group
   grep -qs '^seat:' "$RT/etc/group" 2>/dev/null || printf 'seat:x:990:\n' >> "$RT/etc/group" 2>/dev/null
   grep -qs '^seat:' /etc/group 2>/dev/null || addgroup seat >/dev/null 2>&1
-  # daemon: pk-chroot ke andar, taaki socket wahi mile jahan weston dekhta hai
-  # do try: pehle group 'seat' ke saath (multi-user access), na chale to plain root socket.
-  # 'setsid' isliye ki shell ke band hone par bhi daemon bache rahe.
-  # NOTE: seatd -u ko *naam* chahiye (getpwnam karta hai). "-u 0" dene par wo
-  #   "Could not find user by name 0." de kar exit ho jaata tha (ye guest me pakda).
+  # daemon: inside pk-chroot, so the socket lands where weston looks
+  # two tries: first with group 'seat' (multi-user access), else a plain root socket.
+  # 'setsid' so the daemon survives even when the shell closes.
+  # NOTE: seatd -u needs a *name* (it does getpwnam). On giving "-u 0" it
+  #   used to exit with "Could not find user by name 0." (caught in the guest).
   for args in "-u root -g seat -l error" "-u root -l error"; do
     setsid pk-chroot /bin/sh -c "exec /usr/sbin/seatd $args 2>&1 || exec seatd $args 2>&1" >>"$LOGF" 2>&1 &
     echo $! > "$PIDF" 2>/dev/null
@@ -54,14 +54,14 @@ start() {
       sleep 1; i=$((i + 1))
     done
     [ -S "$SOCK" ] && break
-    say "try '$args' fail -> agli koshish"
+    say "try '$args' failed -> next attempt"
     kill "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null || true
   done
   if [ -S "$SOCK" ]; then
     chmod 660 "$SOCK" 2>/dev/null || true
     chgrp seat "$SOCK" 2>/dev/null || true
-    # live side se bhi reachable ho (weston root hi hai; 666 se koi risk nahi kyunki
-    # node sirf runtime ke andar mount hota hai)
+    # reachable from the live side too (weston itself is root; no risk from 666 since
+    # the node is mounted only inside the runtime)
     say "starting: socket=$SOCK group=seat pid=$(cat "$PIDF" 2>/dev/null)"$PIDF" 2>/dev/null)"
     mark "SEATD-OK (socket=/run/seatd.sock in runtime, pid=$(cat "$PIDF" 2>/dev/null))"
     return 0

@@ -18,16 +18,16 @@ rbin() { [ -x "$RT/usr/bin/$1" ] || [ -x "$RT/bin/$1" ]; }
 start() {
   want=${1:-auto}
   mounted "$RT" || { say "no runtime attached -> pk-runtime start"; exit 64; }
-  # idempotent: pk-boot aur pk-check --gui dono se do baar call ho sakta hai - dusre
-  # instance par weston "unable to lock wayland-1.lock" de kar Xvfb par gir jaata tha.
+  # idempotent: may be called twice, from both pk-boot and pk-check --gui - on the second
+  # instance weston used to fail with "unable to lock wayland-1.lock" and fall to Xvfb.
   if [ -S "$RT/run/pk-x/wayland-1" ] && pidof weston >/dev/null 2>&1; then
     say "a Wayland session is already running (weston pid $(pidof weston)) - not starting a second one"
     [ -r "$ENVR" ] || printf 'WAYLAND_DISPLAY=wayland-1\nXDG_RUNTIME_DIR=/run/pk-x\nPK_XDG_RUNTIME_HOST=%s\nDISPLAY=\n' "$RT/run/pk-x" > "$ENVR" 2>/dev/null
     return 0
   fi
-  # KMS device ke bina weston sirf 'headless' backend par chadhta hai -> session ready
-  # dikhega par SCREEN PAR KUCH NAHI (log isi ko "no desktop appeared" kehte hain).
-  # Isliye auto mode me /dev/dri/card* dekho: na ho to Xvfb (VNC-able) prefer karo.
+  # without a KMS device weston only comes up on the 'headless' backend -> session ready
+  # shows, but NOTHING ON SCREEN (logs call this "no desktop appeared").
+  # So in auto mode look for /dev/dri/card*: if missing, prefer Xvfb (VNC-able).
   hasdrm=0
   for c in /dev/dri/card*; do [ -e "$c" ] && { hasdrm=1; break; }; done
   if [ "$want" = auto ] && [ "$hasdrm" = 0 ] && rbin Xvfb; then
@@ -40,32 +40,32 @@ start() {
       for d in /dev/dri /dev/input /dev/snd; do
         [ -e "$d" ] && { mkdir -p "$RT$d"; mounted "$RT$d" || mount --bind "$d" "$RT$d" 2>/dev/null || true; }
       done
-      # seatd (S55seatd / pk-boot) ka socket runtime ke andar hota hai; weston wahi
-      # dhoondhta hai - mil gaya to VT + DRM + input ek saath, bina logind ke.
+      # seatd's (S55seatd / pk-boot) socket is inside the runtime; weston looks there
+      # - if found, VT + DRM + input come together, without logind.
       [ -S "$RT/run/seatd.sock" ] && SEATD=1 || SEATD=0
-      # weston ko WAHI VT par bithao jo screen par dikhta hai; warna wo free VT (tty7)
-      # le leta hai aur user ko text console hi dikhta rehta hai.
+      # seat weston on the SAME VT that shows on screen; else it takes a free VT (tty7)
+      # and the user keeps seeing only the text console.
       VT=$(sed -n 's/^tty//p' /sys/devices/virtual/tty/tty0/active 2>/dev/null | tr -d ' \n')
       case "${VT:-}" in ''|*[!0-9]*) VT=1 ;; esac
       [ -c "/dev/tty$VT" ] || VT=1
-      # NOTE 1: `exec weston ... || exec weston ...` mat likho - exec shell kha jaata hai,
-      #   to fallback attempts KABHI nahi chalte the (isi wajah se desktop kabhi nahi aaya).
-      # NOTE 2: weston ke DRM backend ko VT chahiye ('<stdin> not a vt' -> --tty) aur
-      #   session ke liye logind/seatd. NOTE 3: 2>/dev/wali cheez reason chhupa leti thi -
-      #   ab har attempt ka output /run/pk/x-weston.log me rehta hai.
+      # NOTE 1: do not write `exec weston ... || exec weston ...` - exec eats the shell,
+      #   so fallback attempts NEVER ran (this is why the desktop never came).
+      # NOTE 2: weston's DRM backend needs a VT ('<stdin> not a vt' -> --tty) and
+      #   logind/seatd for the session. NOTE 3: a 2>/dev/null-style redirect used to hide the reason -
+      #   now every attempt's output stays in /run/pk/x-weston.log.
       { printf 'pk-x: weston start (RT=%s hasdrm=%s seatd=%s vt=tty%s dri=%s)\n' "$RT" "${hasdrm:-0}" "$SEATD" "$VT" "$(ls /dev/dri/card* 2>/dev/null | tr '\n' ' ')"; } > /run/pk/x-weston.log 2>&1
       mkdir -p "$RT/run/pk-x" 2>/dev/null; rm -f "$RT/run/pk-x/wayland-1" "$RT/run/pk-x/wayland-1.lock" 2>/dev/null || true
       say "weston (Wayland) start - VT=tty$VT seatd=$SEATD (log: /run/pk/x-weston.log)"
       pk-chroot /bin/sh -c "mkdir -p /run/pk-x; chmod 700 /run/pk-x; export XDG_RUNTIME_DIR=/run/pk-x XKB_DEFAULT_LAYOUT=us XDG_SEAT=seat0 XDG_VTNR=$VT; test -d /usr/lib/dri || { export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe; }; if [ -S /run/seatd.sock ]; then LIBSEAT_BACKEND=seatd weston --debug --backend=drm-backend.so --socket=wayland-1; fi; test -S /run/pk-x/wayland-1 || LIBSEAT_BACKEND=builtin weston --debug --backend=drm-backend.so --tty=/dev/tty$VT </dev/tty$VT; test -S /run/pk-x/wayland-1 || weston --debug --backend=drm-backend.so --socket=wayland-1; test -S /run/pk-x/wayland-1 || weston --debug --backend=headless-backend.so --socket=wayland-1" >>/run/pk/x-weston.log 2>&1 &
       echo $! > "$PIDF"
-      # socket ka wait: iske bina 'x-env' likh dena = jhootha success
+      # wait for the socket: writing 'x-env' without it = false success
       j=0
       while [ $j -lt 25 ]; do
         [ -S "$RT/run/pk-x/wayland-1" ] && break
         sleep 1; j=$((j + 1))
       done
       if [ -S "$RT/run/pk-x/wayland-1" ]; then
-        # clients chroot ke andar chalte hain -> in-chroot path hi do
+        # clients run inside the chroot -> give the in-chroot path itself
         printf 'WAYLAND_DISPLAY=wayland-1\nXDG_RUNTIME_DIR=/run/pk-x\nPK_XDG_RUNTIME_HOST=%s\nDISPLAY=\n' "$RT/run/pk-x" > /run/pk/x-env
         NOWVT=$(sed -n 's/^tty//p' /sys/devices/virtual/tty/tty0/active 2>/dev/null | tr -d ' \n')
         printf 'weston vt=tty%s seatd=%s wait=%ss active=tty%s\n' "$VT" "$SEATD" "$j" "${NOWVT:-?}" > /run/pk/x-how
@@ -75,9 +75,9 @@ start() {
           warn "weston is running but the screen still shows tty${NOWVT:-?} (no VT switch) - 'pk-desktop vnc 5900'"
           printf '### PK: DESKTOP-VTMISMATCH (want=tty%s active=tty%s) ###\n' "$VT" "${NOWVT:-?}" > /dev/console 2>/dev/null
         fi
-        # session ke baad ek client chahiye, warna weston ki screen plain black dikhti
-        # hai ("desktop aaya ya nahi" ka fark hi nahi pata chalta). weston ka apna
-        # terminal (X nahi) - isliye Xwayland ke bhi bhi chalta hai.
+        # a client is needed after the session, else weston's screen looks plain black
+        # ("did the desktop come or not" cannot even be told apart). weston's own
+        # terminal (not X) - so it runs even without Xwayland.
         # A weston that opens its socket and then dies (GL init failure - typical for a
         # VM with 3D acceleration switched off, or a KMS driver weston cannot render on)
         # used to leave DESKTOP-OK on the console while the user stared at text. So check
@@ -145,7 +145,7 @@ start() {
       ;;
     none|'')
       say "no display server in the runtime (weston/Xorg/Xvfb). Install one:"
-      say "  pk-get install -y weston xterm        # Wayland, DRM/KMS par direct"
+      say "  pk-get install -y weston xterm        # Wayland, direct on DRM/KMS"
       say "  pk-get install -y xvfb x11vnc         # headless + VNC"
       say "  pk-get install -y xserver-xorg xterm  # X11 (intel/amd/nouveau/fbdev)"
       exit 65 ;;

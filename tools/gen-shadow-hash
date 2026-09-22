@@ -1,11 +1,11 @@
 #!/bin/sh
-# pk's OS :: root /etc/shadow ka sha-512 hash banao
+# pk's OS :: make a sha-512 hash for root /etc/shadow
 #
 #   tools/gen-shadow-hash 'pk'
-#   -> $6$salt$....   (isko rootfs/overlay/etc/shadow me daalo, ya
-#      pk-install --root-password-hash='...' se install karo)
+#   -> $6$salt$....   (put it in rootfs/overlay/etc/shadow, or
+#      install with pk-install --root-password-hash='...')
 #
-# host pe koi ek tool chalta hoga - dono try karte hain:
+# some tool runs on the host - try both:
 #   mkpasswd -m sha-512   (whois package)      -> best
 #   openssl passwd -6     (openssl)           -> fine
 #   python3 crypt(3) sha-512                  -> fallback

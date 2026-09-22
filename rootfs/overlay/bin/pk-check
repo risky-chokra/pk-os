@@ -65,7 +65,7 @@ if [ -r /run/pk/boot.env ]; then row ok bootenv "$(tr '\n' ' ' < /run/pk/boot.en
 if touch /run/pk/.wtest 2>/dev/null; then rm -f /run/pk/.wtest; row ok writable "/ writable is"; else row fail writable "/ read-only is"; fi
 up=$(awk '$2=="/"{print $4}' /proc/mounts 2>/dev/null | head -1)
 case "$up" in
-  *upperdir=/mnt/persist*) row ok persist "upper=/mnt/persist (USB on save hota is)" ;;
+  *upperdir=/mnt/persist*) row ok persist "upper=/mnt/persist (saves to USB)" ;;
   *upperdir=*)             row info persist "upper=RAM (reset on reboot) - use the 'persistent' boot option" ;;
   ext4|ext2)               row ok persist "installed ext4 root (changes save)" ;;
   *)                       row info persist "root fs: ${up:-?}" ;;
@@ -77,9 +77,9 @@ row info cpu "${cpu:-x86_64} ($(grep -c ^processor /proc/cpuinfo 2>/dev/null || 
 memtot=$(awk '/MemTotal/{printf "%d", $2/1024}' /proc/meminfo 2>/dev/null)
 memavl=$(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo 2>/dev/null)
 row info mem "${memtot:-?} MB total / ${memavl:-?} MB free"
-if [ -e /dev/kvm ]; then row ok kvm "/dev/kvm (QEMU hardware accel chalega)"; else row info kvm "/dev/kvm absent (pk-vm will run on TCG, slow)"; fi
+if [ -e /dev/kvm ]; then row ok kvm "/dev/kvm (QEMU hardware accel will run)"; else row info kvm "/dev/kvm absent (pk-vm will run on TCG, slow)"; fi
 
-# USB speed of the boot device (pendrive test ka main point)
+# USB speed of the boot device (the main point of the pendrive test)
 spd=''
 if [ -d /sys/bus/usb/devices ]; then
   for d in /sys/bus/usb/devices/*/speed; do
@@ -92,7 +92,7 @@ if [ -n "$spd" ]; then
   case " $spd " in
     *" 5000000000 "*|*" 10000000000 "*|*" 20000000000 "*) row ok usb "super speed (USB3):$spd" ;;
     *" 480000000 "*)                                         row ok usb "high speed (USB2):$spd" ;;
-    *" 12000000 "*)                                          row warn usb "full speed (USB1, 12 Mb) - boot/USB apps bahut dheeme: $spd" ;;
+    *" 12000000 "*)                                          row warn usb "full speed (USB1, 12 Mb) - boot/USB apps very slow: $spd" ;;
     *)                                                        row info usb "usb devices:$spd" ;;
   esac
 else
@@ -125,7 +125,7 @@ if [ -e /dev/fb0 ]; then row ok fb "/dev/fb0 (framebuffer)"; else row info fb "/
 drm=''
 for c in /dev/dri/card*; do [ -e "$c" ] && drm="$drm $c"; done
 for c in /dev/dri/renderD128*; do [ -e "$c" ] && drm="$drm $c"; done
-if [ -n "$drm" ]; then row ok drm "KMS devices:$drm (weston KMS backend chalega)"; else row info drm "no /dev/dri (weston needs headless or Xvfb)"; fi
+if [ -n "$drm" ]; then row ok drm "KMS devices:$drm (weston KMS backend will run)"; else row info drm "no /dev/dri (weston needs headless or Xvfb)"; fi
 # ---- I/O devices + session manager (audio/input/serial/seatd) --------------------
 if [ -S "$RT/run/seatd.sock" ]; then
   row ok seatd "seatd is running ($RT/run/seatd.sock) - weston gets VT+DRM+input from it"
@@ -155,7 +155,7 @@ if [ -f /run/pk/x-how ]; then
 else
   row info desktop "no desktop session running (start it with GRUB entry 'g' or the pk_desktop=1 boot option)"
 fi
-# ---- users: add/remove kaam karta hai? (--users se full round-trip) ----------------
+# ---- users: does add/remove work? (--users for a full round-trip) ----------------
 nu=$(awk -F: '$3>=1000' /etc/passwd 2>/dev/null | wc -l | tr -d ' ')
 au=$(sed -n 's/^PK_CONSOLE_AUTOLOGIN=//p' /etc/pk-console.conf 2>/dev/null | head -1)
 [ -f /run/pk/autologin ] && au=$(cat /run/pk/autologin 2>/dev/null)
@@ -169,7 +169,7 @@ if [ "$DOUN" = 1 ]; then
       if ! grep -qs "^$tu:" /etc/passwd; then
         row ok useradd "round-trip OK: add -> su ('$idout') -> del"
       else
-        row fail useradd "del fail: $tu /etc/passwd me bacha hua"
+        row fail useradd "del failed: $tu left behind in /etc/passwd"
       fi
     else
       pk-user del "$tu" --home >/dev/null 2>&1
@@ -220,9 +220,9 @@ if [ "$DOGUI" = 1 ]; then
     if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
       ( printf '### PK: GUI-X-OK (%s) ###\n' "${DISPLAY:-${WAYLAND_DISPLAY:-wayland}}" > /dev/console ) 2>/dev/null
       row ok display "DISPLAY=${DISPLAY:-none} WAYLAND=${WAYLAND_DISPLAY:-none} (rc=$rc${sess_prev:+, session was already running})"
-      # desktop ka *pixel* evidence: weston se apni screen capture karwaao
-      # (pk-x weston ko --debug ke saath chalata hai -> screenshooter chalta hai)
-      # weston ke andar XWayland ho to :0 pe X clients chal sakte hain
+      # the desktop's *pixel* evidence: get weston to capture its own screen
+      # (pk-x runs weston with --debug -> screenshooter runs)
+      # if XWayland is inside weston, X clients can run on :0
       xd=${DISPLAY:-}
       if [ -z "$xd" ] && [ -e "$RT/tmp/.X11-unix/X0" ]; then xd=":0"; row info xwayland "XWayland socket found ($RT/tmp/.X11-unix/X0)"; fi
       if [ -n "$xd" ] && rt_has xdpyinfo; then
@@ -234,7 +234,7 @@ if [ "$DOGUI" = 1 ]; then
           row warn xclient "xdpyinfo printed nothing (X server may be up while the client failed)"
         fi
       fi
-      # ek asli GUI client: xterm (X11) ya weston-terminal (Wayland)
+      # one real GUI client: xterm (X11) or weston-terminal (Wayland)
       if [ -n "$xd" ] && rt_has xterm; then
         if DISPLAY="$xd" pk-run --gui xterm -e /bin/sh -c "echo PK-GUI-APP-RAN" >/dev/null 2>&1; then
           row ok guiapp "xterm -e (X11 client) ran ✓"
@@ -248,7 +248,7 @@ if [ "$DOGUI" = 1 ]; then
         case "$out" in
           *"wl_compositor"*|*"wl_seat"*|*"Output"*) row ok guiapp "wayland-info: $out"
             ( printf '### PK: GUI-APP-OK (wayland-info) ###\n' > /dev/console ) 2>/dev/null ;;
-          *) row warn guiapp "wayland-info ka output ajeeb: ${out:-<khaali>}" ;;
+          *) row warn guiapp "weird wayland-info output: ${out:-<empty>}" ;;
         esac
       elif rt_has weston-terminal; then
         DISPLAY="$xd" pk-run --gui weston-terminal >/tmp/wl-cli.log 2>&1 &
@@ -259,7 +259,7 @@ if [ "$DOGUI" = 1 ]; then
           ( printf '### PK: GUI-APP-OK (weston-terminal) ###\n' > /dev/console ) 2>/dev/null
           kill "$wlp" 2>/dev/null
         else
-          row fail guiapp "weston-terminal turant band: $(tr '\n' '|' < /tmp/wl-cli.log 2>/dev/null | cut -c1-90)"
+          row fail guiapp "weston-terminal closed instantly: $(tr '\n' '|' < /tmp/wl-cli.log 2>/dev/null | cut -c1-90)"
           ( printf '### PK: GUI-APP-FAIL (weston-terminal) ###\n' > /dev/console ) 2>/dev/null
         fi
       elif rt_has xterm; then
@@ -271,7 +271,7 @@ if [ "$DOGUI" = 1 ]; then
       if [ -n "${WAYLAND_DISPLAY:-}" ] && have pk-desktop; then
         if pk-desktop shot /run/pk/desktop-shot.png >/run/pk/shot.log 2>&1; then
           sz=$(wc -c < /run/pk/desktop-shot.png 2>/dev/null); sz_shot=$sz
-          row ok guishot "desktop PNG /run/pk/desktop-shot.png (${sz:-?} B) - isme asli desktop render is"
+          row ok guishot "desktop PNG /run/pk/desktop-shot.png (${sz:-?} B) - real desktop render inside"
         else
           row warn guishot "no screenshot was written: $(tail -2 /run/pk/shot.log 2>/dev/null | tr '\n' '|' | cut -c1-90)"
         fi
@@ -292,12 +292,12 @@ gw=$(ip route 2>/dev/null | awk '/default/{print $3; exit}')
 if [ -n "$ip" ]; then
   row ok net "IP=$ip gw=${gw:-none}"
   if [ -n "$gw" ]; then
-    if ping -c1 -W2 "$gw" >/dev/null 2>&1; then row ok ping "gateway reachable"; else row warn ping "gateway ping not gaya"; fi
+    if ping -c1 -W2 "$gw" >/dev/null 2>&1; then row ok ping "gateway reachable"; else row warn ping "gateway ping failed"; fi
   fi
   dns=$(awk '/^nameserver/{print $2; exit}' /etc/resolv.conf 2>/dev/null)
   if [ -n "$dns" ]; then
     row info dns "resolver=$dns"
-    if ping -c1 -W3 "$dns" >/dev/null 2>&1; then row ok dns "$dns reachable (real resolve for: wget -qO- http://deb.debian.org/ )"; else row warn dns "$dns ping not gaya (user-net gw DNS block uses)"; fi
+    if ping -c1 -W3 "$dns" >/dev/null 2>&1; then row ok dns "$dns reachable (real resolve for: wget -qO- http://deb.debian.org/ )"; else row warn dns "$dns ping failed (user-net gw blocks DNS)"; fi
   else
     row warn dns "no nameserver in /etc/resolv.conf"
   fi
@@ -323,9 +323,9 @@ done
 if command -v pk-wifi >/dev/null 2>&1; then
   ws=$(pk-wifi status 2>/dev/null | tr '\n' ' ' | tr -s ' ' | cut -c1-150)
   row info wifi "$ws"
-elif [ -n "$wdev" ]; then row ok wifi "wireless iface:$wdev (pk-wifi is not in - image purani?)"; else row info wifi "wireless iface not dikha; firmware:${fw:- none} (ISO build in PK_FIRMWARE=1 from drivers aaate are)"; fi
+elif [ -n "$wdev" ]; then row ok wifi "wireless iface:$wdev (pk-wifi not present - old image?)"; else row info wifi "wireless iface not seen; firmware:${fw:- none} (drivers come from an ISO built with PK_FIRMWARE=1)"; fi
 if [ -x /sbin/pk-ssh ]; then
-  if pgrep dropbear >/dev/null 2>&1; then row ok ssh "dropbear :22 run running is"; else row info ssh "dropbear band (pk-ssh start)"; fi
+  if pgrep dropbear >/dev/null 2>&1; then row ok ssh "dropbear :22 is running"; else row info ssh "dropbear stopped (pk-ssh start)"; fi
 fi
 
 # ------------------------------------------------------------------ runtime + apps
@@ -374,12 +374,12 @@ if [ -n "$rtc" ]; then row ok clock "RTC: $rtc"; else row warn clock "hwclock co
 sb=$(od -An -tx1 -j4 -N1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c 2>/dev/null | tr -d ' ')
 if [ -n "$sb" ]; then
   case "$sb" in
-    01) row warn secureboot "SecureBoot ON is - unsigned GRUB boot not karega; BIOS in OFF do it (ya MOK enroll)" ;;
-    00) row ok secureboot "SecureBoot OFF ✓ (hamara signed-naahi GRUB chalega)" ;;
+    01) row warn secureboot "SecureBoot is ON - unsigned GRUB will not boot; turn it OFF in BIOS (or enroll MOK)" ;;
+    00) row ok secureboot "SecureBoot OFF ✓ (our unsigned GRUB will run)" ;;
     *)  row info secureboot "SecureBoot var value=$sb" ;;
   esac
 else
-  if [ -d /sys/firmware/efi ]; then row info secureboot "efi vars in SecureBoot not found (CSM? ya var padhne from block)"; else row info secureboot "BIOS/Legacy boot (SecureBoot lagu not)"; fi
+  if [ -d /sys/firmware/efi ]; then row info secureboot "SecureBoot not found in efi vars (CSM? or blocked from reading vars)"; else row info secureboot "BIOS/Legacy boot (SecureBoot not applicable)"; fi
 fi
 if dmesg 2>/dev/null | grep -qiE "error|fail"; then
   n=$(dmesg 2>/dev/null | grep -ciE "error|fail")

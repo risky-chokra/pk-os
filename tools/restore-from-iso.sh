@@ -1,12 +1,12 @@
 #!/bin/sh
-# pk's OS :: rootfs/overlay wapas laao, agar workspace/git reset me files ud jaayein.
+# pk's OS :: bring rootfs/overlay back if files fly off in a workspace/git reset.
 #   usage: tools/restore-from-iso.sh [path/to/pkos.iso]
 #
-# Kyun: ISO hi is project ka self-contained backup hai -- live image ke andar
-# rootfs/overlay ke saare hand-written files (pk-boot, pk-run, pk-check, inittab,
-# motd, boot hooks, ...) maujood hain. Generated cheezein (busybox applets, host
-# binaries, /lib/modules, etc/udhcpc symlink, pk-build stamps) wapas nahi laate -
-# build-rootfs unheein khud banata hai.
+# Why: the ISO itself is this project's self-contained backup -- inside the live image
+# all hand-written files of rootfs/overlay (pk-boot, pk-run, pk-check, inittab,
+# motd, boot hooks, ...) are present. Generated stuff (busybox applets, host
+# binaries, /lib/modules, etc/udhcpc symlink, pk-build stamps) are not brought back -
+# build-rootfs creates them itself.
 set -eu
 PK_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 ISO=${1:-}
@@ -22,7 +22,7 @@ trap cleanup EXIT INT TERM
 echo "[pk] ISO extract: $ISO"
 xorriso -osirrox on -indev "$ISO" -extract / "$T/iso" >/dev/null 2>&1
 SQ=$T/iso/live/pk.sqfs
-[ -f "$SQ" ] || { echo "[pk] error: ISO me /live/pk.sqfs not found (ye project ka ISO is?)"; exit 1; }
+[ -f "$SQ" ] || { echo "[pk] error: /live/pk.sqfs not found in ISO (is this the project ISO?)"; exit 1; }
 echo "[pk] squashfs unpack..."
 unsquashfs -q -d "$T/sq" -f "$SQ" >/dev/null 2>&1
 [ -d "$T/sq" ] || { echo "[pk] error: unsquashfs fail"; exit 1; }
@@ -51,12 +51,12 @@ for f in $LIST; do
   n=$((n + 1))
 done
 
-# init/ (initramfs ka /init + grub template + module list) bhi check karo
+# also check init/ (initramfs /init + grub template + module list)
 for f in init/init init/grub.cfg init/kernel-modules; do
   if [ ! -s "$PK_ROOT/$f" ]; then
     case "$f" in
-      init/init) [ -f "$T/sq/init" ] && { cp -p "$T/sq/init" "$PK_ROOT/$f"; n=$((n+1)); echo "[pk warn] $f wapas laya (initrd /init)"; } ;;
-      *) echo "[pk warn] $f gayab is - ye repo in hi hona required was (ISO in not hota)" ;;
+      init/init) [ -f "$T/sq/init" ] && { cp -p "$T/sq/init" "$PK_ROOT/$f"; n=$((n+1)); echo "[pk warn] $f brought back (initrd /init)"; } ;;
+      *) echo "[pk warn] $f is missing - it must be in this repo (never in the ISO)" ;;
     esac
   fi
 done
@@ -74,14 +74,14 @@ for f in $(find "$OV" -type f \( -name 'pk-*' -o -name 'S[0-9]*' -o -name 'defau
   sh -n "$f" 2>/dev/null || { echo "[pk] SYNTAX FAIL: $f"; bad=1; }
 done
 if [ ! -d "$PK_ROOT/.git" ]; then
-  echo "[pk warn] .git not found - history reset in gayab. Naya repo: git init -b main && git add -A && git commit -m 'restore'"
-  echo "[pk warn] ...ya better: git clone https://github.com/risky-chokra/pkos.git (ya release ka pkos-1.0.bundle)"
+  echo "[pk warn] .git not found - history lost in reset. New repo: git init -b main && git add -A && git commit -m 'restore'"
+  echo "[pk warn] ...or better: git clone https://github.com/risky-chokra/pkos.git (or the release pkos-1.0.bundle)"
 elif ! git -C "$PK_ROOT" remote get-url origin >/dev/null 2>&1; then
-  # snapshot me .git/config persist nahi hota -> remote/identity udd jaate hain
-  echo "[pk warn] .git/config me 'origin' is missing (config snapshots in persist not hota). Restore:"
+  # .git/config does not persist in snapshots -> remote/identity fly off
+  echo "[pk warn] .git/config me 'origin' is missing (config is not persisted in snapshots). Restore:"
   echo "    git -C $PK_ROOT remote add origin https://github.com/risky-chokra/pkos.git"
-  echo "    git -C $PK_ROOT config --local user.name  "<naam>""
+  echo "    git -C $PK_ROOT config --local user.name  "<name>""
   echo "    git -C $PK_ROOT config --local user.email "<email>""
 fi
-[ "$bad" = 0 ] && echo "[pk] sh -n clean ✓  ab: make doctor && make iso"
+[ "$bad" = 0 ] && echo "[pk] sh -n clean ✓  now: make doctor && make iso"
 exit $bad

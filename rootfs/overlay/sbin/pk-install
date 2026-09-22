@@ -35,7 +35,7 @@ ROOTPWHASH=
 die()  { echo "### PK: INSTALL-FAIL: $* ###"; echo "pk-install: FAIL: $*" >&2; exit 1; }
 note() { echo "pk-install: $*"; }
 
-mk_sparse() { # <file> <MiB>  (busybox dd me conv=sparse nahi hota)
+mk_sparse() { # <file> <MiB>  (busybox dd has no conv=sparse)
   msf=$1; msm=$2
   if have truncate; then
     truncate -s "${msm}M" "$msf" 2>/dev/null && return 0
@@ -136,10 +136,10 @@ if [ "$YES" != 1 ]; then
   echo "!! ALL data on $TARGET will be DELETED. Type  YES  to continue."
   printf "> "
   read ans
-  [ "$ans" = YES ] || die "cancel set gaya"
+  [ "$ans" = YES ] || die "cancelled"
 fi
 
-# mount ho to umount karo
+# if mounted, umount
 for p in $(lsblk -nro NAME,MOUNTPOINT "$TARGET" 2>/dev/null | awk '$2 != "" {print $1}'); do
   umount -l "$p" 2>/dev/null
 done
@@ -204,8 +204,8 @@ if mke2fs -q -F -t ext4 -O has_journal -L pkos "$ROOTP"; then : ; else
 fi
 [ -n "$ESPP" ] && { mkfs.vfat -F 32 -n PK-EFI "$ESPP" >/dev/null 2>&1 || die "mkfs.vfat fail"; }
 
-# crash-safety: ext4 journal on hona chahiye (default hai; marker install ke *ant* me
-# chhapte hain - pk_silent mode me log ka sirf tail console par aata hai)
+# crash-safety: ext4 journal should be on (it is by default; the marker is printed at the *end* of install
+# - in pk_silent mode only the log tail reaches the console)
 JRN=""
 if have dumpe2fs; then
   feats=$(dumpe2fs -h "$ROOTP" 2>/dev/null | awk -F: '/^Filesystem features/{print $2}')
@@ -218,9 +218,9 @@ else
   JRN="no-dumpe2fs-in-image"
 fi
 note "  ext4 journal check: $JRN"
-  # agar image ke mke2fs defaults ne journal diya hi nahi -> tune2fs se add kar dete hain
-  # (fs abhi unmounted hai, isliye safe) aur phir dobara probe karte hain: marker hamesha
-  # jo *actually* bana hai wahi batata hai.
+  # if the image's mke2fs defaults gave no journal at all -> add one via tune2fs
+  # (the fs is still unmounted, so it is safe) and probe again: the marker always
+  # reports what *actually* got created.
   if [ "$JRN" != ok ] && have tune2fs; then
     note "  no journal found -> adding one with tune2fs -O has_journal"
     tune2fs -q -O has_journal "$ROOTP" >/dev/null 2>&1 && dumpe2fs -h "$ROOTP" 2>/dev/null | grep -q has_journal && JRN=ok
@@ -237,12 +237,12 @@ note "copying the root filesystem (this takes a moment)..."
 rm -f /var/log/messages /var/log/* 2>/dev/null
 SRC=/
 if [ -d /live-base ]; then
-  SRC=/live-base      # pristine squashfs (runtime ka kachra nahi jayega)
+  SRC=/live-base      # pristine squashfs (no runtime junk goes in)
   note "  source: squashfs (clean)"
 else
   note "  source: running root (overlay)"
 fi
-copy_tree() { # $1=src $2=dst   (GNU tar ho to --exclude, busybox tar ho to top-level copy)
+copy_tree() { # $1=src $2=dst   (with GNU tar --exclude, with busybox tar a top-level copy)
   if tar --version 2>&1 | grep -qi "GNU tar"; then
     ( cd "$1" && tar -cf - \
         --exclude=./proc --exclude=./sys --exclude=./dev --exclude=./run \
@@ -250,7 +250,7 @@ copy_tree() { # $1=src $2=dst   (GNU tar ho to --exclude, busybox tar ho to top-
         --exclude=./live-base --exclude=./live-iso . ) |
     ( cd "$2" && tar -xpf - )
   else
-    # busybox tar me --exclude nahi -> / ke andar jaane wale pseudo dirs chhodo
+    # busybox tar has no --exclude -> skip the pseudo dirs that go inside /
     mkdir -p "$2/dev" "$2/proc" "$2/sys" "$2/run" "$2/tmp" "$2/mnt" "$2/media"
     for e in $(cd "$1" && ls -A); do
       case "$e" in
@@ -267,7 +267,7 @@ copy_tree "$SRC" "$TGT" || die "copy fail"
 [ -x "$TGT/sbin/init" ] || die "/sbin/init is missing in the copied root"
 [ -d "$TGT/lib/modules" ] || note "warning: /lib/modules was not copied (the install will have no module support)"
 
-# kernel + initrd (init root= resolve karne ke liye chahiye)
+# kernel + initrd (needed for init to resolve root=)
 mkdir -p "$TGT/boot"
 cp -f "$KERNELIMG" "$TGT/boot/pk-kernel" 2>/dev/null || die "kernel copy fail ($KERNELIMG)"
 cp -f "$INITRDIMG" "$TGT/boot/pk-initrd" 2>/dev/null || die "initrd copy fail"
@@ -287,7 +287,7 @@ echo "$HOSTN" > "$TGT/etc/hostname"
 printf 'pkos-installed=1\ninstall-date=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$TGT/etc/pk-installed"
 rm -f "$TGT/etc/pk-live-base"
 
-# root password (pehle --root-password-hash, phare mkpasswd/openssl se bana)
+# root password (first --root-password-hash, otherwise made via mkpasswd/openssl)
 if [ -n "$ROOTPWHASH" ]; then
   note "  --root-password-hash given (already hashed)"
   H=$ROOTPWHASH
@@ -299,7 +299,7 @@ elif [ -n "$ROOTPW" ] && have mkpasswd; then
         mv -f "$TGT/etc/shadow.n" "$TGT/etc/shadow"
     fi
     if awk -F: 'NR==1{exit ($2 ~ /^\$[56ya]\$/ ? 0 : 1)}' "$TGT/etc/shadow" 2>/dev/null; then
-      note " root password set set (sha-crypt hash verify hua)"
+      note " root password set (sha-crypt hash verified)"
     else
       note "  WARNING: the root field of /etc/shadow was not updated"
     fi
@@ -329,7 +329,7 @@ if [ -n "$USER" ]; then
       printf '%s:x:%s:\n' "$USER" "$uh" >> "$TGT/etc/group"
       lst=$(awk 'BEGIN{print int(systime()/86400)}' 2>/dev/null || echo 19000)
       printf '%s:%s:%s:0:99999:7:::\n' "$USER" "$uhz" "$lst" >> "$TGT/etc/shadow"
-      # sudo/users groups me daal do (jo maujood hon)
+      # add to sudo/users groups (whichever exist)
       awk -F: -v OFS=: -v u="$USER" '
         ($1=="sudo" || $1=="users" || $1=="wheel") {
           if ($4 == "") $4=u
@@ -370,7 +370,7 @@ if [ "$NORT" != 1 ]; then
   if [ -n "$rts" ]; then
     mkdir -p "$TGT/var/lib/pk" 2>/dev/null
     if cp -f "$rts" "$TGT/var/lib/pk/pk-runtime.sqfs" 2>/dev/null; then
-      note "  app runtime copied into the installed system ($(du -h "$TGT/var/lib/pk/pk-runtime.sqfs" | cut -f1)) -> it will auto-mount at /opt/pk on boot"$TGT/var/lib/pk/pk-runtime.sqfs" | cut -f1)) -> boot par /opt/pk auto mount"
+      note "  app runtime copied into the installed system ($(du -h "$TGT/var/lib/pk/pk-runtime.sqfs" | cut -f1)) -> it will auto-mount at /opt/pk on boot"$TGT/var/lib/pk/pk-runtime.sqfs" | cut -f1)) -> auto-mounts at /opt/pk on boot"
       if [ ! -f "$TGT/var/lib/pk/pk-runtime-rw.img" ] && have mkfs.ext4; then
         sz=$(awk '/MemAvailable/{m=int($2/1048576)} END{print (m<1024?1024:2048)}' /proc/meminfo 2>/dev/null || echo 1024)
         if mk_sparse "$TGT/var/lib/pk/pk-runtime-rw.img" "$sz" && \
@@ -385,9 +385,9 @@ if [ "$NORT" != 1 ]; then
     note "  no pk-runtime.sqfs on the live media - the installed system gets no apps layer (fine: base OS works)"
   fi
 fi
-# installed system me host keys khud banane chahiye, live wale copy na hon
+# host keys should generate themselves on the installed system, not copy the live ones
 rm -rf "$TGT/etc/dropbear" 2>/dev/null
-# installed boot par network on
+# network on for installed boot
 sed -i 's/^PK_DHCP=.*/PK_DHCP=yes/' "$TGT/etc/default/pk" 2>/dev/null || true
 
 # ---------------------------------------------------------------- bootloader
@@ -433,11 +433,11 @@ umount -R "$TGT" 2>/dev/null || { umount "$TGT/boot/efi" 2>/dev/null; umount "$T
 cat <<FIN
 
 ==============================================================
- pk's OS $TARGET pe install ho gaya.
+ pk's OS installed on $TARGET.
    root : $ROOTP   (boot: GRUB $LAYOUT)
    password: $ROOTPW
- Ab reboot karo aur boot medium nikaal lo:
-   reboot -f     (ya power off karke USB hatao)
+ Now reboot and remove the boot medium:
+   reboot -f     (or power off and remove the USB)
 ==============================================================
 FIN
 case "$JRN" in

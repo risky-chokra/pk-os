@@ -1,5 +1,5 @@
 #!/bin/sh
-# boot hook: SSH (dropbear) - installed system me default on
+# boot hook: SSH (dropbear) - on by default in installed systems
 . /etc/default/pk 2>/dev/null
 [ "${PK_SSH:-no}" = yes ] || exit 0
 [ -x /sbin/pk-ssh ] || exit 0

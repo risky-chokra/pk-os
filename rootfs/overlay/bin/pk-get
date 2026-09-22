@@ -24,8 +24,8 @@ else
   esac
 fi
 
-# runtime image chhota rakhne ke liye apt ki package lists hata di jaati hain;
-# bina 'update' ke install "Unable to locate package" dega -> khud update karte hain.
+# to keep the runtime image small, apt package lists are removed;
+# without 'update', install gives "Unable to locate package" -> update it ourselves.
 need_update=0
 case "$1" in
   install|remove|purge|upgrade|autoremove|search|show)

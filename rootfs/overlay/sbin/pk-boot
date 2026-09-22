@@ -10,12 +10,12 @@ umask 022
 have() { command -v "$1" >/dev/null 2>&1; }
 has()  { grep -q -- "$1" /proc/cmdline 2>/dev/null; }
 note() { printf 'pk-boot: %s\n' "$*"; }
-say()  { printf 'pk-boot: %s\n' "$*"; }   # purane blocks say use karte the par ye define hi nahi tha
-                              # -> boot log me har jagah "pk-boot: line N: say: not found" (latent bug).
+say()  { printf 'pk-boot: %s\n' "$*"; }   # old blocks used say but it was never defined
+                              # -> "pk-boot: line N: say: not found" everywhere in the boot log (latent bug).
 
 dbg()  { [ "$PK_DEBUG" = 1 ] && printf 'pk-boot(dbg): %s\n' "$*"; return 0; }
 
-# kernel messages console par na dikhein (boot clean rahe)
+# keep kernel messages off the console (boot stays clean)
 dmesg -n 1 2>/dev/null
 
 mkdir -p /run/lock /run/network /var/log /var/tmp /tmp /dev/shm /mnt /media
@@ -30,13 +30,13 @@ grep -q pk_debug /proc/cmdline && PK_DEBUG=1
 # hostname
 [ -f /etc/hostname ] && hostname "$(cat /etc/hostname)"
 
-# live vs installed: installed system me password prompt default
+# live vs installed: password prompt by default in installed systems
 if [ -e /etc/pk-installed ] && ! grep -qE 'pk_autologin|swape_autologin' /proc/cmdline; then
   : > /run/pk/require-login
 fi
 [ "$MODE" = live ] && : > /run/pk/live
 
-# console: UTF-8 + font (agar ship kiya ho)
+# console: UTF-8 + font (if shipped)
 if have loadfont; then
   for f in /usr/share/consolefonts/Uni2-Fixed16.psf.gz /usr/share/consolefonts/Lat15-Terminus16.psf.gz; do
     [ -f "$f" ] && { zcat "$f" 2>/dev/null | loadfont 2>/dev/null && break; }
@@ -49,17 +49,17 @@ PK_DHCP=no
 PK_SSH=no
 [ -f /etc/default/pk ] && . /etc/default/pk
 [ -f /etc/default/swape ] && . /etc/default/swape 2>/dev/null   # legacy image
-# legacy names (SwapeOS 1.0 ke images) -> naye vars
+# legacy names (SwapeOS 1.0 images) -> new vars
 [ -n "${SWAPE_DHCP:-}" ] && PK_DHCP=${PK_DHCP:-$SWAPE_DHCP}
 [ -n "${SWAPE_SSH:-}" ]  && PK_SSH=${PK_SSH:-$SWAPE_SSH}
 [ -n "${SWAPE_ISSUE:-}" ] && PK_ISSUE=${PK_ISSUE:-$SWAPE_ISSUE}
 [ -f /run/pk/boot.env ] && . /run/pk/boot.env
 
 # ------------------------------------------------------------------ network / ssh
-# boot options config ko override kar sakte hain (files me ${VAR:-default} pattern hai)
+# boot options can override config (files carry the ${VAR:-default} pattern)
 [ "${NETCFG:-}" = dhcp ] && PK_DHCP=yes
 export PK_DHCP PK_SSH
-# (SSH/net hooks S20net/S30ssh se hi chalte hain - yahan dobara start na karo)
+# (SSH/net hooks run only via S20net/S30ssh - do not start them again here)
 
 # ------------------------------------------------------------------ boot hooks
 for h in /etc/pk-boot.d/S[0-9][0-9]*; do
@@ -76,7 +76,7 @@ done
     "$MODE" "$(uname -r)" "$(cat /run/pk/media 2>/dev/null || cat /run/pk/rootdev 2>/dev/null || echo installed?)"
 } > /dev/console 2>/dev/null || true
 
-# Wi-Fi (experimental): pk_wifi=<ssid>:<password>  (ethernet na ho to laptop ke liye)
+# Wi-Fi (experimental): pk_wifi=<ssid>:<password>  (for laptops without ethernet)
 WSPEC=$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^pk_wifi=//p' | head -1)
 if [ -n "${WSPEC:-}" ] && command -v pk-wifi >/dev/null 2>&1; then
   wssid=${WSPEC%%:*}; wpw=${WSPEC#*:}
@@ -95,10 +95,10 @@ KMAP=$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^pk_keymap=//p' | hea
 if [ -n "${KMAP:-}" ] && (command -v pk-keymap >/dev/null 2>&1); then
   pk-keymap "$KMAP" >/dev/null 2>&1 && say "keymap: $KMAP" || say "keymap '$KMAP' was only partly applied"
 fi
-# pendrive hardware check (real PC test ke liye) - pk_check=1
+# pendrive hardware check (for real-PC tests) - pk_check=1
 if has pk_check=1 || has pk_check=on || has pk_check=gui; then
-  # runtime attach (S50runtime hook) background me hota hai -> thora wait, taaki
-  # report me runtime/apps wali lines khali na aayein
+  # runtime attach (S50runtime hook) happens in the background -> wait a little, so
+  # the runtime/apps lines do not come out empty in the report
   jw=0
   while [ $jw -lt 8 ]; do
     grep -q ' /opt/pk ' /proc/mounts 2>/dev/null && break
@@ -113,9 +113,9 @@ if has pk_check=1 || has pk_check=on || has pk_check=gui; then
   say "pk-check done (rc=$?) - full report: less /run/pk/check.txt"
 fi
 # ------------------------------------------------ user: pk_user=<name> [+ pk_userpw=<pw>]
-# "root ke alawa koi user nahi" wali kami yahan khatam: boot option se user banta hai
-# (na ho to) aur tty1 ka autologin us par set ho jaata hai. Installed system me ye
-# values pk-install ke --user/--user-password se aati hain.
+# the "no user besides root" gap ends here: the boot option creates a user
+# (if there is none) and sets tty1 autologin to it. In installed systems these
+# values come from pk-install's --user/--user-password.
 _pu=$(sed -n 's/.*pk_user=\([^ ]*\).*/\1/p' /proc/cmdline 2>/dev/null | head -1)
 if [ -n "${_pu:-}" ] && [ "${_pu:-}" != root ]; then
   if ! grep -qs "^$_pu:" /etc/passwd; then
@@ -138,8 +138,8 @@ if [ -n "${_pu:-}" ] && [ "${_pu:-}" != root ]; then
 fi
 
 # ------------------------------------------------ seatd (session manager)
-# weston ko VT + /dev/dri + /dev/input lene ke liye logind chahiye; hamare live me
-# systemd nahi, isliye seatd (runtime ke andar) wahi kaam karta hai. pk_seatd=off se band.
+# weston needs logind to take VT + /dev/dri + /dev/input; in our live image
+# there is no systemd, so seatd (inside the runtime) does that job. pk_seatd=off disables it.
 if ! has pk_seatd=off; then
   if [ ! -S /opt/pk/run/seatd.sock ]; then
     note "pk-seatd start (weston session for)"
@@ -147,12 +147,12 @@ if ! has pk_seatd=off; then
   fi
 fi
 
-# desktop session (apps+wala ISO real PC pe kholne ke liye) - pk_desktop=1
+# desktop session (for opening the apps-included ISO on a real PC) - pk_desktop=1
 if has pk_desktop=1 || has pk_desktop=on; then
   note "pk-desktop start (weston/Xvfb; detail /run/pk/desktop.log)"
   pk-desktop start >/run/pk/desktop.log 2>&1 || note "pk-desktop fail (log: /run/pk/desktop.log)"
-  # 'desktop kyun nahi aaya' ka jawab ab screen par hi milna chahiye: pk-x ka detail
-  # /run/pk/x.log me aur pk-desktop ka /run/pk/desktop.log me dab jaata tha.
+  # the answer to 'why did the desktop not come' should now be on screen: pk-x detail
+  # used to stay buried in /run/pk/x.log and pk-desktop's in /run/pk/desktop.log.
   d_tail=$(tr '\n' '|' < /run/pk/x-weston.log 2>/dev/null | tail -c 220)
   [ -n "${d_tail:-}" ] || d_tail=$(tr '\n' '|' < /run/pk/x.log 2>/dev/null | tail -c 160)
   if grep -qs 'WAYLAND_DISPLAY' /run/pk/x-env 2>/dev/null; then
@@ -163,7 +163,7 @@ if has pk_desktop=1 || has pk_desktop=on; then
       { printf "\npk's OS: desktop session started on Xvfb (virtual - the screen stays blank; view it with 'pk-desktop vnc 5900')\n"
         printf "  reason: %s\n" "${d_tail:-no-log}"
         printf " GUI to view for: pk-desktop vnc 5900 (viewer host on , guest IP port 5900)\n"
-        printf "  ya VM ka graphics device KMS-wala chuno: docs/VM-TEST.md #2b\n"
+        printf "  or choose a KMS graphics device for the VM: docs/VM-TEST.md #2b\n"
       } > /dev/tty1 2>/dev/null || true
     fi
   fi
@@ -172,13 +172,13 @@ if has pk_desktop=1 || has pk_desktop=on; then
     pk-check --save --gui > /run/pk/check2.out 2>&1
   fi
 fi
-# ------------------------------------------------------------------ autoinstall (grub menu se)
+# ------------------------------------------------------------------ autoinstall (from the grub menu)
 if [ -f /run/pk/boot.env ]; then
   . /run/pk/boot.env
   if [ -n "${INSTALLDEV:-}" ]; then
-    note "autoinstall shuru (target=$INSTALLDEV)"
-    # boot option se chalne wala install unattended hota hai -> --yes hamesha
-    # (sirf 'ask' mode me installer khud poochta hai). Silent = output file me.
+    note "autoinstall starting (target=$INSTALLDEV)"
+    # an install run from a boot option is unattended -> always --yes
+    # (only in 'ask' mode does the installer ask itself). Silent = into the output file.
     rc=0
     iopt="--yes"
     [ -n "${ROOTPW:-}" ] && iopt="$iopt --root-password=$ROOTPW"
@@ -222,15 +222,15 @@ if has 'pk_selftest'; then
   [ -x /bin/busybox ] && echo "selftest: busybox $(/bin/busybox 2>/dev/null | head -1 | awk '{print $2}')"
   [ -e /live-iso/live/pk.sqfs ] && echo "selftest: live medium visible at /live-iso"
   [ -d /lib/modules ] && echo "selftest: /lib/modules present ($(ls /lib/modules 2>/dev/null | head -1))"
-  # installer + admin tools chal sakte hain? (dynamic linking / lib closure ka real test)
+  # can installer + admin tools run? (the real test of dynamic linking / lib closure)
   depfail=""
   for t in parted blkid lsblk findmnt losetup mke2fs e2fsck mkfs.vfat tune2fs wipefs \
            grub-install grub-mkimage grub-probe tar gzip; do
     tp=$(command -v "$t" 2>/dev/null) || { depfail="$depfail $t(missing)"; continue; }
     "$t" --version >/dev/null 2>&1
     trc=$?
-    # 127 = loader/lib nahi mila / 126 = exec nahi kar paya -> wahi asli problem hai
-    # (busybox applets --version par usage error dete hain, wo normal hai)
+    # 127 = loader/lib not found / 126 = could not exec -> that is the real problem
+    # (busybox applets give a usage error on --version, that is normal)
     if [ "$trc" = 127 ] || [ "$trc" = 126 ]; then depfail="$depfail $t(cant-exec:$tp)"; fi
   done
   if [ -z "$depfail" ]; then
@@ -239,7 +239,7 @@ if has 'pk_selftest'; then
     echo "### PK: DEPS-FAIL:$depfail ###"
     echo "pk: tools missing/broken:$depfail" > /dev/kmsg 2>/dev/null
   fi
-  # network + ssh (async hote hain -> chhota wait; QEMU user-net me 10.0.2.15 milta hai)
+  # network + ssh (they are async -> short wait; QEMU user-net gets 10.0.2.15)
   if [ "${PK_DHCP:-no}" = yes ]; then
     i=0
     while [ $i -lt 15 ]; do
@@ -269,14 +269,14 @@ if has 'pk_selftest'; then
     tail -5 /var/log/pk-ssh.log 2>/dev/null | sed 's/^/  ssh-log: /'; fi
   APPSGET=$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^pk_apps_get=//p')
   if [ -n "${APPSGET:-}" ]; then
-    # net aane do (apt ke liye), phir install + run
+    # let the net come up (for apt), then install + run
     j=0
     while [ $j -lt 20 ]; do
       ip2=$(ip -4 addr show 2>/dev/null | awk '/inet /{if($2!~/^127\./){print $2; exit}}')
       [ -n "${ip2:-}" ] && break
       sleep 1; j=$((j + 1))
     done
-    note "pk_apps_get: runtime me install + run try (net=${ip2:-none}, ${j}s me)"
+    note "pk_apps_get: try install + run in runtime (net=${ip2:-none}, in ${j}s)"
     for spec in $APPSGET; do
       pkg=${spec%%:*}; args=${spec#*:}
       [ "$args" = "$spec" ] && args=""
@@ -291,7 +291,7 @@ if has 'pk_selftest'; then
           out=$(pk-run "$pkg" $args 2>&1 | head -3 | tr '\n' '|' | cut -c1-140)
           printf '### PK: APPS-GET-OK (%s) %s ###\n' "$pkg" "$out"
         else
-          printf '### PK: APPS-GET-INSTALLED (%s) any /usr/bin binary not mili ###\n' "$pkg"
+          printf '### PK: APPS-GET-INSTALLED (%s) but no /usr/bin binary found ###\n' "$pkg"
         fi
       else
         printf '### PK: APPS-GET-FAIL (%s) %s ###\n' "$pkg" "$(tail -c 200 /run/pk/apps-get.log 2>/dev/null | tr '\n' '|')"
@@ -319,7 +319,7 @@ if has 'pk_selftest'; then
   rh=$(sed -n '1p' /etc/shadow 2>/dev/null | cut -d: -f2)
   case "$rh" in
     \$[56y]\$*) echo "### PK: PASSWD-OK (root hash type sha-$(printf %s "$rh" | cut -d\$ -f2)) ###" ;;
-    ""|"*"|"!"|"*!") echo "### PK: PASSWD-LOCKED (root login band) ###" ;;
+    ""|"*"|"!"|"*!") echo "### PK: PASSWD-LOCKED (root login disabled) ###" ;;
     *) echo "### PK: PASSWD-SKIP (hash field: $rh) ###" ;;
   esac
   if [ -f /etc/pk-installed ]; then
@@ -335,13 +335,13 @@ if has 'pk_selftest'; then
 fi
 
 # ---------------------------------------------------------------- pk_run=<cmd> (diagnostics)
-# "why the desktop did not appear / why this file is empty" jaise sawaal ka jawab lene ke liye
-# boot ke baad ek command chalao, output console par. Kernel args me space nahi jaata,
-# isliye '+' se space likho:
+# to get answers to questions like "why the desktop did not appear / why this file is empty"
+# run one command after boot, output on console. No space goes into kernel args,
+# so write space as '+':
 #   pk_run=cat+/run/pk/x-weston.log!ls+-l+/dev/dri
-#   space = '+', commands ka separator = '!'  (GRUB config me ';' command separator
-#   hai -> ';' likhte hi kernel args katt jaate hain, ye product-level baat hai)
-# (poora output /run/pk/pk_run.out me bhi likha jaata hai)
+#   space = '+', command separator = '!'  (in GRUB config ';' is the command separator
+#   -> writing ';' cuts kernel args short, this is product-level stuff)
+# (the full output is also written to /run/pk/pk_run.out)
 _pkrun=$(sed -n 's/.*pk_run=\([^ ]*\).*/\1/p' /proc/cmdline 2>/dev/null | head -1)
 if [ -n "${_pkrun:-}" ]; then
   echo "### PK: RUN-START ###"

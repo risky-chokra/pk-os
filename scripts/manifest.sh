@@ -1,11 +1,11 @@
 #!/bin/sh
-# pk's OS :: ISO ke *andar* ke payload files ka manifest (sha256) banao.
+# pk's OS :: manifest (sha256) of the payload files *inside* the ISO.
 #   usage: scripts/manifest.sh [build/pkos.iso] [build/manifest.txt]
 #
-# Kyun: ISO ka container (xorriso/grub-mkrescue) build timestamp embed karta hai,
-# isliye do builds ke ISO bytes same nahi hote. Payload files ke hashes same hote
-# hain (SOURCE_DATE_EPOCH ke saath to bilkul) -> "mere build me bhi wahi code hai"
-# ye prove karne ka clean tareeka. Real PC / USB verify: tools/verify-usb.sh
+# Why: the ISO container (xorriso/grub-mkrescue) embeds a build timestamp,
+# so ISO bytes differ between two builds. Payload file hashes stay the same
+# (exactly, with SOURCE_DATE_EPOCH) -> "my build has the same code too"
+# is the clean way to prove it. Real PC / USB verify: tools/verify-usb.sh
 set -eu
 PK_ROOT=$(cd "$(dirname "$0")/.." && pwd); export PK_ROOT
 # shellcheck disable=SC1091
@@ -23,23 +23,23 @@ trap cleanup EXIT INT TERM
 log "ISO extract: $ISO"
 xorriso -osirrox on -indev "$ISO" -extract / "$T/iso" >/dev/null 2>&1 || die "extract fail"
 SQ=$T/iso/live/pk.sqfs
-[ -f "$SQ" ] || die "ISO me /live/pk.sqfs not found - ye pk's OS ka ISO not looks like"
+[ -f "$SQ" ] || die "/live/pk.sqfs not found in ISO - this does not look like a pk's OS ISO"
 
 {
   printf '# pk'"'"'s OS manifest\n'
   printf '# generated: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf '# source repo commit: %s\n' "$( (cd "$PK_ROOT" && git rev-parse HEAD 2>/dev/null) || echo '(no git)')"
   printf '# SOURCE_DATE_EPOCH: %s\n' "${SOURCE_DATE_EPOCH:-(unset)}"
-  printf '\n# ISO container (timestamp embed uses -> pass it builds in differ karega)\n'
+  printf '\n# ISO container (embeds a timestamp -> builds made here will differ)\n'
   printf '%s  ISO\n' "$(sha256sum "$ISO" | cut -d' ' -f1)"
-  printf '\n# payload files (ye stable hone required)\n'
+  printf '\n# payload files (these must be stable)\n'
   for f in boot/pk-kernel boot/pk-initrd live/pk.sqfs live/pk-runtime.sqfs; do
     [ -f "$T/iso/$f" ] || continue
     printf '%s  /%s (%s)\n' "$(sha256sum "$T/iso/$f" | cut -d' ' -f1)" "$f" "$(du -h "$T/iso/$f" | cut -f1)"
   done
 } > "$OUT"
 
-# OS ke hand-written files (rootfs/overlay) ke hashes - squashfs se selective extract
+# hashes of the OS hand-written files (rootfs/overlay) - selective extract from squashfs
 if have unsquashfs; then
   LIST=$(unsquashfs -l "$SQ" 2>/dev/null | sed -e 's|^squashfs-root/||' \
         | grep -E '^((s?bin|usr/s?bin)/pk-.*|etc/(pk-boot\.d/.*|inittab|motd|os-release|passwd|shadow|group|default/pk|hostname)|usr/share/udhcpc/default\.script|usr/share/doc/pkos/.*)$' | sort || true)
@@ -47,7 +47,7 @@ if have unsquashfs; then
     ( cd "$T" && unsquashfs -q -d sq -f "$SQ" $LIST >/dev/null 2>&1 ) || true
     if [ -d "$T/sq" ]; then
       {
-        printf '\n# rootfs/overlay files (jo image in gaayi are)\n'
+        printf '\n# rootfs/overlay files (those that went into the image)\n'
         ( cd "$T/sq" && find . -type f -o -type l | LC_ALL=C sort | while read -r f; do
             p=${f#./}
             if [ -L "$T/sq/$p" ]; then

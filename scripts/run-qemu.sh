@@ -1,17 +1,17 @@
 #!/bin/sh
-# pk's OS :: QEMU runner (headless ya window, BIOS/UEFI, direct kernel bhi)
+# pk's OS :: QEMU runner (headless or window, BIOS/UEFI, direct kernel too)
 #
 # usage: run-qemu.sh [opts]
-#   -iso FILE     boot karne wali ISO (default build/pkos.iso); -no-iso se skip
-#   -hdd FILE     second disk (target/persistence tests ke liye)
-#   -uefi         OVMF pflash ke saath UEFI boot
-#   -tty          serial stdio par (-nographic), warna window
-#   -serial FILE  serial ko file me likho (headless test)
+#   -iso FILE     ISO to boot (default build/pkos.iso); -no-iso to skip
+#   -hdd FILE     second disk (for target/persistence tests)
+#   -uefi         UEFI boot with OVMF pflash
+#   -tty          serial on stdio (-nographic), else a window
+#   -serial FILE  write serial to a file (headless test)
 #   -kernel F -initrd F -append S   direct kernel boot (grub skip)
 #   -m MB         RAM (default 2048)
 #   -timeout S    outer timeout wrapper
-#   -auto         headless ho to direct kernel boot (+ serial console) use karo,
-#                 taaki display ke bina bhi boot dikhe; display ho to ISO+GRUB
+#   -auto         if headless, use direct kernel boot (+ serial console),
+#                 so boot shows even without a display; with a display, ISO+GRUB
 set -u
 PK_ROOT=$(cd "$(dirname "$0")/.." && pwd); export PK_ROOT
 # shellcheck disable=SC1091
@@ -23,7 +23,7 @@ have "$QEMU" || die "$QEMU not found -> sudo apt install qemu-system-x86"
 ISO=$BUILD/pkos.iso
 HDD=""; UEFI=0; TTY=0; MEM=${PK_QEMU_MEM:-2048}; NOACCEL=${PK_QEMU_NOACCEL:-0}; AUTO=0
 
-# host ke available RAM se zyali MAANG rahe ho to kam kar do (low-RAM / sandbox friendly)
+# if you ask for more than the host's available RAM, lower it (low-RAM / sandbox friendly)
 avail=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 0)
 if [ "${avail:-0}" -gt 0 ]; then
   cap=$(( avail - 256 ))
@@ -49,11 +49,11 @@ while [ $# -gt 0 ]; do
     -timeout)  TMO=$2; shift 2 ;;
     -noaccel)  NOACCEL=1; shift ;;
     -auto)     AUTO=1; shift ;;
-    *)         die "unknown arg: $1 (--help style args upar are)" ;;
+    *)         die "unknown arg: $1 (--help-style args are above)" ;;
   esac
 done
 
-# headless + -auto -> grub skip, kernel/initrd direct (serial par output milega)
+# headless + -auto -> skip grub, direct kernel/initrd (output comes on serial)
 if [ "$AUTO" = 1 ] && [ -z "${DISPLAY:-}" ] && [ -z "$SERIAL" ]; then
   ak=$WORK/iso/boot/pk-kernel; ai=$WORK/iso/boot/pk-initrd
   if [ -f "$ak" ] && [ -f "$ai" ]; then
@@ -68,9 +68,9 @@ if [ "$NOISO" != 1 ]; then
   [ -f "$ISO" ] || die "ISO not found: $ISO (run: make iso)"
 fi
 
-# base args (POSIX: positional params ko hi option list ki tarah use karte hain)
+# base args (POSIX: positional params themselves are used as the option list)
 set -- -name pkos -machine q35 -cpu max -smp 2 -m "$MEM"
-# KVM mile to use karo (real PC pe boot 10x tez); na mile to default TCG
+# use KVM if found (10x faster boot on a real PC); else default TCG
 if [ "${NOACCEL:-0}" != 1 ] && [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
   set -- "$@" -accel kvm
   log "accel: kvm" >&2
@@ -79,7 +79,7 @@ set -- "$@" -device virtio-net-pci,netdev=n0 -netdev user,id=n0
 if [ -n "$SERIAL" ]; then
   set -- "$@" -display none -serial "file:$SERIAL" -monitor none
 elif [ "$TTY" = 1 ] || [ -z "${DISPLAY:-}" ]; then
-  # terminal me hi sab kuch (headless machine / ssh)
+  # everything in the terminal itself (headless machine / ssh)
   set -- "$@" -nographic -serial mon:stdio
 else
   set -- "$@" -display gtk -vga std

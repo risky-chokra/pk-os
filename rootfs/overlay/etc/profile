@@ -8,5 +8,5 @@ alias la='ls -A'
 alias ..='cd ..'
 alias d='dmesg | tail -30'
 [ "$(id -u)" = 0 ] || return 0 2>/dev/null
-# root ko welcome (interactive shells only)
+# welcome root (interactive shells only)
 case $- in *i*) [ -f /etc/motd ] && head -9 /etc/motd ;; esac

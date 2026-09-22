@@ -1,17 +1,17 @@
 #!/bin/sh
-# pk's OS boot hook :: display ka FINAL probe (mdev/runtime ke baad) + GPU driver ensure
+# pk's OS boot hook :: FINAL display probe (after mdev/runtime) + GPU driver ensure
 # ---------------------------------------------------------------------------
-# S08display bahut jaldi chalta hai (us waqt /dev/dri banta hi nahi), isliye wo
-# hamesha 'fb=0 drm=0' likhta tha - jo log padhne wale ko "display mar gaya"
-# jaisa galat signal deta tha. Ye hook kaam khatam hone ke baad dobara dekhta hai:
-#   1) display class ke liye jaane-pechane GPU KMS drivers explicitly load karta hai
-#      (mdev coldplug par bharosa mat karo - VM/VBox me aksar uevent late/missing hota hai)
-#   2) /run/pk/display.txt aur /etc/motd ki status line FINAL numbers se update karta hai
-#   3) marker: ### PK: DISPLAY-KMS (drm=N driver=X) ###  ya ### PK: DISPLAY-TEXTONLY ###
-#      (TEXTONLY ka matlab screen par text chalega par weston/KMS session ke liye
-#       device nahi - tab 'pk-desktop vnc' ya GRUB ka 'v' safe-graphics entry use karo)
-# Kabhi bhi fail ho to boot chalta rahega: set -e nahi, sab guarded, exit 0.
-# Band karne ke liye: pk_display=off (S08display ke saath ye bhi skip ho jaata hai)
+# S08display runs very early (at that time /dev/dri does not exist yet), so it
+# always wrote 'fb=0 drm=0' - which gave log readers the wrong "display died"
+# signal. This hook re-checks after the work finishes:
+#   1) explicitly loads known GPU KMS drivers for the display class
+#      (do not rely on mdev coldplug - in VM/VBox uevents are often late/missing)
+#   2) updates /run/pk/display.txt and the /etc/motd status line with FINAL numbers
+#   3) marker: ### PK: DISPLAY-KMS (drm=N driver=X) ###  or ### PK: DISPLAY-TEXTONLY ###
+#      (TEXTONLY means text works on screen but there is no device for a weston/KMS session
+#       - then use 'pk-desktop vnc' or GRUB's 'v' safe-graphics entry)
+# If it ever fails, boot continues: no set -e, everything guarded, exit 0.
+# To disable: pk_display=off (this gets skipped along with S08display)
 # ---------------------------------------------------------------------------
 set -u
 PATH=/bin:/sbin:/usr/bin:/usr/sbin
@@ -21,17 +21,17 @@ grep -q 'pk_display=off' /proc/cmdline 2>/dev/null && exit 0
 mark() { ( printf '### PK: %s ###\n' "$*" > /dev/console ) 2>/dev/null; ( printf '%s\n' "$*" > /dev/kmsg ) 2>/dev/null; }
 say() { printf 'pk-display-late: %s\n' "$*"; }
 
-# --- 1) GPU drivers: chhota, targeted set (jo live /lib/modules me hain wahi) --
-# Naam Debian ke module file-naam se match karne chahiye: 'bochs-drm' naam ka
-# module is kernel me hai hi nahi (file tiny/bochs.ko.xz hai) -> pehle maine galat
-# naam se modprobe kiya tha, isliye -vga std par bhi drm=0 aa raha tha.
+# --- 1) GPU drivers: small, targeted set (only what is in live /lib/modules) --
+# Names must match Debian's module file names: there is no module named 'bochs-drm'
+# in this kernel at all (the file is tiny/bochs.ko.xz) -> I first modprobed with the wrong
+# name, which is why drm=0 kept coming even on -vga std.
 GPU="vmwgfx vboxvideo qxl bochs cirrus virtio_gpu ast mgag200 i915 radeon nouveau vga16fb"
 need=0
 for m in $GPU; do
   [ -d /sys/module/$m ] && { need=1; break; }
 done
 if [ "$need" = 0 ]; then
-  # sirf tab modprobe karo jab koi display class ka PCI device dikhe (berang nahi)
+  # only modprobe when a display-class PCI device is visible (not blindly)
   disp=0
   for c in /sys/bus/pci/devices/*/class; do
     cl=$(cat "$c" 2>/dev/null) || continue
@@ -50,7 +50,7 @@ if [ "$need" = 0 ]; then
   fi
 fi
 
-# GPU driver abhi load hua hai -> /dev/dri/card* naye bane: perms yahi set honge
+# a GPU driver just loaded -> new /dev/dri/card* appeared: perms are set right here
 command -v pk-devperms >/dev/null 2>&1 && pk-devperms 2>/dev/null
 
 # --- 2) final numbers ----------------------------------------------------------------
@@ -70,7 +70,7 @@ line="screen console ok (consoles:${con:-none}) fb=$fbn drm=$drm driver=$drv bla
 mkdir -p /run/pk 2>/dev/null
 printf '%s\n' "$line" > /run/pk/display.txt 2>/dev/null || true
 
-# motd ki pehli line [ pk-display-status ] hoti hai -> use FINAL se badalna
+# motd's first line is [ pk-display-status ] -> replace it with FINAL
 if [ -f /etc/motd ] && head -1 /etc/motd 2>/dev/null | grep -qs 'pk-display-status'; then
   tmp=/run/pk/motd.$$
   { printf '[ pk-display-status ] %s (final)\n' "$line"; sed '1d' /etc/motd; } > "$tmp" 2>/dev/null \
@@ -79,7 +79,7 @@ if [ -f /etc/motd ] && head -1 /etc/motd 2>/dev/null | grep -qs 'pk-display-stat
 fi
 [ -w /dev/tty1 ] && printf 'pk'"'"'s OS: final display check -> fb=%s drm=%s driver=%s\n' "$fbn" "$drm" "$drv" > /dev/tty1 2>/dev/null
 
-# --- 3) desktop ke liye honest verdict -------------------------------------------------
+# --- 3) honest verdict for the desktop -------------------------------------------------
 if [ "$drm" -gt 0 ] 2>/dev/null; then
   mark "DISPLAY-KMS (drm=$drm driver=$drv fb=$fbn)"
   say "KMS device ready: weston can get /dev/dri/card0 (driver $drv)"

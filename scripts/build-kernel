@@ -1,13 +1,13 @@
 #!/bin/sh
-# pk's OS :: apna custom kernel banao (optional, par mazedar)
+# pk's OS :: build your own custom kernel (optional, but fun)
 #
 #   scripts/build-kernel              download + configure + build + modules_install
-#   scripts/build-kernel config       sirf config regenerate karo
+#   scripts/build-kernel config       only regenerate the config
 #   make iso PK_KERNEL=$PWD/build/kernel-6.12/bzImage \
 #            PK_MODULES=$PWD/build/kernel-6.12/modules
 #
-# Config philosophy: boot ke liye chahiye = built-in (=y), optional hardware = module (=m).
-# Isliye initramfs me sirf loop/squashfs/overlay/ext4/vfat/isofs jaate hain aur ISO chhoti rehti hai.
+# Config philosophy: needed-for-boot = built-in (=y), optional hardware = module (=m).
+# So only loop/squashfs/overlay/ext4/vfat/isofs go into the initramfs, keeping the ISO small.
 # shellcheck shell=sh disable=SC3030,SC2086
 set -eu
 
@@ -40,7 +40,7 @@ if [ ! -d "$SRC" ]; then
   mkdir -p "$BUILD"
   rm -rf "$SRC"
   tar -xf "$DL/linux-$KV.tar.xz" -C "$BUILD"
-  [ -d "$SRC" ] || die "extract fail: $SRC not bana"
+  [ -d "$SRC" ] || die "extract failed: $SRC not created"
 fi
 cd "$SRC"
 
@@ -70,10 +70,10 @@ genconfig() {
   for o in $CFG_DISABLE; do
     scripts/config --disable "$o" 2>/dev/null || true
   done
-  # boot-critical cheezein module ke roop me na rahein
+  # boot-critical stuff must not remain as modules
   for o in BLK_DEV_LOOP SQUASHFS OVERLAY_FS EXT4_FS ISO9660_FS VFAT_FS; do
     if grep -qE "^CONFIG_$o=m$" .config; then
-      warn " CONFIG_$o still also =m -> =y run hoon (boot for must)"
+      warn " CONFIG_$o is still =m -> setting =y (a must for boot)"
       scripts/config --enable "$o"
     fi
   done
@@ -87,7 +87,7 @@ genconfig() {
 [ -f .config ] || genconfig
 
 if [ -f "$OUTDIR/bzImage" ] && [ -z "${PK_FORCE_BUILD:-}" ]; then
-  log "first from bana hua is: $OUTDIR/bzImage (dobara build for PK_FORCE_BUILD=1)"
+  log "already built: $OUTDIR/bzImage (PK_FORCE_BUILD=1 to rebuild)"
   exit 0
 fi
 
@@ -97,7 +97,7 @@ log "  output: $OUTDIR/bzImage + $OUTDIR/modules"
 KLOG=$BUILD/kernel-build.log
 if ! make -j"$JOBS" bzImage modules > "$KLOG" 2>&1; then
   tail -30 "$KLOG" | sed 's/^/  | /'
-  die "kernel build fail - pura log: $KLOG"
+  die "kernel build failed - full log: $KLOG"
 fi
 tail -3 "$KLOG" | sed 's/^/  /' 
 make modules_install INSTALL_MOD_PATH="$OUTDIR" >/dev/null 2>&1
@@ -107,4 +107,4 @@ cp -f arch/x86/boot/bzImage "$OUTDIR/bzImage"
 printf 'version=%s\nbzImage=%s\nmodules=%s/modules\n' "$KVER" "$OUTDIR/bzImage" "$OUTDIR" > "$OUTDIR/info"
 log "done. Ab:"
 log "  make clean-rootfs && make iso PK_KERNEL=$OUTDIR/bzImage PK_MODULES=$OUTDIR/modules"
-log "  (PK_MODULES ke saath 'make iso' us version ke modules live image me daal dega)"
+log "  ('make iso' with PK_MODULES puts that version's modules into the live image)"

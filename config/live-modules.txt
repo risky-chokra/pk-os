@@ -1,7 +1,7 @@
-# Live system ke /lib/modules me kaun-kaun se .ko copy honge.
-# Patterns `find` ke liye diye jaate hain ($PK_MODULES ke relative paths).
-# Jitna zyada daaloge utna hardware support, utni badi ISO.
-# (initramfs ke liye alag list hai: init/kernel-modules)
+# Which .ko files get copied into the live system's /lib/modules.
+# Patterns are given for `find` (paths relative to $PK_MODULES).
+# The more you add, the more hardware support — and the bigger the ISO.
+# (the initramfs has a separate list: init/kernel-modules)
 kernel/fs/ext4
 kernel/fs/fat
 kernel/fs/vfat
@@ -32,32 +32,31 @@ kernel/drivers/usb/class
 kernel/drivers/usb/serial
 kernel/drivers/hid
 kernel/drivers/input
-# (is kernel me CONFIG_DRM_SIMPLEDRM nahi -> simpledrm.ko bhi nahi)
+# (this kernel has no CONFIG_DRM_SIMPLEDRM -> no simpledrm.ko either)
 kernel/drivers/gpu/drm/drm_kms_helper.ko*
 
 # --- display / GPU (KMS) ---------------------------------------------------
-# Ye list ke bina VM/VBox/real-PC par /dev/dri/card0 hi nahi banta, aur weston
-# (desktop session) ke paas device nahi aata -> screen text-mode me hi reh jaati
-# hai. Is kernel me CONFIG_DRM_SIMPLEDRM/SYSFB_SIMPLEFB OFF hain, isliye 'koi na
-# koi' native driver load hona zaroori hai; kharcha ~1 MB (xz) - desktop ke
-# muqable bilkul kuch nahi.
-kernel/drivers/gpu/drm/vmwgfx            # VMware + VirtualBox 'VMSVGA' (VBox ka default)
-kernel/drivers/gpu/drm/vboxvideo         # VirtualBox purana 'VBoxVGA' device
+# Without this list, /dev/dri/card0 never appears on VM/VBox/real-PC, and weston
+# (desktop session) gets no device -> the screen stays stuck in text mode.
+# This kernel has CONFIG_DRM_SIMPLEDRM/SYSFB_SIMPLEFB OFF, so loading some
+# native driver is a must; cost ~1 MB (xz) - nothing compared to a desktop.
+kernel/drivers/gpu/drm/vmwgfx            # VMware + VirtualBox 'VMSVGA' (VBox default)
+kernel/drivers/gpu/drm/vboxvideo         # VirtualBox old 'VBoxVGA' device
 kernel/drivers/gpu/drm/qxl               # QEMU/SPICE (-vga qxl)
 kernel/drivers/gpu/drm/tiny              # bochs (-vga std) + cirrus (-vga cirrus)
 kernel/drivers/gpu/drm/virtio            # virtio-gpu (-vga virtio): fast + clean
 kernel/drivers/gpu/drm/ast               # server/BMC on-board graphics
-kernel/drivers/gpu/drm/mgag200           # Matrox G200 (bohat servers me)
+kernel/drivers/gpu/drm/mgag200           # Matrox G200 (in many servers)
 kernel/drivers/video/fbdev/vga16fb.ko*   # legacy text-mode fb (/dev/fb0 fallback)
-# Physical PCs ke liye (bade but real display ka asli raasta):
-kernel/drivers/gpu/drm/i915              # Intel HD/UHD/Arc-ish (display bina firmware ke chalta hai)
-kernel/drivers/gpu/drm/nouveau           # purane/mid NVIDIA
-kernel/drivers/gpu/drm/radeon            # purane ATI/AMD (display bina firmware ke)
-# amdgpu/xe isme JAAN-BOOJH ke nahi: inhe /lib/firmware/{amdgpu,xe} ke .bin chahiye
-# (warna probe fail), size ~4 MB+. In GPUs par text console + 'pk-desktop vnc'
-# chalega; full desktop installed system me (firmware pack ke saath) behtar.
-# --- NIC drivers (udev nahi hai, isliye pk-net boot par modprobe karta hai)
-# virtio: QEMU/KVM guests; ethernet: real PCs; usb: laptops ke USB-Ethernet dongles
+# For physical PCs (bigger, but the real route to a display):
+kernel/drivers/gpu/drm/i915              # Intel HD/UHD/Arc-ish (display works without firmware)
+kernel/drivers/gpu/drm/nouveau           # old/mid NVIDIA
+kernel/drivers/gpu/drm/radeon            # old ATI/AMD (display without firmware)
+# amdgpu/xe are deliberately NOT here: they need /lib/firmware/{amdgpu,xe} .bins
+# (probe fails otherwise), size ~4 MB+. On these GPUs: text console + 'pk-desktop vnc'
+# works; full desktop is better on installed systems (with the firmware pack).
+# --- NIC drivers (no udev, so pk-net modprobes them at boot)
+# virtio: QEMU/KVM guests; ethernet: real PCs; usb: laptop USB-Ethernet dongles
 kernel/drivers/net/virtio*
 kernel/drivers/net/net_failover*
 kernel/net/core/failover.ko*
@@ -71,7 +70,7 @@ kernel/drivers/net/ethernet/broadcom
 kernel/drivers/net/ethernet/atheros
 kernel/drivers/net/phy
 kernel/drivers/net/usb
-# aur chahiye ho to yeh add karo (thodi badi ISO):
+# add these if you need more (slightly bigger ISO):
 # kernel/drivers/net/ethernet/intel/i40e
 # kernel/drivers/net/ethernet/intel/ixgbe
 # kernel/drivers/net/ethernet/marvell
@@ -80,29 +79,29 @@ kernel/drivers/net/wireless/intel/iwlwifi
 kernel/drivers/net/wireless/ath
 kernel/net/ipv4
 kernel/net/ipv6
-# tuning / foreign-arch execution ke liye (pk-tune, pk-binfmt)
+# for tuning / foreign-arch execution (pk-tune, pk-binfmt)
 kernel/fs/binfmt_misc.ko*
 kernel/drivers/cpufreq
 kernel/drivers/cpuidle
 kernel/drivers/thermal
 
-# --- audio / bluetooth / webcam / sensors / power (saare I/O device) -------------
-# Pehle live me sirf storage+net+hid+input the: sound card, bluetooth, webcam,
-# laptop battery/fans, USB-serial, typec dock ke driver ship hi nahi hote the.
-kernel/sound/core                  # ALSA core (har sound driver ko chahiye)
-kernel/sound/pci/hda               # Intel/AMD HDA - aaj kal ke almost saare PCs
-kernel/sound/pci/ac97              # purane onboard audio
-kernel/sound/usb                   # USB sound cards / headsets / webcams ke mic
-kernel/sound/drivers               # dummy/virmidi (VM me bhi device dikhe)
+# --- audio / bluetooth / webcam / sensors / power (all I/O devices) -------------
+# Live used to ship only storage+net+hid+input: sound card, bluetooth, webcam,
+# laptop battery/fans, USB-serial, typec dock drivers never shipped at all.
+kernel/sound/core                  # ALSA core (every sound driver needs it)
+kernel/sound/pci/hda               # Intel/AMD HDA - almost all modern PCs
+kernel/sound/pci/ac97              # old onboard audio
+kernel/sound/usb                   # USB sound cards / headsets / webcam mics
+kernel/sound/drivers               # dummy/virmidi (a device shows up even in VMs)
 kernel/net/bluetooth
 kernel/drivers/bluetooth           # btusb etc.
 kernel/drivers/media/usb/uvc       # webcams
 kernel/drivers/media/common
 kernel/drivers/hwmon               # temperature/fan sensors (sensors command)
 kernel/drivers/power/supply        # laptop battery/AC status
-kernel/drivers/video/backlight      # brightness control (pk-display isko use karta hai)
+kernel/drivers/video/backlight      # brightness control (used by pk-display)
 kernel/drivers/thunderbolt
 kernel/drivers/usb/typec           # USB-C docks
 kernel/drivers/usb/misc
 kernel/drivers/usb/phy
-# chahiye to enable karo (bada): kernel/drivers/gpu/drm/amd (amdgpu + firmware chahiye)
+# enable if needed (big): kernel/drivers/gpu/drm/amd (needs amdgpu + firmware)

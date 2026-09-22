@@ -21,7 +21,7 @@ mark() { ( printf '### PK: %s ###\n' "$*" > /dev/console ) 2>/dev/null; ( printf
 runtime_ok() { grep -q " $RT " /proc/mounts 2>/dev/null && [ -d "$RT/usr" ]; }
 rtbin() { runtime_ok && { [ -x "$RT/usr/bin/$1" ] || [ -e "$RT/usr/bin/$1" ] || [ -L "$RT/usr/bin/$1" ]; }; }
 
-INI=""   # set karta hoon pehli baar jab zaroorat pade
+INI=""   # set on first use, when the need arises
 ini_path() {
   [ -n "$INI" ] && return 0
   if [ -d "$RT/etc" ]; then INI=$RT/etc/weston.ini; else INI=/etc/weston.ini; fi
@@ -47,7 +47,7 @@ ini_set() { # <section> <key> <value>
       if (insec && !seen) print k "=" v
       else if (!exists) { printf ""; printf "\n%s\n%s=%s\n", hdr, k, v }
     }' "$INI" > "$INI.new" 2>/dev/null && mv -f "$INI.new" "$INI"
-  say "$INI me [$sec] $k=$v"
+  say "$INI: [$sec] $k=$v"
 }
 drm_outputs() {
   n=0
@@ -95,7 +95,7 @@ start() {
   if ! runtime_ok; then
     warn "no app runtime attached -> GUI needs the runtime (weston/xterm live inside it)"
     warn "  sudo make runtime  (build/pk-runtime.sqfs)  ->  make iso WITH_RUNTIME=1"
-    warn "  ya live me:  pk-runtime start"
+    warn "  or in live:  pk-runtime start"
     mark "DESKTOP-NO-RUNTIME"
     return 71
   fi
@@ -105,17 +105,17 @@ start() {
       warn "install fail (net? 'pk-net dhcp') - manual: pk-get install -y weston xterm xvfb x11-utils"
       mark "DESKTOP-INSTALL-FAIL"; return 70; }
   fi
-  # weston ka default background black hota hai (theme image ke bina) -> "desktop aayi
-  # ya nahi" ka farak screen par dikhna chahiye, isliye solid-color set karte hain.
+  # weston's default background is black (without a theme image) -> "did the desktop come
+  # or not" should be visible on screen, so we set a solid-color.
   if ini_set output background-type solid-color >/dev/null 2>&1; then
     ini_set output background-color 0xFF1a5fb4 >/dev/null 2>&1 || true
   fi
-  # xkb layout (pk_keymap= se diya ho to weston ko bhi batao)
+  # xkb layout (if given via pk_keymap=, also tell weston)
   kl=$(sed -n 's/.*pk_keymap=\([^ ]*\).*/\1/p' /proc/cmdline 2>/dev/null | head -1)
   [ -n "${kl:-}" ] && { ini_set xkb layout "$kl" >/dev/null 2>&1 || true; }
   pk-x start >/run/pk/desktop.log 2>&1 || pk-x start weston >>/run/pk/desktop.log 2>&1
-  # weston ka aakhri error user ko marker me dikhe (warna "DESKTOP-OK (:0)" ke peeche
-  # pura reason /run/pk/x-weston.log me dab jaata tha - debug namumkin jaisa).
+  # weston's last error shows to the user in a marker (else it hides behind "DESKTOP-OK (:0)"
+  # while the full reason stayed buried in /run/pk/x-weston.log - debugging was near-impossible).
   wx=$(tail -c 220 /run/pk/x-weston.log 2>/dev/null | tr '\n' '|' | tr -s ' ')
   [ -n "${wx:-}" ] && printf '### PK: DESKTOP-WESTON-LOG %s ###\n' "$wx" > /dev/console 2>/dev/null
   if [ -r /run/pk/x-env ]; then . /run/pk/x-env; fi
@@ -127,10 +127,10 @@ start() {
   # welcome + terminal
   cat > /root/pk-desktop-welcome.txt <<'W'
 pk's OS desktop
-  apps     :  pk-run --gui xterm        (ya terminal me jo bhi)
+  apps     :  pk-run --gui xterm        (or whatever in a terminal)
              pk-run --gui htop
              pk-get install -y firefox-esr && pk-run --gui firefox-esr
-  install  :  pk-install --target=auto   (disk pe permanent)
+  install  :  pk-install --target=auto   (permanent on disk)
   check    :  pk-check --all
   iOS/Android: pk-ios why ; pk-android doctor
 W
@@ -138,10 +138,10 @@ W
     say "a terminal is already running (pk-x launched it) - not opening a second one"
   elif [ -n "${DISPLAY:-}" ] && rtbin xterm; then
     pk-run --gui xterm -e sh -c 'cat /root/pk-desktop-welcome.txt; echo; exec /bin/sh' >/dev/null 2>&1 &
-    say "terminal khola (xterm)"
+    say "terminal opened (xterm)"
   elif [ -n "${WAYLAND_DISPLAY:-}" ] && rtbin weston-terminal; then
     pk-run --gui weston-terminal >/dev/null 2>&1 &
-    say "terminal khola (weston-terminal)"
+    say "terminal opened (weston-terminal)"
   else
     say "session is ready; no client opened (xterm/weston-terminal are not in the runtime)"
     say "  app:  pk-desktop app <name>   (for example: pk-desktop app htop)"
@@ -174,9 +174,9 @@ vnc() {
 }
 
 # ------------------------------------------------------------------ shot
-# weston se *apni* screen capture karwata hai (weston-screenshooter; iske liye
-# weston --debug chahiye, jo pk-x lagata hai). Ye QA ka pixel-evidence hai:
-# "desktop aaya ya nahi" ka jawab screenshot se milta hai, markers se nahi.
+# gets weston to capture *its own* screen (weston-screenshooter; for this
+# weston --debug is needed, which pk-x applies). This is QA's pixel-evidence:
+# "did the desktop come or not" is answered by the screenshot, not markers.
 do_shot() {
   out=${1:-/run/pk/desktop-shot.png}
   runtime_ok || { warn "no runtime attached -> run pk-desktop start first"; return 66; }
@@ -186,7 +186,7 @@ do_shot() {
     return 66
   fi
   tmp=/root/.pk-shot.$$.png
-  to=""; have timeout && to="timeout 25"   # screenshooter compositor ka wait karta hai ->
+  to=""; have timeout && to="timeout 25"   # the screenshooter waits for the compositor ->
   $to pk-chroot /bin/sh -c "export XDG_RUNTIME_DIR=/run/pk-x WAYLAND_DISPLAY=wayland-1; cd /root; weston-screenshooter $tmp" >/run/pk/shot.log 2>&1
   rc=$?
   [ "$rc" = 124 ] && warn "no screenshot within 25s (compositor busy / debug off?) - log: /run/pk/shot.log"
@@ -210,7 +210,7 @@ case "${1:-start}" in
             [ -r /run/pk/x-env ] && . /run/pk/x-env && export DISPLAY WAYLAND_DISPLAY XDG_RUNTIME_DIR
             pk-run --gui "$@" &
             ap=$!
-            # app ko foreground slice me daalo (interactive priority)
+            # put the app in the foreground slice (interactive priority)
             command -v pk-tune >/dev/null 2>&1 && pk-tune fg "$ap" >/dev/null 2>&1 || true
             wait "$ap" ;;
   shot)

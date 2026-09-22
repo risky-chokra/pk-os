@@ -1,9 +1,9 @@
 #!/bin/sh
 # pk's OS :: initramfs -> build/work/iso/boot/pk-initrd
 #   /init            init/init
-#   /bin/busybox     static busybox + saare applet symlinks
-#   /mods/NN-x.ko    boot modules (dependency order, uncompressed -> busybox insmod chalega)
-#   /sbin/blkid      root=UUID/PARTUUID resolve ke liye
+#   /bin/busybox     static busybox + all applet symlinks
+#   /mods/NN-x.ko    boot modules (dependency order, uncompressed -> busybox insmod will run)
+#   /sbin/blkid      for root=UUID/PARTUUID resolving
 # shellcheck shell=sh disable=SC3030,SC2086
 set -eu
 PK_ROOT=$(cd "$(dirname "$0")/.." && pwd); export PK_ROOT
@@ -25,14 +25,14 @@ if [ -z "$BUSYBOX" ]; then
   done
 fi
 [ -n "$BUSYBOX" ] || die "static busybox not found -> sudo apt install busybox-static"
-# initrd me koi libc nahi jaata -> dynamic busybox se /init fail hota hai aur
-# kernel panic milta hai (screen bilkul khali). Isliye ya static chahiye, ya
-# POORI lib closure initrd me copy karna padega (PK_ALLOW_DYNAMIC_BUSYBOX=1).
+# no libc goes into the initrd -> /init fails with dynamic busybox and
+# you get a kernel panic (totally blank screen). So either static is needed, or
+# the WHOLE lib closure must be copied into the initrd (PK_ALLOW_DYNAMIC_BUSYBOX=1).
 if ldd "$BUSYBOX" 2>/dev/null | grep -q '=> /'; then
   if [ "${PK_ALLOW_DYNAMIC_BUSYBOX:-0}" != 1 ]; then
-    die "$BUSYBOX dynamic is (initrd in libc not will -> /init panic). Fix: sudo apt-get install -y busybox-static , or PK_BUSYBOX=<static-path> pass it, or samajhdari ke saath PK_ALLOW_DYNAMIC_BUSYBOX=1 (then lib closure khud copy ho jaayega)"
+    die "$BUSYBOX is dynamic (no libc in initrd -> /init panic). Fix: sudo apt-get install -y busybox-static , or pass PK_BUSYBOX=<static-path>, or wisely set PK_ALLOW_DYNAMIC_BUSYBOX=1 (then the lib closure gets copied itself)"
   fi
-  warn "dynamic busybox use ho is running -> uska lib closure initrd in copy run rahe are"
+  warn "dynamic busybox is being used -> copying its lib closure into the initrd"
   BUSYBOX_DYNAMIC=1
 else
   BUSYBOX_DYNAMIC=0
@@ -84,7 +84,7 @@ if [ -d "$PK_MODULES" ] && [ -f "$PK_ROOT/init/kernel-modules" ]; then
       [ -n "${ko:-}" ] || continue
       [ -f "$ko" ] || continue
       b=${ko##*/}; b=${b%.xz}; b=${b%.gz}; b=${b%.zst}; b=${b%.zstd}; b=${b%.lzma}; b=${b%.ko}
-      # SAME module dobara-copy mat karo (modprobe closure me deps repeat hote hain)
+      # do NOT copy the SAME module twice (deps repeat in the modprobe closure)
       grep -qxF "$b" "$modseen" 2>/dev/null && continue
       tgt=$IR/mods/$(printf '%03d' "$i")-$b.ko
       case "$ko" in
@@ -102,7 +102,7 @@ if [ -d "$PK_MODULES" ] && [ -f "$PK_ROOT/init/kernel-modules" ]; then
   done
   log "  $(ls "$IR/mods" 2>/dev/null | wc -l) modules in /mods"
 else
-  warn "modules dir not found -> initrd without /mods (kernel in sab built-in hona required)"
+  warn "modules dir not found -> initrd without /mods (kernel must have all built-in)"
 fi
 
 # ---------------------------------------------------------------- blkid (root= resolve)
@@ -115,22 +115,22 @@ if [ -x "$PK_ROOT/scripts/collect-bins" ]; then
     break
   done
 fi
-# loader ke liye /lib64 path bhi chahiye
+# the loader needs the /lib64 path too
 [ -d "$IR/lib" ] || ln -sfn usr/lib "$IR/lib" 2>/dev/null || mkdir -p "$IR/lib"
 
 # ---------------------------------------------------------------- pack
 mkdir -p "$(dirname "$OUT")"
-# kernel initrd decompressors: /boot/config se dekho (RD_ZSTD/RD_XZ/RD_LZ4...)
+# kernel initrd decompressors: see /boot/config (RD_ZSTD/RD_XZ/RD_LZ4...)
 icomp=${INITRD_COMP:-auto}
 cfg=/boot/config-$KVER
-pick() { # <comp> -> 0 agar kernel support kare aur tool ho
+pick() { # <comp> -> 0 if the kernel supports it and the tool exists
   case $1 in
     zstd) have zstd || return 1; key=RD_ZSTD ;;
     xz)   have xz   || return 1; key=RD_XZ   ;;
     lz4)  have lz4  || return 1; key=RD_LZ4  ;;
     *)    key=RD_GZIP ;;
   esac
-  [ -r "$cfg" ] || return 0        # config na mile to trust kernel defaults
+  [ -r "$cfg" ] || return 0        # if no config, trust kernel defaults
   grep -qE "^CONFIG_$key=y" "$cfg"
 }
 if [ "$icomp" = auto ]; then

@@ -32,10 +32,10 @@ have() { command -v "$1" >/dev/null 2>&1; }
 row() { printf '  %-10s %s\n' "$1" "$2"; }
 is_live() { [ -f /run/pk/live ] || grep -qs '^live$' /run/pk/mode 2>/dev/null; }
 # ---------------------------------------------------------------- /etc helpers
-# Debian ke busybox me adduser/deluser applet hote hi NAHI hain (hamare live image me
-# bhi nahi tha -> ye tool pehle fail ho gaya tha). Isliye /etc/passwd, /etc/group,
-# /etc/shadow, /etc/gshadow seedhe, carefully edit karte hain (temp file + cat back,
-# taaki SELinux/mount options se na phansein) aur busybox applets sirf optional bonus hain.
+# Debian's busybox has NO adduser/deluser applets at all (nor did our live image
+# -> this tool failed earlier). So /etc/passwd, /etc/group,
+# /etc/shadow, /etc/gshadow are edited directly, carefully (temp file + cat back,
+# so as not to get stuck on SELinux/mount options) and busybox applets are only an optional bonus.
 PW=/etc/passwd; GR=/etc/group; SH=/etc/shadow; GSH=/etc/gshadow
 write_back() { # <tmp> <target>
   [ -s "$1" ] || { rm -f "$1" 2>/dev/null; return 1; }
@@ -44,7 +44,7 @@ write_back() { # <tmp> <target>
 add_line() { # <file> <line>
   printf '%s\n' "$2" >> "$1" 2>/dev/null
 }
-del_user_lines() { # <user> : passwd+shadow se hatao, group lists se members nikalo
+del_user_lines() { # <user> : remove from passwd+shadow, remove members from group lists
   u=$1
   for f in "$PW" "$SH"; do
     [ -f "$f" ] || continue
@@ -53,7 +53,7 @@ del_user_lines() { # <user> : passwd+shadow se hatao, group lists se members nik
   for f in "$GR" "$GSH"; do
     [ -f "$f" ] || continue
     awk -F: -v U="$u" 'BEGIN{OFS=":"} {
-      if ($1==U) next                      # private group bhi hata do
+      if ($1==U) next                      # also drop the private group
       n=split($4, m, ","); out=""
       for (i=1;i<=n;i++) if (m[i]!="" && m[i]!=U) out = out (out=="" ? "" : ",") m[i]
       $4=out; print
@@ -70,8 +70,8 @@ ensure_group() { # <name> [gid]
   return 0
 }
 group_gid() { awk -F: -v G="$1" '$1==G{print $3; exit}' "$GR" 2>/dev/null; }
-field() { # <name> <column> <file>   (NOTE: file argument shell me "$3" hai - "$F"
-                      # awk ki variable thi, wahan se empty expand ho kar stdin padhta)
+field() { # <name> <column> <file>   (NOTE: the file argument in shell is "$3" - "$F"
+                      # was an awk variable, expanding empty from there and reading stdin)
   awk -F: -v U="$1" -v C="$2" 'BEGIN{OFS=""} $1==U{print $C; exit}' "$3" 2>/dev/null
 }
 group_add_member() { # <group> <user>
@@ -82,14 +82,14 @@ group_add_member() { # <group> <user>
                  if (!p) $4 = ($4=="" ? U : $4 "," U) }
     print }' "$GR" > "$GR.pk-tmp" 2>/dev/null && write_back "$GR.pk-tmp" "$GR"
 }
-# uid/gid: 1000 se shuru pehla free (max+1 isliye nahi, kyunki ek system user 65534
-# hone par naya user 65536 par chala jaata tha - login/permissions ke liye awkward)
+# uid/gid: first free starting at 1000 (not max+1, because with one system user at 65534
+# a new user used to land at 65536 - awkward for login/permissions)
 _taken() { awk -F: -v V="$2" '$3+0==V+0{f=1} END{exit f?0:1}' "$1" 2>/dev/null; }
 next_gid() { n=1000; while [ $n -lt 60000 ]; do _taken "$GR" "$n" || { echo "$n"; return 0; }; n=$((n + 1)); done; return 1; }
 next_uid() { n=1000; while [ $n -lt 60000 ]; do _taken "$PW" "$n" || { echo "$n"; return 0; }; n=$((n + 1)); done; return 1; }
-hash_pw() { # <pw> -> crypt hash (ya fail). Har tool ke saath '< /dev/null' zaroori
-  # hai: inme se kai password stdin par mangte hain, aur boot ke dauran (pk_user=)
-  # koi tty nahi hoti -> warna hang. (Ye hang humne host test me pakda tha.)
+hash_pw() { # <pw> -> crypt hash (or fail). "< /dev/null" is a must with every tool
+  # : many of them ask for a password on stdin, and during boot (pk_user=)
+  # there is no tty -> else a hang. (This hang was caught in the host test.)
   pw=$1
   if have mkpasswd; then mkpasswd -m sha-512 "$pw" </dev/null 2>/dev/null && return 0; fi
   if [ -x /bin/busybox ]; then /bin/busybox mkpasswd -m sha-512 "$pw" </dev/null 2>/dev/null && return 0; fi
@@ -127,7 +127,7 @@ cmd_list() {
   a=$(sed -n 's/^PK_CONSOLE_AUTOLOGIN=//p' "$CONF" 2>/dev/null | head -1)
   [ -f "$RUNAUTO" ] && a=$(cat "$RUNAUTO" 2>/dev/null)
   row autologin "${a:-off}"
-  row persistent "$(grep -qs 'upperdir=/mnt/persist' /proc/mounts && echo 'yes (users save rahenge)' || echo 'nahee (reboot on reset - live in normal)')"
+  row persistent "$(grep -qs 'upperdir=/mnt/persist' /proc/mounts && echo 'yes (users will be saved)' || echo 'no (reset on reboot - normal in live)')"
 }
 
 cmd_info() {
@@ -165,7 +165,7 @@ cmd_add() {
   uid=${newuid:-$(next_uid)}
   [ -n "$uid" ] || die "no free uid found (next_uid failed)"
   awk -F: -v U="$uid" '$3==U {e=1} END{exit e?0:1}' "$PW" 2>/dev/null && die "uid $uid is already in use"
-  # private group (same name, same gid) - busybox adduser yahi karta hai
+  # private group (same name, same gid) - busybox adduser does exactly this
   gid=$(group_gid "$u"); [ -n "$gid" ] || { gid=$uid; ensure_group "$u" "$gid"; }
   hsh=$(hash_pw "${pw:-x}" 2>/dev/null || true)
   if [ -n "$pw" ] && [ -z "${hsh:-}" ]; then
@@ -191,13 +191,13 @@ cmd_add() {
     [ -n "$g" ] || continue
     if group_add_member "$g" "$u"; then added="$added $g"; else failed="$failed $g"; fi
   done
-  # seat group bhi (weston/seatd socket access ke liye)
+  # the seat group too (for weston/seatd socket access)
   group_add_member seat "$u" && added="$added seat"
   # home + skel + perms
   if [ "$nohome" = 0 ]; then
     uid=$(uid_of "$u"); gid=$(field "$u" 4 "$PW")
     mkdir -p "$home" 2>/dev/null || say "WARNING: could not create $home"
-    # skel PEHLE copy karo, phir chown -R: warna dotfiles root ke reh jaate hain
+    # copy skel FIRST, then chown -R: else dotfiles stay owned by root
     [ -d /etc/skel ] && cp -a /etc/skel/. "$home"/ 2>/dev/null
     chown -R "${uid:-$u}:${gid:-$u}" "$home" 2>&1 | sed 's/^/  chown: /' | sed 's/^/pk-user:/1' || true
     chmod 700 "$home" 2>/dev/null
@@ -217,7 +217,7 @@ cmd_add() {
   else
     say "no password set yet - run: pk-user passwd $u   (or pass --password=...)"
   fi
-  # sudo (installed system me sudo ho to)
+  # sudo (if the installed system has sudo)
   if [ "$admin" = 1 ]; then
     if [ -d /etc/sudoers.d ]; then
       printf '%s ALL=(ALL) ALL\n' "$u" > /etc/sudoers.d/90-$u 2>/dev/null && chmod 440 /etc/sudoers.d/90-$u 2>/dev/null \
@@ -245,9 +245,9 @@ cmd_del() {
   if [ -n "$uid" ] && [ "$uid" -lt 1000 ] && [ "$force" = 0 ]; then
     die "pass --force to delete a system user (uid $uid)"
   fi
-  # user ke process pehle band karo, warna delete ke baad bhi chaleinge
+  # stop the user's processes first, else they keep running after deletion
   pkill -u "$u" >/dev/null 2>&1 || true
-  # manual edit primary: kisi bhi busybox/shadow build par kaam karega
+  # manual edit is primary: works on any busybox/shadow build
   for f in "$PW" "$SH" "$GR" "$GSH"; do
     [ -f "$f" ] && cp -p "$f" "$f.pk-bak" 2>/dev/null
   done
@@ -285,7 +285,7 @@ cmd_autologin() {
   [ -n "$u" ] || die "usage: pk-user autologin <user>|off"
   mkdir -p /run/pk 2>/dev/null
   if [ "$u" = off ] || [ "$u" = root ]; then
-    [ "$u" = off ] && { rm -f "$RUNAUTO" 2>/dev/null; printf 'PK_CONSOLE_AUTOLOGIN=\n' > "$CONF" 2>/dev/null; say "autologin off (login prompt wapas)"; return 0; }
+    [ "$u" = off ] && { rm -f "$RUNAUTO" 2>/dev/null; printf 'PK_CONSOLE_AUTOLOGIN=\n' > "$CONF" 2>/dev/null; say "autologin off (login prompt is back)"; return 0; }
   fi
   user_exists "$u" || die "no such user: $u"
   printf 'PK_CONSOLE_AUTOLOGIN=%s\n' "$u" > "$CONF" 2>/dev/null || say "could not write $CONF (pass it it as root on an installed system)"
@@ -295,9 +295,9 @@ cmd_autologin() {
 }
 
 cmd_doctor() {
-  say "device-perms + homes + groups ki jaanch"
+  say "checking device-perms + homes + groups"
   ensure_groups
-  # /etc/group me gid blank reh gaya ho to bhar do
+  # if a gid stayed blank in /etc/group, fill it
   bad=0
   for d in /dev/snd /dev/input /dev/dri; do
     if [ -d "$d" ]; then
@@ -306,7 +306,7 @@ cmd_doctor() {
       printf ' %-12s not (driver/hardware not found)\n' "$d"
     fi
   done
-  # mdev ka ek coldplug: naye nodes ko turant sahi group/mode do
+  # one coldplug from mdev: give new nodes the right group/mode at once
   if have mdev || [ -x /bin/mdev ]; then
     busybox mdev -s >/dev/null 2>&1 && say "ran mdev -s (permissions applied)"
   fi

@@ -1,9 +1,9 @@
-# pk's OS :: initramfs me daale jaane wale kernel modules (top-level names).
-# Build script `modprobe --show-depends` se inka full dependency closure nikaalta
-# hai, .ko.xz/.zst decompress karke /mods/NN-name.ko ke naam se order me rakhta hai.
-# Jo module kernel me built-in (=y) hai woh automatically skip ho jaata hai.
+# pk's OS :: kernel modules to place in the initramfs (top-level names).
+# The build script derives their full dependency closure via `modprobe --show-depends`,
+# then decompresses .ko.xz/.zst and stores them in order as /mods/NN-name.ko.
+# A module built into the kernel (=y) is skipped automatically.
 
-# --- boot / root mount ke liye must
+# --- must-haves for boot / root mount
 loop
 squashfs
 overlay
@@ -13,14 +13,14 @@ udf
 vfat
 fat
 
-# --- compression (squashfs ke liye)
+# --- compression (for squashfs)
 zlib
 zlib_deflate
 zstd_decompress
 lz4_decompress
 lzo_decompress
 
-# --- filesystems jo live/USB pe mil sakte hain (ntfs3/btrfs/xfs live me modprobe honge)
+# --- filesystems that may show up on live/USB (ntfs3/btrfs/xfs get modprobed in live)
 exfat
 
 # --- block / storage
@@ -54,14 +54,14 @@ mousedev
 usbhid
 hid_generic
 
-# --- network yahan JAAN BUJH KAR NAHI: initramfs ko disk dhoondhne ke liye net
-# chahiye hi nahi. NIC drivers live rootfs ke /lib/modules me hain (dhimi par
-# sahi jagah), wahan modprobe/se aa jayenge. Net drivers yahan daalne se initrd
-# ~4MB bhaari hoti hai aur boot me ~1s extra lagta hai - fayda zero.
+# --- NO network here ON PURPOSE: the initramfs needs no net to find disks
+# at all. NIC drivers live in the live rootfs /lib/modules (slower but the
+# right place) and come via modprobe there. Putting net drivers here makes the initrd
+# ~4MB heavier and boot ~1s slower - zero benefit.
 
-# --- filesystem ke runtime deps: modules.dep inhe list nahi karta, isliye explicit ---
-# (inke bina initramfs me 'mount -t vfat' fail -> FAT32/exFAT pendrive pe image boot hi
-#  nahi karti thi; ntfs3 se Windows partition par rakhi ISO/frugal image padhte hain)
+# --- filesystem runtime deps: modules.dep does not list them, hence explicit ---
+# (without these, 'mount -t vfat' fails in the initramfs -> an image on a FAT32/exFAT pendrive boots
+#  never; ntfs3 reads ISO/frugal images kept on Windows partitions)
 nls_cp437
 nls_utf8
 msdos

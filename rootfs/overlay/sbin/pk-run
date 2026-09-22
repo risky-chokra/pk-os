@@ -34,19 +34,19 @@ tailmagic() {
   [ "$sz" -gt 32 ] || return 1
   dd if="$1" bs=1 skip=$(( sz - 16 )) count=16 2>/dev/null | od -An -tx1 | tr -d ' \n'
 }
-in_runtime_bin() { # <name> -> runtime ke PATH me hai?
+in_runtime_bin() { # <name> -> in the runtime's PATH?
   runtime_ok || return 1
   for d in /usr/bin /bin /usr/local/bin /usr/games /usr/sbin; do
     [ -x "$RT$d/$1" ] && return 0
-    # Debian alternatives/deep paths: host se -x fail karta hai (symlink target
-    # absolute hota hai -> host ke /etc/alternatives ko point karta hai)
+    # Debian alternatives/deep paths: -x fails from the host (the symlink target
+    # is absolute -> it points at the host's /etc/alternatives)
     [ -L "$RT$d/$1" ] && return 0
     [ -e "$RT$d/$1" ] && return 0
   done
   return 1
 }
 
-# file ko runtime ke andar visible banao -> in-chroot path print karta hai
+# make the file visible inside the runtime -> prints the in-chroot path
 stage_for_chroot() { # <file>
   mkdir -p "$STUB" 2>/dev/null
   cp -f "$1" "$STUB/" 2>/dev/null || return 1
@@ -93,8 +93,8 @@ detect() { # <file> -> type
 }
 
 # ---------------------------------------------------------------- ar (sysv) writer
-# busybox 'ar' sirf extract karta hai (x|p|t), isliye .deb banane ke liye khud
-# 60-byte member header likhte hain.  pack_ar <out> <name=path>...
+# busybox 'ar' only extracts (x|p|t), so to create .debs we
+# write 60-byte member headers ourselves.  pack_ar <out> <name=path>...
 pack_ar() {
   out=$1; shift
   printf '!<arch>\n' > "$out" || return 1
@@ -110,15 +110,15 @@ pack_ar() {
 }
 
 # ---------------------------------------------------------------- ar (sysv) reader
-# busybox 'ar' ke paas extract hi hota hai aur woh bhi mode/name ke mamle me
-# naraz ho jaata hai - isliye fallback reader khud (60-byte member headers).
+# busybox 'ar' only has extract, and even that is picky about mode/name -
+# so here is a fallback reader of our own (60-byte member headers).
 unpack_ar() { # <archive> <outdir>
   a=$1; d=$2
   off=8
   while :; do
     hdr=$(tail -c +$(( off + 1 )) "$a" 2>/dev/null | head -c 60)
     [ "${#hdr}" -ge 58 ] || break
-    hdr=$(printf '%-60s' "$hdr")   # $() trailing newline kha jaata hai -> pad karo
+    hdr=$(printf '%-60s' "$hdr")   # $() eats the trailing newline -> pad it
     name=$(printf '%s' "$hdr" | head -c 16 | tr -d ' /')
     sz=$(printf '%s' "$hdr" | cut -c 49-58 | tr -d ' ')
     case "$sz" in ''|*[!0-9]*) break ;; esac
@@ -164,12 +164,12 @@ run_foreign() { # <arch> <file> [args...]
   if [ -z "$emu" ]; then
     warn "this is a $a (foreign arch) Linux binary - running it needs qemu-user:"
     warn "  pk-get install -y qemu-user-static   &&   pk-binfmt register"
-    warn " (then tak: pk-run $f --self-check wala rasta also is)"
+    warn " (until then: the pk-run $f --self-check route also exists)"
     mark "APP-ARCH-DIAG ($a, no qemu-user)"
     return 69
   fi
   say "arch: $a -> running via $emu (inside the App Runtime)"
-  ip=$(stage_for_chroot "$f") || { warn "runtime me copy fail"; return 66; }
+  ip=$(stage_for_chroot "$f") || { warn "copy to runtime failed"; return 66; }
   pk-chroot "/usr/bin/$emu" "$ip" "$@"
   rc=$?
   [ "$rc" = 0 ] && mark "APP-ARCH-OK ($a via $emu)"
@@ -188,7 +188,7 @@ run_sandboxed() { # <file> [args...]  -- user/pid/mount/net namespaces + user di
     mark "APP-SANDBOX-UNAVAIL"
     "$f" "$@"; return $?
   fi
-  # net ns (-n) se app ko network nahi dikhta; tmpfs se /root /home /mnt/persist chhupe
+  # with net ns (-n) the app sees no network; tmpfs hides /root /home /mnt/persist
   unshare -r -m -u -i -n -p -f --mount-proc /bin/sh -c '
     for d in /root /home /mnt/persist /run/pk; do
       [ -d "$d" ] && mount -t tmpfs -o size=1M tmpfs "$d" 2>/dev/null
@@ -216,7 +216,7 @@ run_elf() { # <file> [args...]
   fi
   warn "no shared libraries found -> trying inside the runtime"
   runtime_ok || { warn "no runtime attached. Run 'pk-runtime start' (or use the WITH_RUNTIME=1 ISO)."; return 66; }
-  ip=$(stage_for_chroot "$f") || { warn "runtime me copy fail"; return 66; }
+  ip=$(stage_for_chroot "$f") || { warn "copy to runtime failed"; return 66; }
   pk-chroot "$ip" "$@"
 }
 
@@ -234,10 +234,10 @@ run_script() {
   pk-chroot "/usr/bin/$base" "$ip" "$@"
 }
 
-run_deb_extract() { # .deb bina dpkg ke: ar + tar se extract, launcher banao
+run_deb_extract() { # .deb without dpkg: extract via ar + tar, create a launcher
   f=$1; shift
   name=$(basename "$f" .deb)
-  case "$name" in *_*) name=${name%%_*} ;; esac     # pkg_ver_arch.deb -> pkg (upgrade par same dir reuse ho)
+  case "$name" in *_*) name=${name%%_*} ;; esac     # pkg_ver_arch.deb -> pkg (on upgrade the same dir gets reused)
   dest=$APPS/$name
   have ar || { warn "'.deb' needs the busybox 'ar' applet"; return 70; }
   tmp=/tmp/pk-deb.$$
@@ -256,9 +256,9 @@ run_deb_extract() { # .deb bina dpkg ke: ar + tar se extract, launcher banao
     { warn "no data.tar.* inside the .deb"; rm -rf "$tmp"; return 70; }
   data=$(ls "$tmp"/x/data.tar.* 2>/dev/null | head -1)
   [ -n "$data" ] || { warn "no data.tar.* found"; rm -rf "$tmp"; return 70; }
-  # data.tar.{gz,xz,zst,bz2} ko pipe se tar me daalte hain: kai .deb me end-of-archive
-  # padding nahi hoti (busybox tar likhta hai) to `tar -xf file` "short read" de deta
-  # hai, jabki pipe se wahi archive padha ja sakta hai.
+  # data.tar.{gz,xz,zst,bz2} goes to tar via pipe: in many .debs the end-of-archive
+  # padding is missing (busybox tar writes it), so `tar -xf file` gives a "short read"
+  # while the same archive can be read via pipe.
   tout=$(
     case "$data" in
       *.tar.gz|*.tgz)  gzip -dc "$data" 2>/dev/null ;;
@@ -328,12 +328,12 @@ run_win() { # .exe/.msi -> Wine
   if [ -z "${wine:-}" ]; then
     warn "a Windows app (.exe/.msi) needs Wine:"
     warn "  pk-get install -y wine            # inside the runtime (works on the lean runtime too)"
-    warn "  scripts/make-runtime --variant=full   # wine+wine64+mesa ke saath runtime"
+    warn "  scripts/make-runtime --variant=full   # runtime with wine+wine64+mesa"
     mark "APP-EXE-NO-WINE"
     return 72
   fi
   ip=$(stage_for_chroot "$f") || { warn "stage fail"; return 72; }
-  # wine prefix runtime ke andar /root/.wine banta hai (wahi persist hota hai)
+  # the wine prefix is created at /root/.wine inside the runtime (it persists there)
   pk-chroot /usr/bin/wineboot -u >/dev/null 2>&1 || true
   base=$(basename "$f")
   case "$base" in
@@ -362,25 +362,25 @@ run_apk() { # Android package
   fi
   warn "running an Android app needs 3 things (current status):"
   if [ -n "$binder" ]; then say "  [ok] binder ($binder)"; else warn " [ ] kernel: CONFIG_ANDROID_BINDERFS=y -> 'make kernel' (add it in scripts/build-kernel pass it) then mount -t binder binder /dev/binderfs"; fi
-  if [ -x "$RT/usr/bin/waydroid" ]; then say "  [ok] waydroid (runtime me)"; else warn "  [ ] runtime: pk-get install -y waydroid lxc"; fi
+  if [ -x "$RT/usr/bin/waydroid" ]; then say "  [ok] waydroid (in runtime)"; else warn "  [ ] runtime: pk-get install -y waydroid lxc"; fi
   if [ -n "${WAYLAND_DISPLAY:-}" ] || [ -e /run/pk/x-wayland ]; then say "  [ok] GUI session (pk-x)"; else warn " [ ] GUI: pk-x (Waydroid ek Wayland client is)"; fi
-  warn " Simple fallback (without kernel change): Android-x86 ISO ko VM me - pk-vm run --cdrom=<android-iso>"
+  warn " Simple fallback (without kernel change): Android-x86 ISO in a VM - pk-vm run --cdrom=<android-iso>"
   mark "APP-APK-DIAG"
   return 73
 }
 
-run_ipa() { # .ipa -> iOS app: native nahi chal sakta; routes dikhate hain
+run_ipa() { # .ipa -> iOS app: cannot run natively; show the routes
   f=$1; shift
   warn "this is an iOS/iPadOS app (.ipa) - it cannot run natively on Linux:"
   warn "  (1) the binary is Mach-O/arm64  -> the Linux kernel cannot load it (needs XNU)"
   warn "  (2) the frameworks (UIKit/SwiftUI/CoreAnimation) are closed-source, there is no Linux port"
-  warn " (3) codesign + entitlements Apple ke signing chain from are bound by"
+  warn " (3) codesign + entitlements are bound by Apples signing chain"
   if [ -x /sbin/pk-ios ]; then
-    say "app ka content (bundle id, arch, min iOS):"
+    say "app content (bundle id, arch, min iOS):"
     /sbin/pk-ios info "$f" 2>&1 | sed 's/^/  /' | head -14
     say "raaste:  pk-ios web <url>   |   pk-ios mac-guest   |   pk-ios darling (macOS binaries only)"
   else
-    say "raaste: macOS guest me Xcode Simulator, ya app ki web service browser me"
+    say "routes: Xcode Simulator in a macOS guest, or the apps web service in a browser"
   fi
   mark "APP-IOS-DIAG"
   return 74
@@ -398,7 +398,7 @@ uninstall_app() { # <name>
     fi
   fi
   if [ -e "$APPS/bin/$n" ] || [ -e "$APPS/$n" ]; then
-    warn "anything bach gaya: $APPS (permissions? /opt/pk writable? )"
+    warn "something left over: $APPS (permissions? /opt/pk writable? )"
     return 1
   fi
   say "uninstalled: $n"
@@ -454,7 +454,7 @@ run_appimage() {
 run_vm_image() {
   f=$1; shift
   say "disk/ISO image - run it as a guest OS:"
-  say " pk-vm run --cdrom=$f (ya pk-vm new <name> --size=40G first)"
+  say " pk-vm run --cdrom=$f (or pk-vm new <name> --size=40G first)"
   [ -x /sbin/pk-vm ] && { pk-vm run --image="$f" "$@"; return $?; }
   return 77
 }
@@ -478,7 +478,7 @@ selftest() {
   else
     mark "APP-SCRIPT-FAIL"; fails=$((fails + 1))
   fi
-  # 3) asli .deb (control.tar.gz + data.tar.gz, ar header khud likhe hue) -> install
+  # 3) a real .deb (control.tar.gz + data.tar.gz, ar headers written by hand) -> install
   mkdir -p "$tmp/deb/DEBIAN" "$tmp/deb/usr/bin" "$tmp/out"
   st=$tmp/pk-st-app_1.0_all.deb
   printf 'Package: pk-st-app\nVersion: 1.0\nArchitecture: all\nMaintainer: pk\nDescription: selftest\n' > "$tmp/deb/DEBIAN/control"
@@ -511,11 +511,11 @@ selftest() {
     rc=$?
     case "$wv" in
       *stub*|*tiny*|*"(version not found)"*)
-        # QA ka fake wine: usme .exe ka rc 0 aana chahiye
+        # QA's fake wine: .exe in it should return rc 0
         if [ "$rc" = 0 ]; then mark "APP-EXE-OK"; else mark "APP-EXE-FAIL(rc=$rc)"; fails=$((fails + 1)); fi ;;
       *)
-        # asli Wine: 15-byte nakli PE ko wine khud reject karega - wo hamari
-        # galti nahi. Yahan prove karna hai ki dispatch wine tak pahuncha.
+        # real Wine: wine itself will reject the 15-byte fake PE - that is not our
+        # fault. What must be proven here is that dispatch reached wine.
         mark "APP-EXE-OK (wine: $wv; dispatch rc=$rc - sample PE fake is)" ;;
     esac
   else
@@ -531,14 +531,14 @@ selftest() {
   printf '\317\372\355\376 mach-o-stub' > "$tmp/st.macho"
   pk-run "$tmp/st.macho" >/dev/null 2>&1 || true
   mark "APP-MACHO-DIAG-OK"
-  # 5b) iOS (.ipa): detection + honest route (native chal hi nahi sakta)
+  # 5b) iOS (.ipa): detection + honest route (can never run natively)
   printf 'PK\003\004 fake-ipa' > "$tmp/st.ipa"
   out=$(pk-run "$tmp/st.ipa" 2>&1 | tr '\n' '|' | cut -c1-160 || true)
   case "$out" in
     *"Mach-O"*|*"UIKit"*|*"pk-ios"*|*"Xcode"*) mark "APP-IOS-DIAG-OK" ;;
     *) mark "APP-IOS-DIAG-FAIL ${out:-<khaali>}"; fails=$((fails + 1)) ;;
   esac
-  # 6) AppImage (extract + AppRun) - sample khud banate hain agar mksquashfs ho
+  # 6) AppImage (extract + AppRun) - build the sample ourselves if mksquashfs exists
   if have mksquashfs && have unsquashfs; then
     ad=$tmp/ai; mkdir -p "$ad"
     printf '#!/bin/sh\necho "PK-APPIMAGE-RAN $* "\n' > "$ad/AppRun"
@@ -549,9 +549,9 @@ selftest() {
       mksquashfs "$ad" "$tmp/st.AppImage" -noappend >/dev/null 2>&1
     az=$(stat -c %s "$tmp/st.AppImage" 2>/dev/null || echo 0)
     if [ "$az" -lt 512 ]; then
-      # sample ban hi nahi paya (image me mksquashfs ki koi lib missing) -> ye
-      # selftest ki limitation hai, app support ki kami nahi
-      mark "APP-APPIMAGE-SKIP (mksquashfs ne $az byte banaye - image me lib missing?)"
+      # the sample could not even be built (some mksquashfs lib missing in the image) -> this
+      # is a selftest limitation, not a lack of app support
+      mark "APP-APPIMAGE-SKIP (mksquashfs made $az bytes - lib missing in image?)"
     else
       printf 'AI\002\000\000\000\000' >> "$tmp/st.AppImage"
       out=$(pk-run "$tmp/st.AppImage" 2>&1 | tr '\n' '|' | cut -c1-120 || true)
@@ -561,9 +561,9 @@ selftest() {
       esac
     fi
   else
-    mark "APP-APPIMAGE-SKIP (mksquashfs/unsquashfs image in not)"
+    mark "APP-APPIMAGE-SKIP (mksquashfs/unsquashfs not in image)"
   fi
-  # 7) .jar -> java ho to chale, na ho to exact command
+  # 7) .jar -> runs if java exists, else the exact command
   printf 'PK\005\006 jar-stub' > "$tmp/st.jar"
   out=$(pk-run "$tmp/st.jar" 2>&1 | tr '\n' '|' | cut -c1-120 || true)
   case "$out" in
@@ -571,7 +571,7 @@ selftest() {
     *"Java is required"*|*default-jre*) mark "APP-JAR-DIAG-OK (jre not - message came)" ;;
     *) mark "APP-JAR-PARTIAL ${out:-<khaali>}" ;;
   esac
-  # 8) .rpm -> alien/rpm ho to install, warna exact command
+  # 8) .rpm -> install if alien/rpm exist, else the exact command
   printf '\355\253\355\355 rpm-stub' > "$tmp/st.rpm"
   out=$(pk-run "$tmp/st.rpm" 2>&1 | tr '\n' '|' | cut -c1-120 || true)
   case "$out" in
@@ -586,7 +586,7 @@ selftest() {
     *QEMU-USER-RAN*|*"arch: aarch64"*) mark "APP-ARCH-OK ($out)" ;;
     *) mark "APP-ARCH-PARTIAL ${out:-<khaali>}" ;;
   esac
-  # 8c) sandbox: /root ka content app se chhupna chahiye
+  # 8c) sandbox: /root content must stay hidden from the app
   mkdir -p /root 2>/dev/null
   secret=/root/pk-sb-secret-$$.txt
   echo hidden > "$secret" 2>/dev/null
@@ -600,7 +600,7 @@ selftest() {
     mark "APP-SANDBOX-SKIP (unshare/user-ns did not work: $out)"
   fi
   rm -f "$secret" 2>/dev/null
-  # 9) runtime ke andar exec
+  # 9) exec inside the runtime
   if runtime_ok; then
     if [ -x "$RT/usr/bin/pk-tiny-app" ]; then
       if pk-chroot /usr/bin/pk-tiny-app 2>/dev/null | grep -q 'hello from pk runtime'; then mark "RUNTIME-EXEC-OK"; else mark "RUNTIME-EXEC-FAIL"; fails=$((fails + 1)); fi
@@ -635,7 +635,7 @@ case "${1:-}" in
   --selftest) shift; selftest "${1:-}"; exit $? ;;
   --uninstall|--remove) shift; uninstall_app "${1:?app name pass it}"; exit $? ;;
   --which)
-    shift; w=${1:?naam do}
+    shift; w=${1:?give a name}
     for x in "$APPS/bin/$w" "/usr/local/bin/$w" "$RT/usr/local/bin/$w" "$RT/usr/bin/$w" "$RT/usr/games/$w" "$RT/bin/$w"; do
       { [ -e "$x" ] || [ -L "$x" ]; } && { printf '%s\n' "$x"; exit 0; }
     done

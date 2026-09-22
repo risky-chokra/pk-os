@@ -1,18 +1,18 @@
-# pk's OS defaults (pk-boot ise boot hone se pehle padhta hai)
-# note: ${VAR:-default} pattern -> kernel cmdline/boot.env se aaya value jeetta hai
-PK_DHCP=${PK_DHCP:-no}    # yes = boot pe DHCP se IP lena
+# pk's OS defaults (pk-boot reads it before boot completes)
+# note: ${VAR:-default} pattern -> the value from kernel cmdline/boot.env wins
+PK_DHCP=${PK_DHCP:-no}    # yes = get IP via DHCP at boot
 PK_SSH=${PK_SSH:-no}     # yes = dropbear SSH server start
 PK_ISSUE=${PK_ISSUE:-yes}
 
-# CPU/IO/IPC tuning hook (S60tune) ka default mode: '' (off) | report | desktop | hybrid
-# boot option pk_tune=... ise override karta hai. desktop = governor/EPP + IO scheduler
-# + sysctls + cgroup weights (apps=200 / bg=20); hybrid = P/E cores detect karke daemons
-# ko efficiency cores par. Manual: pk-tune report | pk-tune desktop | pk-tune undo
+# default mode of the CPU/IO/IPC tuning hook (S60tune): '' (off) | report | desktop | hybrid
+# boot option pk_tune=... overrides this. desktop = governor/EPP + IO scheduler
+# + sysctls + cgroup weights (apps=200 / bg=20); hybrid = detect P/E cores and pin daemons
+# to efficiency cores. Manual: pk-tune report | pk-tune desktop | pk-tune undo
 PK_TUNE=
 
-# swap: boot option pk_swap=<MB>|auto|off se (ya yahan default). '' = boot par swap mat chhedo.
-# auto = RAM/2 (1 GB se 8 GB ke beech clamp). Live me / tmpfs/overlay hota hai -> wahan ye
-# jaanboojh ke skip hota hai (warna swap = RAM khana); installed system (/var/tmp) ya
-# PK-PERSIST (/persistence) par swapfile ban ke swapon ho jaata hai.
+# swap: from boot option pk_swap=<MB>|auto|off (or the default here). '' = do not touch swap at boot.
+# auto = RAM/2 (clamped between 1 GB and 8 GB). In live, / is tmpfs/overlay -> there it
+# is skipped deliberately (else swap = eating RAM); on installed systems (/var/tmp) or
+# PK-PERSIST (/persistence), a swapfile is created and swapon'd.
 # Manual: pk-tune swap 6144  |  pk-tune swap 0 (off)
 PK_SWAP=${PK_SWAP:-}

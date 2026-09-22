@@ -18,7 +18,7 @@ iface_has_ip() { ip addr show dev "$1" 2>/dev/null | grep -q 'inet ' || ifconfig
 
 case "${1:-status}" in
   dhcp)
-    # udev nahi hai -> NIC drivers khud load karo (jo hain wahi; baaki fail ignore)
+    # no udev -> load NIC drivers yourself (only those present; ignore the rest failing)
     MODERR=""
     if command -v modprobe >/dev/null 2>&1; then
       for m in virtio_net net_failover failover virtio_pci e1000 e1000e igb igc r8169 \
@@ -51,7 +51,7 @@ case "${1:-status}" in
     done
     say "carrier=$(cat "/sys/class/net/$IF/carrier" 2>/dev/null) after ${wait}s"
     command -v udhcpc >/dev/null 2>&1 || { say "the udhcpc applet is not available"; exit 3; }
-    # -q: lease ke baad exit, -n: na milne par exit (hang na ho), -p: pidfile
+    # -q: exit after lease, -n: exit if none arrives (no hang), -p: pidfile
     if [ -n "$SCRIPT" ]; then
       udhcpc -i "$IF" -s "$SCRIPT" -p /run/udhcpc."$IF".pid -t 10 -T 2 -n -q >/tmp/udhcpc.out 2>&1
     else

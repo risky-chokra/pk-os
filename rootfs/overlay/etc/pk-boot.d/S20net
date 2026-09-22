@@ -1,5 +1,5 @@
 #!/bin/sh
-# boot hook: agar /etc/default/pk me PK_DHCP=yes ho to DHCP try karo
+# boot hook: if PK_DHCP=yes in /etc/default/pk, try DHCP
 . /etc/default/pk 2>/dev/null
 [ "${PK_DHCP:-no}" = yes ] || exit 0
 [ -x /sbin/pk-net ] || exit 0
